@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import dataclass
-from pathlib import Path
 
 from app.services.language_normalizer import normalize_for_intent
 
@@ -19,20 +17,19 @@ class DemoIssue:
     projectId: str | None = None
 
 
-ROOT_DIR = Path(__file__).resolve().parents[4]
-ISSUES_PATH = ROOT_DIR / "packages" / "shared" / "demo-data" / "issues.json"
+def records_or_refuse(data: dict | None) -> dict:
+    """Every lookup reads the records its caller may see, passed in explicitly.
+
+    There is no default dataset. A private visitor's turn that forgot to pass its snapshot must
+    fail, not quietly read the shared member records, a seed file or a built-in list of names.
+    """
+    if data is None:
+        raise ValueError("record lookups need the caller's own records")
+    return data
 
 
 def load_demo_issues(data: dict | None = None) -> tuple[DemoIssue, ...]:
-    if data is not None:
-        return tuple(_issue_from_payload(issue) for issue in data.get("issues", []))
-    try:
-        from app.services.product_data_store import ProductDataStore
-
-        raw_issues = ProductDataStore().load()["issues"]
-    except Exception:
-        raw_issues = json.loads(ISSUES_PATH.read_text(encoding="utf-8"))
-    return tuple(_issue_from_payload(issue) for issue in raw_issues)
+    return tuple(_issue_from_payload(issue) for issue in records_or_refuse(data).get("issues", []))
 
 
 def issue_exists(issue_id: str, data: dict | None = None) -> bool:
@@ -70,15 +67,7 @@ def assignee_in_scope(assignee: str, allowed_project_ids: set[str], allowed_issu
 
 
 def team_member_in_scope(assignee: str, allowed_project_ids: set[str], data: dict | None = None) -> bool:
-    if data is not None:
-        members = data.get("team", [])
-    else:
-        try:
-            from app.services.product_data_store import ProductDataStore
-
-            members = ProductDataStore().load()["team"]
-        except Exception:
-            return False
+    members = records_or_refuse(data).get("team", [])
 
     normalized_assignee = _normalize(assignee)
     for member in members:
@@ -91,30 +80,14 @@ def team_member_in_scope(assignee: str, allowed_project_ids: set[str], data: dic
 
 
 def team_member_exists(name: str, data: dict | None = None) -> bool:
-    if data is not None:
-        members = data.get("team", [])
-    else:
-        try:
-            from app.services.product_data_store import ProductDataStore
-
-            members = ProductDataStore().load()["team"]
-        except Exception:
-            return name in {"Maya Chen", "Noah Patel", "Avery Brooks", "Iris Morgan"}
+    members = records_or_refuse(data).get("team", [])
 
     normalized_name = _normalize(name)
     return any(_normalize(str(member.get("name", ""))) == normalized_name for member in members)
 
 
 def load_team_member_names(data: dict | None = None) -> tuple[str, ...]:
-    if data is not None:
-        members = data.get("team", [])
-    else:
-        try:
-            from app.services.product_data_store import ProductDataStore
-
-            members = ProductDataStore().load()["team"]
-        except Exception:
-            return ("Maya Chen", "Noah Patel", "Avery Brooks", "Iris Morgan")
+    members = records_or_refuse(data).get("team", [])
     names = [str(member.get("name", "")) for member in members]
     return tuple(name for name in names if name)
 

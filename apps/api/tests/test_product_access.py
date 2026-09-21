@@ -23,6 +23,7 @@ from app.main import app
 from app.schemas import TurnRequest
 from app.services import env as env_module
 from app.services.agent import DemoAgent
+from app.services.product_data_store import ProductDataStore
 
 DEFINITION_ID = "linear_simplified"
 ADMIN = AuthUser(kind="member", user_id="demo-admin", tenant_id="pixel-dev", role="org_admin")
@@ -66,8 +67,13 @@ class ProductAccessFixture(unittest.TestCase):
         self.directory.bind_product("acme", "acme-demo", "planning-team", DEFINITION_ID, 1, visitor_access=True)
         self.agent = DemoAgent()
 
+    def handle_turn(self, request: TurnRequest, principal: AuthUser):
+        # The turn endpoint passes the caller's own records. These tests are about which
+        # product a principal may use, so they pass the member demo records.
+        return self.agent.handle_turn(request, principal, ProductDataStore().load())
+
     def assert_turn_denied(self, principal: AuthUser, request: TurnRequest, reason: str):
-        response = self.agent.handle_turn(request, principal)
+        response = self.handle_turn(request, principal)
         self.assertEqual(response.status, "denied")
         self.assertIn(reason, response.intent_trace.reason)
         self.assertIsNone(response.validated_action)
@@ -76,7 +82,7 @@ class ProductAccessFixture(unittest.TestCase):
 
 class TurnIsolationTest(ProductAccessFixture):
     def test_the_seeded_product_runs_on_its_pinned_definition(self):
-        response = self.agent.handle_turn(turn("s1", "linear-demo"), PLANNER)
+        response = self.handle_turn(turn("s1", "linear-demo"), PLANNER)
         self.assertEqual(response.status, "completed")
         self.assertEqual(response.validated_action.type, "OPEN_ISSUES")
         pin = self.agent.sessions.pin_for("s1")
@@ -88,10 +94,10 @@ class TurnIsolationTest(ProductAccessFixture):
     def test_same_organization_different_teams(self):
         self.assert_turn_denied(PLANNER, turn("s1", "support-desk"), "product_not_found")
         self.assertFalse(self.agent.sessions.exists("s1"), "a denied turn creates no session")
-        self.assertEqual(self.agent.handle_turn(turn("s2", "support-desk"), ADMIN).status, "completed")
+        self.assertEqual(self.handle_turn(turn("s2", "support-desk"), ADMIN).status, "completed")
 
     def test_same_organization_different_products(self):
-        self.agent.handle_turn(turn("s1", "linear-demo"), ADMIN)
+        self.handle_turn(turn("s1", "linear-demo"), ADMIN)
         response = self.assert_turn_denied(ADMIN, turn("s1", "support-desk", turn_id=2), "owned by another")
         self.assertIn("belongs to someone else", response.speech)
         self.assertEqual(self.agent.sessions.pin_for("s1").product_id, "linear-demo")
@@ -99,28 +105,28 @@ class TurnIsolationTest(ProductAccessFixture):
     def test_different_organizations(self):
         acme_admin = AuthUser(kind="member", user_id="acme-admin", tenant_id="acme", role="org_admin")
         self.assert_turn_denied(ADMIN, turn("s1", "acme-demo"), "product_not_found")
-        self.assertEqual(self.agent.handle_turn(turn("acme-session", "acme-demo"), acme_admin).status, "completed")
+        self.assertEqual(self.handle_turn(turn("acme-session", "acme-demo"), acme_admin).status, "completed")
         # Another organization cannot continue the session, even through its own product of the same name.
         self.directory.create_team("pixel-dev", "acme-lookalike", "Lookalike")
         self.directory.bind_product("pixel-dev", "acme-demo", "acme-lookalike", DEFINITION_ID, 1)
         self.assert_turn_denied(ADMIN, turn("acme-session", "acme-demo", turn_id=2), "owned by another")
 
     def test_disabled_products_end_live_sessions(self):
-        self.agent.handle_turn(turn("s1", "linear-demo"), PLANNER)
+        self.handle_turn(turn("s1", "linear-demo"), PLANNER)
         self.directory.set_product_state("pixel-dev", "linear-demo", "disabled")
         self.assert_turn_denied(PLANNER, turn("s1", "linear-demo", turn_id=2), "product_disabled")
         self.assert_turn_denied(PLANNER, turn("s2", "linear-demo"), "product_disabled")
-        self.assertEqual(self.agent.handle_turn(turn("s3", "support-desk"), ADMIN).status, "completed")
+        self.assertEqual(self.handle_turn(turn("s3", "support-desk"), ADMIN).status, "completed")
 
     def test_visitors_are_pinned_to_their_product(self):
         guest = visitor("support-desk")
-        self.assertEqual(self.agent.handle_turn(turn("guest", "support-desk"), guest).status, "completed")
+        self.assertEqual(self.handle_turn(turn("guest", "support-desk"), guest).status, "completed")
         self.assert_turn_denied(guest, turn("guest", "linear-demo", turn_id=2), "product_not_found")
         self.assert_turn_denied(guest, turn("guest-2", "linear-demo"), "product_not_found")
         self.assert_turn_denied(visitor("acme-demo"), turn("guest-3", "acme-demo"), "product_not_found")
 
     def test_transferred_products_end_sessions_of_the_old_team(self):
-        self.agent.handle_turn(turn("s1", "linear-demo"), ADMIN)
+        self.handle_turn(turn("s1", "linear-demo"), ADMIN)
         self.directory.transfer_product("pixel-dev", "linear-demo", "support-team")
         response = self.assert_turn_denied(ADMIN, turn("s1", "linear-demo", turn_id=2), "product_transferred")
         self.assertIn("has ended", response.speech)

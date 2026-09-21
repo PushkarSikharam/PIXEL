@@ -32,7 +32,12 @@ from app.definitions.organizations import OrganizationDirectory
 from app.definitions.sessions import DefinitionUnavailable, pin_new_session
 from app.record_access import RecordGrant, legacy_record_owner, record_grant
 from app.services.env import env_bool, env_value
-from app.services.demo_instances import DemoContext, DemoInstanceStore, InstanceUnavailable
+from app.services.demo_instances import (
+    DemoContext,
+    DemoInstanceStore,
+    InstanceUnavailable,
+    SeedNotApproved,
+)
 from app.installed_products import PackageMissing, package_for
 
 # The secret rotates per process; tokens don't survive a server restart,
@@ -150,7 +155,11 @@ def create_visitor_token(tenant_id: str, product_id: str) -> tuple[str, str]:
         raise AccessDenied("demo_package_unavailable") from missing
     if package.demo_seed_factory is None:
         raise AccessDenied("demo_seed_unavailable")
-    seed = package.demo_seed_factory()
+    try:
+        seed = package.demo_seed_factory()
+    except SeedNotApproved as unapproved:
+        # An unreviewed seed change must not become what a new visitor sees.
+        raise AccessDenied("demo_seed_not_approved") from unapproved
     instances = DemoInstanceStore()
     # The login and every seeded record commit together. A valid token can never point at a
     # partial instance, and a failed login leaves no orphan consuming capacity.

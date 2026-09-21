@@ -117,8 +117,17 @@ class LinearLegacyLookup:
 
 
 def lookup_for(grant: RecordGrant, store: ProductDataStore | None = None) -> LinearLegacyLookup:
-    """Bind a lookup to exactly what this record grant may see."""
-    return LinearLegacyLookup(store or ProductDataStore(), grant.visible_scope_ids())
+    """Bind a lookup to exactly what this record grant may see.
+
+    A visitor's grant carries that visitor's private demo instance, and the lookup reads only it.
+    Omitting the store must never fall back to the shared member records, and a store for a
+    different instance (or the shared store for a visitor) is refused rather than trusted.
+    """
+    if store is None:
+        store = ProductDataStore(grant.demo_context) if grant.demo_context else ProductDataStore()
+    elif store.demo_context != grant.demo_context:
+        raise ValueError("the record store does not belong to this grant's demo instance")
+    return LinearLegacyLookup(store, grant.visible_scope_ids())
 
 
 # What the engine needs in order to resolve people inside a snapshot of this product.

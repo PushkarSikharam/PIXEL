@@ -81,7 +81,7 @@ def _run_case(agent: DemoAgent, case: dict) -> list[dict]:
             current_page=page,
             selected_issue_id=selected,
             workspace_scope_id=case.get("workspace", DEFAULT_WORKSPACE),
-        ), PRINCIPAL)
+        ), PRINCIPAL, ProductDataStore().load())  # what the turn endpoint passes an administrator
         turns.append(_summarize(message, response))
         page, selected = _next_ui_state(response, page, selected)
     return turns

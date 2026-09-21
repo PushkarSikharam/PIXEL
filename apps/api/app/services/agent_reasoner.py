@@ -16,7 +16,6 @@ from app.schemas import IntentTrace, ProposedAction
 from app.services.demo_data import issue_in_scope, load_demo_issues
 from app.services import http_client
 from app.services.env import env_bool, env_int, env_value
-from app.services.product_data_store import ProductDataStore
 from app.services.retriever import RetrievedDocument
 from app.services.provider_policy import ReasoningTokenLimits, reasoning_token_limits
 from app.services.usage_ledger import (
@@ -305,7 +304,10 @@ class AgentReasoner:
     ) -> dict[str, list[str]]:
         allowed_project_ids = set(workspace_scope.allowed_project_ids)
         allowed_issue_projects = set(workspace_scope.allowed_issue_projects)
-        data = visible_data if visible_data is not None else ProductDataStore().load()
+        if visible_data is None:
+            # The model sees only the caller's own records; there is no shared default.
+            raise ValueError("model context needs the caller's own records")
+        data = visible_data
 
         projects = [
             str(project["name"])

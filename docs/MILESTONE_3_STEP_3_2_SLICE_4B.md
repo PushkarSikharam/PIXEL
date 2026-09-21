@@ -1,6 +1,9 @@
 # Milestone 3.2, Slice 4b: Response Composer, Conversation Intents and the Knowledge Boundary
 
-Status: **PR #13 MERGED, SIGN-OFF REOPENED by the 2026-09-20 review. Revision 4.3 corrections are locally verified and await review and fresh CI evidence. The composer is not wired into the live runtime.**
+Status: **REVISION 4.3 MERGED WITH GREEN LINUX CI; AWAITING STAKEHOLDER SIGN-OFF. The composer is not wired into the live runtime.**
+
+- Revision 4.3 corrections merged through PR #17 (commit `266b32c`, merge `fd21af9`). Pull-request run 35565519318 and `main` push run 35565440664 are green on all three jobs: API tests (with the container build and its smoke test), web checks and browser tests.
+- Railway never completed a deployment of `fd21af9` (its GitHub record went from in progress to inactive). The next merge, `6517c8b`, which contains these changes, deployed successfully on 2026-09-21. The composer is not used by live chat, so visitors saw no difference either way.
 
 - Merged through PR #10 (commit `d3ddf25`). Pull-request run 35380052283 and the `main` push run 35380344483 are green on all three jobs.
 - The stakeholder review of 2026-09-18 found that product-controlled templates were still spoken in answers, refusals and clarifications, and reopened the sign-off. The boundary it required is described below under "The response-integrity boundary". It is built and carried by PR #13 (commit `f5f5f97`). Pull-request run 35396288897 is green on all three jobs: API tests, including the container build and its live smoke test; web checks; and browser tests. PR #13 merged as `f3cc571c4a3e49aa780947b9b49a7d03ec0c0f89`. Its CI evidence covers `f5f5f97`, not the new revision 4.3 edits.
@@ -11,8 +14,8 @@ Approved scope: the response composer as a lifecycle state machine, platform con
 ## Current contract: revision 4.3
 
 The 2026-09-20 review reproduced three remaining output paths and a shared-demo defect.
-The shared-demo defect is not fixed by the composer; its implementation plan is
-`docs/DEMO_VISITOR_ISOLATION_PLAN.md` and awaits review before schema work.
+The shared-demo defect is not a composer issue. It is fixed by private demo instances, live since
+PR #18; see `docs/DEMO_VISITOR_ISOLATION_PLAN.md`.
 
 - **Capability descriptions:** generated from capability, entity, view, control and allowed field
   keys. A navigation action cannot advertise refunds by changing its description. The composer
@@ -46,9 +49,9 @@ Local verification completed on 2026-09-21:
 - Focused response-boundary suite: 21 passed; the nine new regression tests also pass.
 - TypeScript check, all 34 web unit tests and the production build passed on the fresh verification run.
 
-No new CI sign-off is claimed. These edits are not deployed. No paid provider
-calls or changes to production data were made. The shared-demo isolation issue remains open
-pending review and implementation of its separate migration plan.
+These were the local runs before merging. The Linux CI evidence is the PR #17 runs named in the
+status above; sign-off itself is the stakeholder's. No paid provider calls or changes to
+production data were made for this revision.
 
 ## Earlier implementation record
 

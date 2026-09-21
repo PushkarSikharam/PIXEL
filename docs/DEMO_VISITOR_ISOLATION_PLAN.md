@@ -1,6 +1,8 @@
 # Private Demo Instances
 
-Status: implemented locally; production rollout and CI evidence pending. Part of phase-3, before 5a.
+Status: implemented and live in production (PR #18, merge `6517c8b`). Four review findings are
+fixed in a follow-up change awaiting its CI run. Part of phase-3, before 5a. Evidence is recorded
+at the end of this document.
 Updated: 2026-09-21.
 
 ## Outcome
@@ -169,3 +171,41 @@ approval for any real paid voice synthesis. This plan alone is not evidence that
 
 After isolation and 4b sign-off, 5a stays deterministic and read-only: independent shadow memory,
 zero provider calls, zero execution keys, and platform-wording differences reported separately.
+
+## Evidence
+
+**Continuous integration.** PR #18 (commit `e75e929`): pull-request run 35618632336 and `main` push
+run 35618980742 are green on all three jobs: API tests (with the container build and its smoke
+test), web checks and browser tests.
+
+**Deployment.** Railway and Vercel both deployed `6517c8b` on 2026-09-21. Railway waited for the
+`main` CI run and reported success.
+
+**Production acceptance, 2026-09-21, on the public URL.**
+
+- `scripts/smoke-live.mjs` passed: two visitors received different instances with identical seed
+  data; a reassignment of LIN-142 by the first was invisible to the second; the first visitor's
+  private reset restored its seed, moved it to generation 2 and refused its old token; the
+  administrator login and the global reset were refused. (The script checks that the two instance
+  IDs differ; it does not print them, and no tokens were recorded.)
+- In the live page: "Open Maya's ticket" and "Assign it to Noah" completed; after a reload the
+  visitor still saw Noah on LIN-142, while a newly allocated visitor saw Maya.
+- Not yet done: the two-browser manual check from the release smoke test, run by a person.
+
+**Open item found in production.** The legacy member demo login still answered `200` for
+`demo-visitor`, so the shared member records remained reachable by direct API calls. Production must
+set `PIXEL_SYNTHETIC_DEMO=false`; see `docs/LIVE_DEPLOYMENT.md`.
+
+**Review findings fixed in the follow-up** (`apps/api/tests/test_private_demo_hardening.py`, each test
+shown to fail without its fix):
+
+1. The product's record lookup defaulted to the shared member records. It now reads the grant's
+   private instance and refuses a store belonging to anyone else. This is the lookup the 5a shadow
+   engine uses.
+2. One caller could claim every demo slot within the deployment's sign-in ceiling and hold it for the
+   idle window. Capacity is now 1,000 per product; when full, the instance unused for longest (at
+   least 15 minutes) is reclaimed; an instance in use is never evicted.
+3. Lookup helpers fell back to the shared records, a seed file or a built-in list of names. They now
+   require the caller's records and refuse to run without them.
+4. The seed was rebuilt from files with no approved checksum. The product package now pins its
+   version and checksum; an unreviewed change refuses new visitors and resets.

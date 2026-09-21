@@ -18,6 +18,7 @@ from app.services.agent import DemoAgent
 from app.services.agent_reasoner import AgentReasoner, estimate_tokens
 from app.services.provider_policy import ReasoningTokenLimits
 from app.services.retriever import RetrievedDocument
+from app.services.product_data_store import ProductDataStore
 from app.workspace_config import get_workspace_scope
 from test_usage_ledger import ORG_ADMIN, LedgerFixture, SECRET_MESSAGE
 
@@ -103,12 +104,14 @@ class PersistentSessionLimitTest(LedgerFixture):
         request = TurnRequest(session_id="s1", turn_id=1, product_id="linear-demo",
                               message="how should my team plan work")
         access = authorize_product(ORG_ADMIN, "linear-demo")
-        scope = get_workspace_scope("workspace-product-eng")
+        data = ProductDataStore().load()
+        scope = get_workspace_scope("workspace-product-eng", data)
         for _ in range(2):
             agent = DemoAgent()  # a fresh process-level agent each time
             self.assertFalse(hasattr(agent, "llm_call_counts"))
             agent.llm_reasoner = AgentReasoner(transport=transport)
-            agent._reason_with_llm(request, request.message, scope, "demo-product-eng", access, "linear_simplified")
+            agent._reason_with_llm(request, request.message, scope, "demo-product-eng", access,
+                                   "linear_simplified", data)
         self.assertEqual(len(calls), 1)
         self.assertEqual(self.statuses(), ["timeout", "blocked"])
 

@@ -16,12 +16,14 @@ import json
 from dataclasses import dataclass
 
 from app.db import get_connection, use_connection
+from app.services.demo_instances import DemoContext
 
 
 @dataclass(frozen=True)
 class RecordGrant:
     scope_ids: frozenset[str]
     is_admin: bool
+    demo_context: DemoContext | None = None
 
     def visible_scope_ids(self) -> frozenset[str] | None:
         """Scopes whose records are visible; None means every scope."""

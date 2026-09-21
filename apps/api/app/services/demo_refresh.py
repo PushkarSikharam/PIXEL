@@ -1,13 +1,12 @@
-"""Restore the shared synthetic demo between visitors.
+"""Restore the legacy shared member demo between configured member sign-ins.
 
-Demo records are shared by everyone who visits. One visitor who follows the guided path changes
-them (a guided step reassigns a record), and every later visitor then finds the guided path
-broken (the next step looks for that record where it used to be) until an operator resets.
+These records are shared only by explicitly configured organization-member demo logins. The
+public web experience uses private visitor instances and never invokes this service.
 
 This is the interim remedy, not isolation: when a visitor signs in to the demo, the shared data
 has been changed, and nobody has used the demo for `PIXEL_DEMO_IDLE_RESET_MINUTES`, the seed is
-restored before they start. Visitors who overlap still share one copy. Per-visitor, disposable
-state is the real fix and needs its own plan.
+restored before they start. Members who overlap still share one copy; this remains a compatibility
+path for the older demo workflow, not a public-demo isolation mechanism.
 
 It restores data, so it is off unless that setting is a positive number, and it is armed only when
 the server starts (like the rate limits), so tests that never start the server are unaffected.

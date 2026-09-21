@@ -66,7 +66,9 @@ NEW_ISSUE = {
 
 def issue_payload(**overrides) -> dict:
     """Exactly the body the endpoint parses, so the key authorizes what the client will send."""
-    return IssueInput(**{**NEW_ISSUE, **overrides}).model_dump(mode="json")
+    return IssueInput(**{**NEW_ISSUE, **overrides}).model_dump(
+        mode="json", exclude={"revision"}
+    )
 
 
 class ExecutionFixture(unittest.TestCase):
@@ -317,6 +319,7 @@ class LedgerDataTest(ExecutionFixture):
             sorted(row.keys()),
             sorted([
                 "execution_key", "tenant_id", "product_id", "session_id", "turn_id", "user_id",
+                "instance_id", "instance_generation",
                 "action_key", "capability", "entity", "target_id", "request_digest", "state",
                 "result_record_id", "result_code", "reason", "created_at", "expires_at",
                 "settled_at",

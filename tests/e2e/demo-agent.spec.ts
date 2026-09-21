@@ -3,8 +3,8 @@ import {
   agentApiRoute,
   agentCancelTurnOneRoute,
   agentTurnRoute,
-  apiAuthHeaders,
   apiPort,
+  browserAuthHeaders,
   delay,
   escapedRequests,
   forwardToFreshBackend,
@@ -20,7 +20,7 @@ setupIsolatedApp();
 test("live readiness blocks partial demo behavior and recovers cleanly", async ({ page }) => {
   let loginRequests = 0;
   page.on("request", (request) => {
-    if (new URL(request.url()).pathname === "/api/agent/auth/demo-login") loginRequests += 1;
+    if (new URL(request.url()).pathname.endsWith("/visitor-sessions")) loginRequests += 1;
   });
   await page.route("**/api/agent/health", (route) => route.fulfill({
     status: 503,
@@ -62,15 +62,18 @@ test("phase 1 creates a ticket through the form with the selected owner", async 
   await page.reload();
   await page.getByTestId("nav-issues").click();
   await expect(page.getByText("Audit form-created ticket", { exact: true })).toBeVisible();
-  const data = await (await fetch(`http://127.0.0.1:${apiPort}/api/demo-data`, { headers: apiAuthHeaders() })).json();
+  const data = await (await fetch(`http://127.0.0.1:${apiPort}/api/demo-data`, {
+    headers: await browserAuthHeaders(page)
+  })).json();
   expect(data.issues.find((issue: { title: string }) => issue.title === "Audit form-created ticket").assignee)
     .toBe("Noah Patel");
 });
 
 for (const entity of ["project", "cycle"] as const) {
   test(`phase 1 creates and reloads a ${entity} without changing existing records`, async ({ page }) => {
-    const before = await (await fetch(`http://127.0.0.1:${apiPort}/api/demo-data`, { headers: apiAuthHeaders() })).json();
     await openApp(page);
+    const headers = await browserAuthHeaders(page);
+    const before = await (await fetch(`http://127.0.0.1:${apiPort}/api/demo-data`, { headers })).json();
     await page.getByTestId(`nav-${entity}s`).click();
     await page.getByTestId(`create-${entity}-button`).click();
     const name = `Audit ${entity}`;
@@ -84,7 +87,7 @@ for (const entity of ["project", "cycle"] as const) {
     await page.reload();
     await page.getByTestId(`nav-${entity}s`).click();
     await expect(page.getByText(name, { exact: true })).toBeVisible();
-    const after = await (await fetch(`http://127.0.0.1:${apiPort}/api/demo-data`, { headers: apiAuthHeaders() })).json();
+    const after = await (await fetch(`http://127.0.0.1:${apiPort}/api/demo-data`, { headers })).json();
     for (const previous of before[`${entity}s`]) {
       expect(after[`${entity}s`].find((record: { id: string }) => record.id === previous.id)).toEqual(previous);
     }
@@ -121,12 +124,13 @@ test("milestone 1 failed reset keeps the session and reports the failure", async
   await sendChat(page, "all tickets for Maya");
   await expect(page.getByTestId("issue-filter")).toContainText("Maya Chen");
 
-  // Reset reloads the saved data for a fresh conversation; make that reload fail.
-  await page.route("**/api/agent/demo-data", (route) => route.fulfill({
+  // Reset is one private transaction; make that transaction fail.
+  await page.route("**/api/agent/demo-data/reset-mine", (route) => route.fulfill({
     status: 503, contentType: "application/json", body: JSON.stringify({ detail: "Unavailable" })
   }));
-  const reset = page.waitForResponse((response) => response.url().endsWith("/api/agent/demo-data"));
+  const reset = page.waitForResponse((response) => response.url().endsWith("/api/agent/demo-data/reset-mine"));
   await page.getByTestId("reset-demo").click();
+  await page.getByTestId("reset-demo-confirm").click();
   expect((await reset).status()).toBe(503);
 
   await expect(page.getByTestId("data-error")).toContainText("Reset failed");
@@ -157,7 +161,7 @@ test("a throttled turn keeps the demo connected and asks the visitor to wait", a
 });
 
 test("a throttled sign-in says to wait rather than reporting an outage", async ({ page }) => {
-  await page.route("**/api/agent/auth/demo-login", (route) => route.fulfill({
+  await page.route("**/api/agent/organizations/*/products/*/visitor-sessions", (route) => route.fulfill({
     status: 429,
     contentType: "application/json",
     headers: { "Retry-After": "5" },
@@ -184,7 +188,9 @@ test("milestone 1 removing a page override preserves backend isolation", async (
   expect(await page.evaluate(async () => (await fetch("/api/agent/demo-data")).status)).toBe(503);
   await page.unroute(dataRoute);
   const status = await page.evaluate(async () => {
-    const token = window.sessionStorage.getItem("demo_auth_token");
+    const key = Object.keys(window.sessionStorage)
+      .find((candidate) => candidate.startsWith("pixel_demo_auth:"));
+    const token = key ? window.sessionStorage.getItem(key) : null;
     return (await fetch("/api/agent/demo-data", {
       headers: { Authorization: `Bearer ${token}` }
     })).status;
@@ -276,11 +282,12 @@ test("shows only the current workspace scope across product views", async ({ pag
 });
 
 test("milestone 1 duplicate project names cannot widen the browser workspace", async ({ page }) => {
+  await openApp(page);
   const created = await fetch(
     `http://127.0.0.1:${apiPort}/api/demo-data/projects?workspace_scope_id=workspace-product-eng`,
     {
       method: "POST",
-      headers: { ...apiAuthHeaders(), "Content-Type": "application/json" },
+      headers: { ...(await browserAuthHeaders(page)), "Content-Type": "application/json" },
       body: JSON.stringify({
         name: "Planning", description: "Name collision regression", progress: 0,
         status: "Planned", lead: "Maya Chen", team: "Product Engineering", targetDate: "2026-12-01"
@@ -288,7 +295,7 @@ test("milestone 1 duplicate project names cannot widen the browser workspace", a
     }
   );
   expect(created.ok).toBe(true);
-  await openApp(page);
+  await page.reload();
   await expect(page.getByTestId("workspace-scope-badge")).toHaveText("3 scoped projects");
   await page.getByTestId("nav-issues").click();
   await expect(page.getByTestId("issue-count-badge")).toHaveText("3 open");
@@ -460,6 +467,7 @@ test("runs suggested demo turns and resets to a fresh session", async ({ page })
   await expect(page.getByTestId("issue-filter")).toContainText("Maya Chen");
 
   await page.getByTestId("reset-demo").click();
+  await page.getByTestId("reset-demo-confirm").click();
 
   await expect(page.getByTestId("current-view-title")).toHaveText("Dashboard");
   await expect(page.getByTestId("turn-status")).toHaveText("Ready");
@@ -477,6 +485,7 @@ test("reset returns to the default workspace, where the guided prompts apply", a
   await expect(page.getByTestId("workspace-switcher")).toHaveValue("workspace-platform");
 
   await page.getByTestId("reset-demo").click();
+  await page.getByTestId("reset-demo-confirm").click();
   await expect(page.getByTestId("turn-status")).toHaveText("Ready");
   await expect(page.getByTestId("workspace-switcher")).toHaveValue("workspace-product-eng");
 
@@ -484,26 +493,28 @@ test("reset returns to the default workspace, where the guided prompts apply", a
   await expect(page.getByTestId("selected-issue-id")).toHaveText("LIN-142");
 });
 
-test("reset starts a fresh conversation and never resets shared demo data", async ({ page }) => {
-  // Demo data is shared by every visitor. The public page may only restart its own conversation;
-  // restoring the data is an operator action on the server.
-  const globalResets: string[] = [];
+test("reset restores only the current visitor's private demo", async ({ page }) => {
+  const resets: string[] = [];
   page.on("request", (request) => {
-    if (request.url().includes("/demo-data/reset")) globalResets.push(request.url());
+    if (request.url().includes("/demo-data/reset")) resets.push(new URL(request.url()).pathname);
   });
   await openApp(page);
 
-  const reloaded = page.waitForResponse((response) =>
-    response.url().endsWith("/api/agent/demo-data") && response.request().method() === "GET"
+  const restored = page.waitForResponse((response) =>
+    response.url().endsWith("/api/agent/demo-data/reset-mine")
+    && response.request().method() === "POST"
   );
   await page.getByTestId("reset-demo").click();
-  expect((await reloaded).ok()).toBe(true);
+  await page.getByTestId("reset-demo-confirm").click();
+  expect((await restored).ok()).toBe(true);
   await expect(page.getByTestId("turn-status")).toHaveText("Ready");
-  expect(globalResets).toEqual([]);
+  expect(resets).toEqual(["/api/agent/demo-data/reset-mine"]);
 
   // The API refuses the global reset for the public visitor even when asked directly.
   const status = await page.evaluate(async () => {
-    const token = window.sessionStorage.getItem("demo_auth_token");
+    const key = Object.keys(window.sessionStorage)
+      .find((candidate) => candidate.startsWith("pixel_demo_auth:"));
+    const token = key ? window.sessionStorage.getItem(key) : null;
     const response = await fetch("/api/agent/demo-data/reset", {
       method: "POST",
       headers: token ? { Authorization: `Bearer ${token}` } : {}
@@ -511,6 +522,33 @@ test("reset starts a fresh conversation and never resets shared demo data", asyn
     return response.status;
   });
   expect(status).toBe(403);
+});
+
+test("restart preserves private records while reset restores this visitor's seed", async ({ page }) => {
+  await openApp(page);
+  await sendChat(page, "open ticket for maya");
+
+  const saved = page.waitForResponse((response) =>
+    response.url().endsWith("/demo-data/issues/LIN-142")
+    && response.request().method() === "PUT"
+  );
+  await page.getByTestId("assignee-select").selectOption("Noah Patel");
+  expect((await saved).ok()).toBe(true);
+  await expect(page.getByTestId("assignee-select")).toHaveValue("Noah Patel");
+
+  await page.getByTestId("restart-chat").click();
+  await expect(page.getByTestId("current-view-title")).toHaveText("Dashboard");
+  await expect(page.getByTestId("transcript")).toContainText("Welcome to Pixel");
+  await page.getByTestId("nav-issues").click();
+  await page.getByRole("button", { name: "Open LIN-142" }).click();
+  await expect(page.getByTestId("assignee-select")).toHaveValue("Noah Patel");
+
+  await page.getByTestId("reset-demo").click();
+  await page.getByTestId("reset-demo-confirm").click();
+  await expect(page.getByTestId("turn-status")).toHaveText("Ready");
+  await page.getByTestId("nav-issues").click();
+  await page.getByRole("button", { name: "Open LIN-142" }).click();
+  await expect(page.getByTestId("assignee-select")).toHaveValue("Maya Chen");
 });
 
 test("opens and highlights Maya Chen's issue from chat", async ({ page }) => {

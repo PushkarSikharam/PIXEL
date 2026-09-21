@@ -41,9 +41,10 @@ class ConversationManager:
         self,
         message: str,
         last_feature: str | None,
+        data: dict | None = None,
     ) -> tuple[ProposedAction | None, list[Signal]]:
         text = normalize_for_intent(message)
-        issue = find_issue_by_person(message)
+        issue = find_issue_by_person(message, data)
 
         if issue:
             signals = [

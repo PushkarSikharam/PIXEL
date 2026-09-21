@@ -18,6 +18,7 @@ import {
 import {
   ensureDemoLogin,
   loadDemoData,
+  resetPrivateDemo,
   RateLimitedError,
   RecordSaveError,
   saveStoredCycle,
@@ -352,7 +353,12 @@ export default function Home() {
     if (action.type === "UPDATE_DEMO_ISSUE") {
       const changed = applyIssueUpdate(issues, action.payload).find((issue) => issue.id === action.payload.issue_id);
       if (!changed) throw new Error("This ticket is no longer available.");
-      await updateStoredIssue(changed);
+      const saved = await updateStoredIssue(changed);
+      applyAction(action);
+      // The server increments the optimistic revision. Keep it in browser state so a second
+      // natural-language edit does not submit the stale version that preceded this write.
+      setIssues((currentIssues) => upsertIssue(currentIssues, saved));
+      return;
     }
     applyAction(action);
   }
@@ -363,10 +369,9 @@ export default function Home() {
 
   function resetDemoSession() {
     setDataError(null);
-    // Reset starts a fresh conversation for this visitor over the current saved data. It never
-    // resets everyone's demo data: that is shared, and only an operator may restore it.
-    // Clear nothing until the data has reloaded; a failed reset keeps the session as it was.
-    void loadDemoData()
+    // Reset restores only this visitor's private seed and rotates its generation. Clear nothing
+    // until that transaction commits; a failed reset keeps the current conversation and data.
+    void resetPrivateDemo()
       .then((demoData) => {
         const activeTurnId = activeTurnIdRef.current;
         if (activeTurnId !== null) {
@@ -404,6 +409,25 @@ export default function Home() {
       .catch(() => {
         setDataError("Reset failed. Nothing was changed: your current session is unchanged.");
       });
+  }
+
+  function restartConversation() {
+    const activeTurnId = activeTurnIdRef.current;
+    if (activeTurnId !== null) {
+      void cancelAgentTurn({ sessionId, turnId: activeTurnId }).catch(() => undefined);
+    }
+    activeTurnIdRef.current = null;
+    nextTurnIdRef.current = 1;
+    setSessionId(crypto.randomUUID());
+    setUiState({ current_page: "dashboard", active_turn_id: null });
+    setUiEvents([]);
+    setIntentTrace(initialTrace);
+    setSessionSummary(initialSessionSummary);
+    setMessages(initialTranscript);
+    setDraftPrefill({});
+    setVisitorName(null);
+    setIsSending(false);
+    setTurnStatus("Ready");
   }
 
   async function createIssue(issue: DemoIssue, requestKey: string) {
@@ -1185,6 +1209,7 @@ function handleLocalDraftIntent(message: string): AgentTurnResponse | null {
             isSending={isSending}
             messages={messages}
             onCollapse={() => setIsAssistantCollapsed(true)}
+            onRestart={restartConversation}
             onReset={resetDemoSession}
             onRetryService={() => void loadStoredData()}
             onSend={sendMessage}
@@ -2948,6 +2973,7 @@ function ConversationCard({
   isSending,
   messages,
   onCollapse,
+  onRestart,
   onReset,
   onRetryService,
   onSend,
@@ -2961,6 +2987,7 @@ function ConversationCard({
   isSending: boolean;
   messages: TranscriptMessage[];
   onCollapse: () => void;
+  onRestart: () => void;
   onReset: () => void;
   onRetryService: () => void;
   onSend: (message: string, inputMode?: InputMode) => Promise<AgentTurnResponse | null>;
@@ -2975,6 +3002,7 @@ function ConversationCard({
   const [liveTranscript, setLiveTranscript] = useState("");
   const [voiceError, setVoiceError] = useState("");
   const [voiceFallbackNotice, setVoiceFallbackNotice] = useState("");
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   // Replies are spoken only after the visitor turns voice on; neural speech is a paid call.
   const [isTTSEnabled, setIsTTSEnabled] = useState(false);
   const transcriptRef = useRef<HTMLDivElement | null>(null);
@@ -3200,9 +3228,18 @@ function ConversationCard({
           </button>
           <button
             className="reset-button"
+            data-testid="restart-chat"
+            disabled={!isServiceReady}
+            onClick={onRestart}
+            type="button"
+          >
+            Restart
+          </button>
+          <button
+            className="reset-button"
             data-testid="reset-demo"
             disabled={!isServiceReady}
-            onClick={onReset}
+            onClick={() => setIsResetConfirmOpen(true)}
             type="button"
           >
             Reset
@@ -3215,6 +3252,48 @@ function ConversationCard({
           </span>
         </div>
       </div>
+
+      {isResetConfirmOpen ? (
+        <div className="demo-reset-backdrop" role="presentation">
+          <div
+            aria-describedby="demo-reset-description"
+            aria-labelledby="demo-reset-title"
+            aria-modal="true"
+            className="demo-reset-dialog"
+            data-testid="reset-demo-dialog"
+            role="dialog"
+          >
+            <p className="section-kicker">Private demo</p>
+            <h3 id="demo-reset-title">Restore the starting data?</h3>
+            <p id="demo-reset-description">
+              This clears tickets, projects, cycles, and members created in this demo. Other
+              visitors are not affected.
+            </p>
+            <div className="demo-reset-actions">
+              <button
+                className="secondary-button compact"
+                onClick={() => setIsResetConfirmOpen(false)}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="danger-button compact"
+                data-testid="reset-demo-confirm"
+                onClick={() => {
+                  voiceEngineRef.current?.stop();
+                  voiceEngineRef.current?.cancelSpeech();
+                  setIsResetConfirmOpen(false);
+                  onReset();
+                }}
+                type="button"
+              >
+                Reset demo
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="guide-intro">
         <div className="guide-title-row">

@@ -22,6 +22,8 @@ from app.definitions.sessions import DefinitionUnavailable, SessionEnded, check_
 from app.engine.execution import ExecutionRefused
 from app.record_access import RecordGrant, record_grant
 from app.services.session_manager import SessionManager
+from app.services.demo_instances import DemoInstanceStore, InstanceUnavailable
+from app.services.product_data_store import ProductDataStore
 
 
 @dataclass(frozen=True)
@@ -50,18 +52,29 @@ class ExecutionGuard:
         except AccessDenied as denied:
             raise ExecutionRefused(f"access_{denied.reason}", conflict=False) from denied
 
-        grant = (
-            record_grant(principal.tenant_id, product_id, principal.user_id, connection=connection)
-            if principal.kind == "member"
-            else None
-        )
+        if principal.kind == "member":
+            grant = record_grant(
+                principal.tenant_id, product_id, principal.user_id, connection=connection
+            )
+        else:
+            context = getattr(principal, "demo_context", None)
+            try:
+                DemoInstanceStore().assert_available(context, connection)
+            except (InstanceUnavailable, AttributeError):
+                grant = None
+            else:
+                scopes = ProductDataStore(context).load(connection=connection)["workspaceScopes"]
+                grant = RecordGrant(
+                    frozenset(scope["id"] for scope in scopes), False, demo_context=context
+                )
         if grant is None:
             raise ExecutionRefused("record_access_withdrawn", conflict=False)
 
         if session_id is not None:
             pin = self._sessions.pin_for(session_id, connection=connection)
             owned = self._sessions.owns_session(
-                session_id, principal.user_id, principal.tenant_id, connection=connection
+                session_id, principal.user_id, principal.tenant_id, connection=connection,
+                demo_context=getattr(principal, "demo_context", None),
             )
             if pin is None or not owned or pin.product_id != product_id:
                 # Another caller's session, an unknown one, or one for a different product.

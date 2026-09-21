@@ -1,7 +1,7 @@
 # Private Demo Instances
 
-Status: proposed for stakeholder review, not implemented. Part of phase-3, before 5a.
-Updated: 2026-09-20.
+Status: implemented locally; production rollout and CI evidence pending. Part of phase-3, before 5a.
+Updated: 2026-09-21.
 
 ## Outcome
 
@@ -16,7 +16,7 @@ Required demonstration: A reassigns LIN-142 from Maya to Noah. B still sees LIN-
 Maya. A refreshes and still sees Noah. A and B cannot operate on each other's instance or session,
 even when they know its ID. Restarting chat preserves A's edits; resetting A's demo restores only A.
 
-## Confirmed defects
+## Defects this implementation closes
 
 - Public sign-ins mint different tokens for the same `demo-visitor` principal. Session ownership
   compares user and tenant, so a second login can submit to a known first login's conversation.
@@ -27,7 +27,7 @@ even when they know its ID. Restarting chat preserves A's edits; resetting A's d
 - Legacy lookup helpers can fall back to seed files on errors. A missing private instance must
   never become a successful lookup against shared records or seed files.
 
-## Identity and authorization
+## Implemented identity and authorization
 
 Use the existing product-scoped visitor-session endpoint as the entry point. Check active tenant,
 product, definition, and public visitor access before allocation. The server issues a unique
@@ -53,8 +53,10 @@ in the existing SQLite database so record changes and execution settlement can s
 transaction. Do not clone the full database per visitor: that would duplicate permissions and
 budgets and make accounting and revocation inconsistent.
 
-Add instance metadata keyed by tenant/product/instance, with visitor owner, generation, pinned
-definition and approved seed version, creation/expiry timestamps, state and quota accounting.
+Instance metadata is keyed by tenant/product/instance and carries visitor owner, generation,
+approved seed version, creation/expiry timestamps, state and quota accounting. Conversation
+sessions separately pin the exact definition version and checksum; that pin remains the
+conversation engine's responsibility rather than being duplicated in disposable record storage.
 
 Store private records with composite identity `(tenant_id, product_id, instance_id, entity, id)`.
 The familiar IDs such as LIN-142 can repeat across instances. A constrained JSON payload can
@@ -97,7 +99,7 @@ reads and writes instance-scoped; it does not claim to replace the browser decis
 
 ## Reset, expiry and resource limits
 
-Proposed defaults for this synthetic demo: 24-hour absolute lifetime, 2-hour inactivity expiry,
+Defaults for this synthetic demo: 24-hour absolute lifetime, 2-hour inactivity expiry,
 100 active instances per product, and 1,000 records per instance including seed records. These are
 configurable operator limits, subject to review. Do not silently evict an active instance to admit
 a new one; reject allocation with 429 and Retry-After when its capacity budget is exhausted.
@@ -138,9 +140,22 @@ allowances. Keep one API replica until shared rate-limit storage is implemented.
 
 ## Rollout and evidence
 
-All implementation stays on phase-3. Review this plan before schema work. Land implementation in
-reviewable commits, with API, product, web and real-backend browser evidence. Test the exact Linux
-deployment image on a fresh database and a copy of the previous schema.
+Local verification on 2026-09-21:
+
+- 741 core API tests passed with 3 CI-only skips; 82 product tests passed.
+- Web type checking, 35 web unit tests and the production build passed.
+- 113 real-backend browser tests passed, including the Restart-versus-Reset lifecycle.
+- The release smoke created two visitors, proved isolated writes, rotated one visitor's reset
+  generation, rejected its stale token and the global reset, and exercised chat and guardrails.
+- Paid speech and model providers were disabled for all isolation verification.
+
+These are local implementation results, not production sign-off. Linux CI, a verified backup,
+deployment against the previous production schema, and two independent production browser
+contexts remain required.
+
+All implementation stays on phase-3. Local evidence includes the API, product, web and real-backend
+browser suites. CI and the exact Linux deployment image remain release gates, along with a test on
+a copy of the previous production schema.
 
 Take and verify a consistent SQLite backup before changing production storage. Add the new schema
 without deleting the old tables; leave the employee path intact. Existing public shared tokens

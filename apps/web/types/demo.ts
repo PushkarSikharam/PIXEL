@@ -31,6 +31,7 @@ export type SessionUiState = {
 };
 
 export type DemoTeamMember = {
+  revision?: number;
   name: string;
   initials: string;
   role: string;
@@ -40,6 +41,7 @@ export type DemoTeamMember = {
 };
 
 export type DemoIssue = {
+  revision?: number;
   id: string;
   title: string;
   priority: "Low" | "Medium" | "High";
@@ -54,6 +56,7 @@ export type DemoIssue = {
 };
 
 export type DemoProject = {
+  revision?: number;
   id: string;
   name: string;
   description: string;
@@ -65,6 +68,7 @@ export type DemoProject = {
 };
 
 export type DemoCycle = {
+  revision?: number;
   id: string;
   name: string;
   projectId?: string;
@@ -81,6 +85,7 @@ export type DemoCycle = {
 };
 
 export type DemoWorkspaceScope = {
+  revision?: number;
   id: string;
   name: string;
   description: string;

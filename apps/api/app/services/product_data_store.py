@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from contextlib import contextmanager
 import re
 from pathlib import Path
@@ -8,6 +9,14 @@ from typing import Any
 
 from app.db import get_connection, use_connection
 from app.workspace_config import WORKSPACE_SCOPES, WorkspaceScope
+from app.services.demo_instances import (
+    DemoContext,
+    DemoInstanceStore,
+    DemoSeed,
+    InstanceCapacity,
+    InstanceConflict,
+    InstanceUnavailable,
+)
 
 
 API_ROOT = Path(__file__).resolve().parents[2]
@@ -140,6 +149,11 @@ SEED_CYCLES: tuple[dict[str, Any], ...] = (
 
 
 class ProductDataStore:
+    def __init__(self, demo_context: DemoContext | None = None,
+                 instances: DemoInstanceStore | None = None) -> None:
+        self.demo_context = demo_context
+        self.instances = instances or DemoInstanceStore()
+
     def load(self, scope_ids: frozenset[str] | None = None,
              connection=None) -> dict[str, list[dict[str, Any]]]:
         """Load records; with scope_ids, only records inside those workspaces.
@@ -147,10 +161,22 @@ class ProductDataStore:
         With `connection`, every table is read through the caller's open transaction, so one call
         gives a single consistent view (used by the turn snapshot).
         """
-        data = self._load_all(connection)
+        data = self._load_private(connection) if self.demo_context else self._load_all(connection)
         return data if scope_ids is None else _filter_to_scopes(data, scope_ids)
 
     def workspace_scope(self, scope_id: str) -> WorkspaceScope | None:
+        if self.demo_context:
+            row = next((item for item in self.load()["workspaceScopes"] if item["id"] == scope_id), None)
+            if row is None:
+                return None
+            project_ids = frozenset(row["allowedProjectIds"])
+            members = self.load()["team"]
+            return WorkspaceScope(
+                row["id"], row["name"], row["description"], project_ids,
+                frozenset(row["allowedIssueProjects"]),
+                frozenset(member["name"] for member in members
+                          if project_ids.intersection(member.get("projectIds", []))),
+            )
         self.seed_if_empty()
         with get_connection() as connection:
             row = connection.execute(
@@ -171,6 +197,10 @@ class ProductDataStore:
         )
 
     def get_issue(self, issue_id: str, connection=None) -> dict[str, Any] | None:
+        if self.demo_context:
+            records = self.instances.read(self.demo_context, connection)
+            row = records.get("issues", {}).get(issue_id)
+            return _with_revision(row) if row else None
         if connection is None:
             self.seed_if_empty()
         with use_connection(connection) as connection:
@@ -180,6 +210,12 @@ class ProductDataStore:
     def scopes_for_record(self, project_id: str | None, issue_project: str | None = None,
                           connection=None) -> set[str]:
         """Workspaces that contain a record, by project ID or, failing that, issue project label."""
+        if self.demo_context:
+            rows = self.load(connection=connection)["workspaceScopes"]
+            if project_id:
+                return {row["id"] for row in rows if project_id in row["allowedProjectIds"]}
+            return {row["id"] for row in rows
+                    if issue_project and issue_project in row["allowedIssueProjects"]}
         if connection is None:
             self.seed_if_empty()
         with use_connection(connection) as connection:
@@ -227,6 +263,9 @@ class ProductDataStore:
             }
 
     def seed_if_empty(self) -> None:
+        if self.demo_context:
+            self.instances.assert_available(self.demo_context)
+            return
         with get_connection() as connection:
             row = connection.execute("select count(*) as count from demo_projects").fetchone()
             if row and row["count"] > 0:
@@ -234,9 +273,8 @@ class ProductDataStore:
         self.reset()
 
     def reset(self) -> dict[str, list[dict[str, Any]]]:
-        from app.services.action_planner import ActionPlanner
-
-        ActionPlanner.reset_created_count()
+        if self.demo_context:
+            raise RuntimeError("private demos reset through reset_private with their pinned seed")
         issues = json.loads(ISSUES_PATH.read_text(encoding="utf-8"))
         with get_connection() as connection:
             connection.executescript(
@@ -277,12 +315,20 @@ class ProductDataStore:
 
         return self.load()
 
+    def reset_private(self, seed: DemoSeed, connection=None) -> tuple[DemoContext, dict[str, list[dict[str, Any]]]]:
+        if self.demo_context is None:
+            raise RuntimeError("a private demo context is required")
+        updated = self.instances.reset(self.demo_context, seed, connection=connection)
+        return updated, ProductDataStore(updated, self.instances).load(connection=connection)
+
     def save_issue(self, issue: dict[str, Any], request_key: str | None = None,
                    connection=None) -> dict[str, Any]:
         return self._create_record("issue", issue, request_key=request_key, connection=connection)
 
     def update_issue(self, issue_id: str, issue: dict[str, Any], connection=None) -> dict[str, Any]:
         """Change one ticket. With `connection`, the caller owns the transaction (see 3.2 slice 3)."""
+        if self.demo_context:
+            return self._private_update_issue(issue_id, issue, connection)
         if connection is None:
             self.seed_if_empty()
         issue = {**issue, "id": issue_id}
@@ -332,6 +378,8 @@ class ProductDataStore:
     def _create_record(self, kind: str, record: dict[str, Any],
                        scope_id: str | None = None, request_key: str | None = None,
                        connection=None) -> dict[str, Any]:
+        if self.demo_context:
+            return self._private_create_record(kind, record, scope_id, request_key, connection)
         if connection is None:
             self.seed_if_empty()
         table, key_column, prefix, writer = {
@@ -385,6 +433,146 @@ class ProductDataStore:
                     (request_key, request_body, json.dumps(record)),
                 )
         return record
+
+    def _load_private(self, connection=None) -> dict[str, list[dict[str, Any]]]:
+        records = self.instances.read(self.demo_context, connection)
+        return {
+            name: [_with_revision(row) for _, row in sorted(records.get(name, {}).items())]
+            for name in ("workspaceScopes", "projects", "team", "cycles", "issues")
+        }
+
+    @contextmanager
+    def _private_transaction(self, connection):
+        if connection is not None:
+            if not connection.in_transaction:
+                raise RuntimeError("a caller-owned connection must already hold a write transaction")
+            self.instances.assert_available(self.demo_context, connection)
+            yield connection
+            return
+        with self.instances.transaction(self.demo_context) as own:
+            yield own
+
+    def _private_create_record(self, kind: str, record: dict[str, Any], scope_id: str | None,
+                               request_key: str | None, connection=None) -> dict[str, Any]:
+        source, key_name, prefix = {
+            "issue": ("issues", "id", "PIX"),
+            "project": ("projects", "id", "PRJ"),
+            "cycle": ("cycles", "id", "CYC"),
+            "member": ("team", "name", None),
+        }[kind]
+        record = {name: value for name, value in dict(record).items() if name != "revision"}
+        request_body = json.dumps([kind, scope_id, record], sort_keys=True, separators=(",", ":"))
+        request_digest = hashlib.sha256(request_body.encode()).hexdigest()
+        with self._private_transaction(connection) as open_connection:
+            if request_key:
+                receipt = open_connection.execute(
+                    "select request_digest, entity, record_id from demo_instance_receipts "
+                    "where tenant_id=? and product_id=? and instance_id=? and generation=? and request_key=?",
+                    (*self.instances.key(self.demo_context), self.demo_context.generation, request_key),
+                ).fetchone()
+                if receipt:
+                    if receipt["request_digest"] != request_digest:
+                        raise RecordConflict("This request key was already used for a different change.")
+                    existing = self.instances.read(self.demo_context, open_connection).get(
+                        receipt["entity"], {}
+                    ).get(receipt["record_id"])
+                    if existing is None:
+                        raise RecordConflict("The earlier result is no longer available.")
+                    return _with_revision(existing)
+            data = self.instances.read(self.demo_context, open_connection)
+            if scope_id:
+                scope_row = data.get("workspaceScopes", {}).get(scope_id)
+                if scope_row is None:
+                    raise RecordNotFound("This workspace no longer exists.")
+                scope = scope_row["data"]
+                if kind == "member":
+                    allowed = set(scope["allowedProjectIds"])
+                    if not record.get("projectIds"):
+                        record["projectIds"] = sorted(allowed)
+                    elif not set(record["projectIds"]) <= allowed:
+                        raise ScopeViolation(
+                            "Team members can only join projects in this workspace. No records were changed."
+                        )
+            if prefix and not record.get("id"):
+                numbers = [int(match.group(1)) for identifier in data.get(source, {})
+                           if (match := re.search(r"-(\d+)$", identifier))]
+                record["id"] = f"{prefix}-{max(numbers, default=0) + 1}"
+            record_id = record[key_name]
+            if record_id in data.get(source, {}):
+                raise RecordConflict(f"A {kind} with this identifier already exists. No records were changed.")
+            references = self._private_references(kind, record, data, previous_issue=None)
+            revision = self.instances.put(
+                self.demo_context, source, record_id, record, expected_revision=None,
+                references=references, connection=open_connection,
+            )
+            if kind == "project" and scope_id:
+                scope_row = data["workspaceScopes"][scope_id]
+                scope = dict(scope_row["data"])
+                scope["allowedProjectIds"] = sorted(set(scope["allowedProjectIds"]) | {record_id})
+                scope["allowedIssueProjects"] = sorted(
+                    set(scope["allowedIssueProjects"]) | {record["name"]}
+                )
+                self.instances.put(
+                    self.demo_context, "workspaceScopes", scope_id, scope,
+                    expected_revision=scope_row["revision"], connection=open_connection,
+                )
+            if request_key:
+                open_connection.execute(
+                    "insert into demo_instance_receipts values (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (*self.instances.key(self.demo_context), self.demo_context.generation,
+                     request_key, request_digest, source, record_id),
+                )
+        return {**record, "revision": revision}
+
+    def _private_update_issue(self, issue_id: str, issue: dict[str, Any], connection=None) -> dict[str, Any]:
+        expected = issue.get("revision")
+        if type(expected) is not int or expected < 1:
+            raise RecordConflict("Reload this ticket before saving it.")
+        clean = {name: value for name, value in dict(issue).items() if name != "revision"}
+        clean["id"] = issue_id
+        with self._private_transaction(connection) as open_connection:
+            data = self.instances.read(self.demo_context, open_connection)
+            existing = data.get("issues", {}).get(issue_id)
+            if existing is None:
+                raise RecordNotFound("This ticket no longer exists.")
+            references = self._private_references(
+                "issue", clean, data, previous_issue=existing["data"]
+            )
+            revision = self.instances.put(
+                self.demo_context, "issues", issue_id, clean,
+                expected_revision=expected, references=references, connection=open_connection,
+            )
+        return {**clean, "revision": revision}
+
+    def _private_references(self, kind: str, record: dict[str, Any], data,
+                            previous_issue: dict[str, Any] | None) -> tuple[tuple[str, str], ...]:
+        references: list[tuple[str, str]] = []
+        project_id = record.get("projectId")
+        if kind in ("issue", "cycle") and project_id:
+            if project_id not in data.get("projects", {}):
+                raise InvalidReference(f"Project {project_id} does not exist.")
+            references.append(("projects", project_id))
+        if kind != "issue":
+            return tuple(references)
+        assignee = record["assignee"]
+        member = data.get("team", {}).get(assignee)
+        if member is None:
+            raise InvalidReference(f"{assignee} is not a member of this team.")
+        scopes = [row["data"] for row in data.get("workspaceScopes", {}).values()]
+        workspace_projects = {
+            project
+            for scope in scopes
+            if (project_id in scope["allowedProjectIds"] if project_id
+                else record["project"] in scope["allowedIssueProjects"])
+            for project in scope["allowedProjectIds"]
+        }
+        unchanged = previous_issue and assignee == previous_issue.get("assignee") and (
+            previous_issue.get("projectId"), previous_issue.get("project")
+        ) == (project_id, record.get("project"))
+        if not unchanged and not workspace_projects.intersection(member["data"].get("projectIds", [])):
+            raise InvalidReference(f"{assignee} does not work in this ticket's workspace.")
+        references.append(("team", assignee))
+        return tuple(references)
 
     def _upsert_issue(self, connection, issue: dict[str, Any]) -> None:
         connection.execute(
@@ -577,6 +765,10 @@ def _issue_from_row(row) -> dict[str, Any]:
         "label": row["label"],
         "description": row["description"],
     }
+
+
+def _with_revision(row: dict[str, Any]) -> dict[str, Any]:
+    return {**row["data"], "revision": row["revision"]}
 
 
 def _filter_to_scopes(

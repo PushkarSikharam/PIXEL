@@ -3,10 +3,16 @@ import { join, relative } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { sendAgentTurn } from "@/lib/agent-api";
-import { ensureDemoLogin, RateLimitedError, setAuthToken } from "@/lib/product-data-api";
+import {
+  ensureDemoLogin,
+  getAuthToken,
+  RateLimitedError,
+  resetPrivateDemo,
+  setAuthToken
+} from "@/lib/product-data-api";
 
-// The public page runs as an anonymous visitor. It must never sign in as an administrator,
-// never reset the demo data every visitor shares, and never mistake a rate limit for an outage.
+// The public page runs as an anonymous visitor with disposable records. It must never sign in as
+// a member, invoke the global reset, or mistake a rate limit for an outage.
 const WEB_ROOT = join(__dirname, "..");
 const SOURCE_DIRS = ["app", "lib", "types"];
 
@@ -43,21 +49,37 @@ describe("public demo boundary", () => {
   it("never names an administrator identity or the shared data reset", () => {
     const violations = files.flatMap((file) => {
       const source = readFileSync(file, "utf8");
-      return [/demo-admin/, /demo-data\/reset/]
+      return [/demo-admin/, /demo-data\/reset(?=["'`])/]
         .filter((pattern) => pattern.test(source))
         .map((pattern) => `${relative(WEB_ROOT, file)}: ${pattern}`);
     });
     expect(violations).toEqual([]);
   });
 
-  it("signs in as the public demo visitor by default", async () => {
+  it("starts a server-allocated private visitor session", async () => {
     const request = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(200, { token: "visitor-token" }));
     vi.stubGlobal("fetch", request);
 
     await ensureDemoLogin();
 
-    const [, init] = request.mock.calls[0];
-    expect(JSON.parse(String(init?.body))).toEqual({ user_id: "demo-visitor" });
+    const [url, init] = request.mock.calls[0];
+    expect(String(url)).toContain("/organizations/pixel-dev/products/linear-demo/visitor-sessions");
+    expect(init?.method).toBe("POST");
+    expect(init?.body).toBeUndefined();
+  });
+
+  it("stores the rotated token returned by a private reset", async () => {
+    setAuthToken("generation-one");
+    const data = { workspaceScopes: [], projects: [], team: [], cycles: [], issues: [] };
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(200, {
+      token: "generation-two",
+      instance_id: "instance-1",
+      generation: 2,
+      data
+    })));
+
+    await expect(resetPrivateDemo()).resolves.toEqual(data);
+    expect(getAuthToken()).toBe("generation-two");
   });
 });
 

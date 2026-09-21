@@ -16,17 +16,23 @@ Attach one persistent volume at `/data`, then set:
 PIXEL_DB_PATH=/data/pixel-live.sqlite3
 PIXEL_DEPLOYMENT_ID=live-demo
 PIXEL_AUTH_SECRET=<long random value>
-PIXEL_SYNTHETIC_DEMO=true
+PIXEL_SYNTHETIC_DEMO=false
 PIXEL_DEMO_SEEDS=true
 PIXEL_SESSION_MAX_AGE_SECONDS=86400
-PIXEL_DEMO_INSTANCE_ACTIVE_LIMIT=100
+PIXEL_DEMO_INSTANCE_ACTIVE_LIMIT=1000
 PIXEL_DEMO_INSTANCE_RECORD_LIMIT=1000
 PIXEL_DEMO_INSTANCE_TTL_SECONDS=86400
 PIXEL_DEMO_INSTANCE_IDLE_SECONDS=7200
+PIXEL_DEMO_INSTANCE_RECLAIM_SECONDS=900
 ```
 
 Never set `PIXEL_DEMO_ADMIN_LOGIN` or `PIXEL_RATE_LIMITS=off` on a deployment. Both exist only for
 isolated test harnesses.
+
+`PIXEL_SYNTHETIC_DEMO` controls only the legacy member demo login, which signs callers into the
+shared member records. The public web app no longer uses it, so production keeps it off: with it
+on, anyone calling the API directly could still read and change the shared member records.
+`PIXEL_DEMO_LOGIN_USERS` and `PIXEL_DEMO_IDLE_RESET_MINUTES` only matter while it is on.
 
 Provider credentials and budgets belong only to the API service. Copy the paid-provider settings
 from `.env.example`; never add them to Vercel or expose them as `NEXT_PUBLIC_*` variables.
@@ -80,7 +86,16 @@ public API.
 - `POST /api/demo-data/reset` remains administrator-only and affects only legacy member-owned demo
   records. Public visitors use `POST /api/demo-data/reset-mine` and cannot reset another visitor.
 - Expired instances fail closed and are pruned in bounded batches. A missing private context never
-  falls back to member records or product seed files.
+  falls back to member records or product seed files: record lookups take the caller's records
+  explicitly and refuse to run without them.
+- **Capacity cannot be held by allocating once.** When all `PIXEL_DEMO_INSTANCE_ACTIVE_LIMIT`
+  slots are taken, a new visitor takes over the instance unused for longest, provided it has been
+  unused for `PIXEL_DEMO_INSTANCE_RECLAIM_SECONDS` (15 minutes). An instance used within that window
+  is never evicted; if every instance is in use, allocation answers `429`. The server logs
+  `demo_instance_reclaimed` and `demo_capacity_reached` (logger `pixel.demo`).
+- **The seed is pinned.** The product package records the approved seed version and checksum. If
+  the seed files change without an updated pin, new visitors and private resets are refused
+  instead of starting from an unreviewed seed, and a test fails in CI.
 - `PIXEL_DEMO_LOGIN_USERS` and `PIXEL_DEMO_IDLE_RESET_MINUTES` apply only to the legacy member demo
   login. The public web app does not use that login.
 
@@ -89,14 +104,16 @@ public API.
 Limits apply per client address, authenticated identity and deployment. A refused request is not
 counted, and the response is `429` with `Retry-After`.
 
-| Route | Per client, per minute | Per identity, per minute |
-| --- | --- | --- |
-| Visitor allocation and legacy demo login | 30 | — |
-| Conversation turn | 120 | 600 |
-| Speech | 60 | 300 |
-| Record write | 30 | 120 |
-| Private demo reset | 10 | 5 |
-| Global data reset | — | 5 |
+| Route | Per client, per minute | Per identity, per minute | Whole deployment, per minute |
+| --- | --- | --- | --- |
+| Visitor allocation and legacy demo login | 30 | — | 120 |
+| Conversation turn | 120 | 60 | 600 |
+| Speech | 60 | 60 | 300 |
+| Record write | 30 | 60 | 180 |
+| Private demo reset and global data reset | 10 | 5 | 120 |
+
+Every public visitor now has their own identity, so the per-identity limit applies to one visitor;
+the deployment column is the ceiling that neither forged addresses nor fresh identities bypass.
 
 - **The client address is best effort.** It is the first `X-Forwarded-For` entry. A caller can
   forge it, so visitor allocation also has a deployment-wide ceiling that fresh identities and
@@ -171,8 +188,8 @@ Then check by hand:
 4. Create a ticket for an unknown teammate and verify the Teams handoff.
 5. Press **Restart**: the conversation restarts and A still sees Noah. Then press **Reset**, accept
    the confirmation, and verify A returns to Maya while B remains unchanged.
-6. Rate limits: from one network, the 31st demo login within a minute returns `429`. From a
-   different network straight afterwards, a login succeeds. If it does not, the proxy is not
+6. Rate limits: from one network, the 31st new visitor session within a minute returns `429`.
+   From a different network straight afterwards, a new session succeeds. If it does not, the proxy is not
    forwarding client addresses and every visitor shares one limit.
 7. Enable voice and speak one turn (paid: needs approval), or confirm the browser-voice fallback.
 8. Restart the API service and verify the saved data remains.

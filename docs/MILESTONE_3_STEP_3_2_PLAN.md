@@ -1,6 +1,6 @@
 # Milestone 3, Step 3.2: Generic Conversation Engine — Implementation Plan
 
-Status: **plan, revision 4.3. Slices 1, 2, 3 and 4a are signed off. PR #13 merged with all three Linux CI jobs green (run 35396288897, merge f3cc571). The 2026-09-20 review reopened 4b for capability descriptions, identity/choice prose, and knowledge-title attribution. Corrections are locally verified as of 2026-09-21 and await review and fresh CI evidence; that earlier CI run does not certify these new edits. Slice 5a has not started.**
+Status: **plan, revision 4.3. Slices 1, 2, 3 and 4a are signed off. The 2026-09-20 review reopened 4b for capability descriptions, identity/choice prose, and knowledge-title attribution. The corrections merged through PR #17 with all three Linux CI jobs green (pull-request run 35565519318, `main` run 35565440664) and await stakeholder sign-off. Private demo instances, required before 5a, are live (PR #18, `docs/DEMO_VISITOR_ISOLATION_PLAN.md`); a follow-up fixes four review findings, including the record lookup the 5a shadow engine will use. Slice 5a has not started.**
 
 - Slices 2 and 3 were signed off on 2026-09-17, after three review rounds that reproduced eight defects, all fixed with regression tests, and green Linux CI including browser tests.
 - Slice 4a (the model boundary) merged through PR #8. Pull-request run 35363767851 and the `main` push run 35364069464 are green on all three jobs, including browser tests. The stakeholder accepted it on 2026-09-18.
@@ -12,8 +12,8 @@ Every generic-engine sentence is platform-owned, including identity and choice q
 Capability descriptions derive from the allowed operation and structured targets/fields.
 Knowledge titles stay in citation metadata; spoken attribution is fixed. Legacy response bodies
 remain in published definitions for compatibility but are never spoken by the new composer.
-Visitor identity and demo data isolation are separately planned in
-`docs/DEMO_VISITOR_ISOLATION_PLAN.md`, with a review gate before schema implementation.
+Visitor identity and demo data isolation were planned and reviewed separately in
+`docs/DEMO_VISITOR_ISOLATION_PLAN.md`, and are live since PR #18.
 
 Earlier history: revision 4 rewrote the model boundary and split the remaining work; revision 4.1 corrected six contradictions found in it. Revision 3.2 recorded the routing rules as built in slice 2 (section 3, stages 5 and 6). Revision 3.3 recorded two decisions from the slice 3 transaction reviews: the execution ledger stores identifiers and outcomes, never raw customer record content, and a replay returns the record's current visible state without a second write (section 5).
 

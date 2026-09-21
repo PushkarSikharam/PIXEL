@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import time
 from contextlib import contextmanager
@@ -14,6 +15,8 @@ from dataclasses import dataclass, replace
 from uuid import uuid4
 
 from app.db import get_connection
+
+logger = logging.getLogger("pixel.demo")
 
 
 class InstanceUnavailable(ValueError):
@@ -26,6 +29,10 @@ class InstanceConflict(ValueError):
 
 class InstanceCapacity(ValueError):
     pass
+
+
+class SeedNotApproved(ValueError):
+    """The installed seed differs from the version and checksum the product package approved."""
 
 
 @dataclass(frozen=True)
@@ -65,17 +72,24 @@ class DemoSeed:
 
 @dataclass(frozen=True)
 class InstanceLimits:
-    active_per_product: int = 100
+    # Each instance is a few dozen small rows, so capacity is cheap; it exists to bound abuse.
+    active_per_product: int = 1000
     records_per_instance: int = 1000
     absolute_seconds: int = 86400
     idle_seconds: int = 7200
+    # When every slot is taken, the instance unused for longest may be reclaimed for a new
+    # visitor, but only after this long without use. An instance in use is never evicted, so
+    # holding every slot means keeping every instance busy, not just allocating once.
+    reclaim_after_seconds: int = 900
 
     def __post_init__(self):
         if any(type(value) is not int or value < 1 for value in (
             self.active_per_product, self.records_per_instance,
-            self.absolute_seconds, self.idle_seconds,
+            self.absolute_seconds, self.idle_seconds, self.reclaim_after_seconds,
         )):
             raise ValueError("instance limits must be positive integers")
+        if self.reclaim_after_seconds > self.idle_seconds:
+            raise ValueError("an instance must be reclaimable before it expires on its own")
 
 
 def create_instance_schema(connection) -> None:
@@ -92,6 +106,7 @@ def create_instance_schema(connection) -> None:
             created_at real not null,
             expires_at real not null,
             idle_expires_at real not null,
+            last_active_at real,
             primary key (tenant_id, product_id, instance_id),
             unique (tenant_id, product_id, visitor_id)
         );
@@ -123,15 +138,25 @@ def create_instance_schema(connection) -> None:
         create index if not exists demo_instances_expiry
             on demo_instances(expires_at, idle_expires_at);
     """)
+    # Added after the first release: instances created before it count as last used at creation.
+    columns = {row["name"] for row in connection.execute("pragma table_info(demo_instances)")}
+    if "last_active_at" not in columns:
+        connection.execute("alter table demo_instances add column last_active_at real")
+        connection.execute("update demo_instances set last_active_at = created_at")
+    connection.execute(
+        "create index if not exists demo_instances_activity "
+        "on demo_instances(tenant_id, product_id, last_active_at)"
+    )
 
 
 class DemoInstanceStore:
     def __init__(self, limits: InstanceLimits | None = None, clock=time.time):
         self.limits = limits or InstanceLimits(
-            active_per_product=int(os.environ.get("PIXEL_DEMO_INSTANCE_ACTIVE_LIMIT", "100")),
+            active_per_product=int(os.environ.get("PIXEL_DEMO_INSTANCE_ACTIVE_LIMIT", "1000")),
             records_per_instance=int(os.environ.get("PIXEL_DEMO_INSTANCE_RECORD_LIMIT", "1000")),
             absolute_seconds=int(os.environ.get("PIXEL_DEMO_INSTANCE_TTL_SECONDS", "86400")),
             idle_seconds=int(os.environ.get("PIXEL_DEMO_INSTANCE_IDLE_SECONDS", "7200")),
+            reclaim_after_seconds=int(os.environ.get("PIXEL_DEMO_INSTANCE_RECLAIM_SECONDS", "900")),
         )
         self.clock = clock
 
@@ -150,12 +175,20 @@ class DemoInstanceStore:
                 "select count(*) from demo_instances where tenant_id=? and product_id=? "
                 "and expires_at>? and idle_expires_at>?", (tenant_id, product_id, now, now),
             ).fetchone()[0]
-            if active >= self.limits.active_per_product:
+            if active >= self.limits.active_per_product and not self._reclaim_unused(
+                connection, tenant_id, product_id, now,
+            ):
+                logger.warning(json.dumps({
+                    "event": "demo_capacity_reached", "tenant_id": tenant_id,
+                    "product_id": product_id, "active": active,
+                }))
                 raise InstanceCapacity("Demo capacity reached.")
             connection.execute(
-                "insert into demo_instances values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "insert into demo_instances(tenant_id, product_id, instance_id, visitor_id, "
+                "generation, seed_version, seed_checksum, created_at, expires_at, "
+                "idle_expires_at, last_active_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (*self.key(context), visitor_id, 1, seed.version, seed.checksum, now,
-                 now + self.limits.absolute_seconds, now + self.limits.idle_seconds),
+                 now + self.limits.absolute_seconds, now + self.limits.idle_seconds, now),
             )
             self._insert_seed(connection, context, records)
         return context
@@ -188,10 +221,11 @@ class DemoInstanceStore:
         with get_connection() as connection:
             connection.execute("begin immediate")
             self._check(connection, context)
+            now = self.clock()
             connection.execute(
-                "update demo_instances set idle_expires_at=min(expires_at, ?) "
+                "update demo_instances set idle_expires_at=min(expires_at, ?), last_active_at=? "
                 "where tenant_id=? and product_id=? and instance_id=?",
-                (self.clock() + self.limits.idle_seconds, *self.key(context)),
+                (now + self.limits.idle_seconds, now, *self.key(context)),
             )
 
     def put(self, context: DemoContext, entity: str, record_id: str, payload: dict,
@@ -294,6 +328,31 @@ class DemoInstanceStore:
             connection.execute("begin immediate")
             now = self.clock()
             return self._prune_expired(connection, now, limit)
+
+    def _reclaim_unused(self, connection, tenant_id: str, product_id: str, now: float) -> bool:
+        """At capacity, free the instance unused for longest, if it has been unused long enough.
+
+        Its visitor finds their demo gone on their next request and starts a fresh one. A visitor
+        who used their demo within the reclaim window keeps it.
+        """
+        row = connection.execute(
+            "select instance_id, last_active_at from demo_instances "
+            "where tenant_id=? and product_id=? and expires_at>? and idle_expires_at>? "
+            "and coalesce(last_active_at, created_at)<=? "
+            "order by coalesce(last_active_at, created_at) limit 1",
+            (tenant_id, product_id, now, now, now - self.limits.reclaim_after_seconds),
+        ).fetchone()
+        if row is None:
+            return False
+        connection.execute(
+            "delete from demo_instances where tenant_id=? and product_id=? and instance_id=?",
+            (tenant_id, product_id, row["instance_id"]),
+        )
+        logger.info(json.dumps({
+            "event": "demo_instance_reclaimed", "tenant_id": tenant_id, "product_id": product_id,
+            "unused_seconds": round(now - (row["last_active_at"] or now)),
+        }))
+        return True
 
     @staticmethod
     def _prune_expired(connection, now: float, limit: int) -> int:

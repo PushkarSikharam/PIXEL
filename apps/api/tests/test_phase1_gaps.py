@@ -119,8 +119,10 @@ class PhaseOneGapTest(unittest.TestCase):
         # Platform owns the "Planning" issues; a Product Engineering project with the
         # same name must not make them visible to Product Engineering.
         ProductDataStore().save_project(_project(name="Planning"), "workspace-product-eng")
-        scope = get_workspace_scope("workspace-product-eng")
-        platform_issues = [issue for issue in load_demo_issues() if issue.projectId in {"PRJ-103", "PRJ-104"}]
+        # Lookups read the caller's own records, passed explicitly; here, the shared member demo.
+        data = ProductDataStore().load()
+        scope = get_workspace_scope("workspace-product-eng", data)
+        platform_issues = [issue for issue in load_demo_issues(data) if issue.projectId in {"PRJ-103", "PRJ-104"}]
         self.assertTrue(platform_issues)
 
         leaked = [
@@ -129,7 +131,7 @@ class PhaseOneGapTest(unittest.TestCase):
         ]
         self.assertEqual(leaked, [])
 
-        model_context = AgentReasoner()._visible_workspace_data(scope)["issues"]
+        model_context = AgentReasoner()._visible_workspace_data(scope, data)["issues"]
         platform_ids = {issue.id for issue in platform_issues}
         self.assertEqual([line for line in model_context if line.split()[0] in platform_ids], [])
 

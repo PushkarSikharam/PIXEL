@@ -80,13 +80,15 @@ class LedgerFixture(unittest.TestCase):
             return connection.execute("select * from provider_attempts order by created_at").fetchall()
 
     def reasoning_context(self) -> AgentReasoningContext:
+        data = ProductDataStore().load()  # the caller's records; there is no shared default
         return AgentReasoningContext(
             owner=self.tenant,
             definition_id="linear_simplified",
             message=SECRET_MESSAGE,
             current_page="dashboard",
             selected_issue_id=None,
-            workspace_scope=get_workspace_scope("workspace-product-eng"),
+            workspace_scope=get_workspace_scope("workspace-product-eng", data),
+            visible_data=data,
             retrieved_docs=[],
             user_id="demo-product-eng",
             session_id="session-1",

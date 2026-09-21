@@ -17,6 +17,7 @@ from app.auth import AuthUser, create_token
 from app.main import app
 from app.schemas import IntentTrace, TurnRequest
 from app.services.agent import DemoAgent
+from app.services.product_data_store import ProductDataStore
 from app.services.agent_reasoner import AgentReasoningResult, ReasonedAction
 from app.services.session_manager import SessionManager
 
@@ -534,6 +535,7 @@ class AgentApiTest(unittest.TestCase):
                 current_page="dashboard",
             ),
             DEMO_ADMIN,
+            ProductDataStore().load(),  # the turn endpoint passes the caller's records
         )
 
         self.assertEqual(response.status, "completed")
@@ -571,6 +573,7 @@ class AgentApiTest(unittest.TestCase):
                 current_page="dashboard",
             ),
             DEMO_ADMIN,
+            ProductDataStore().load(),  # the turn endpoint passes the caller's records
         )
 
         self.assertEqual(response.status, "completed")
@@ -607,6 +610,7 @@ class AgentApiTest(unittest.TestCase):
                 current_page="dashboard",
             ),
             DEMO_ADMIN,
+            ProductDataStore().load(),  # the turn endpoint passes the caller's records
         )
 
         self.assertEqual(response.status, "denied")
@@ -643,6 +647,7 @@ class AgentApiTest(unittest.TestCase):
                 current_page="dashboard",
             ),
             DEMO_ADMIN,
+            ProductDataStore().load(),  # the turn endpoint passes the caller's records
         )
 
         self.assertEqual(response.status, "denied")
@@ -679,6 +684,7 @@ class AgentApiTest(unittest.TestCase):
                 current_page="dashboard",
             ),
             DEMO_ADMIN,
+            ProductDataStore().load(),  # the turn endpoint passes the caller's records
         )
 
         self.assertEqual(response.status, "denied")
@@ -715,6 +721,7 @@ class AgentApiTest(unittest.TestCase):
                 current_page="issues",
             ),
             DEMO_ADMIN,
+            ProductDataStore().load(),  # the turn endpoint passes the caller's records
         )
 
         self.assertEqual(response.status, "denied")

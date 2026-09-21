@@ -46,6 +46,7 @@ from app.services.demo_instances import (
     InstanceCapacity,
     InstanceConflict,
     InstanceUnavailable,
+    SeedNotApproved,
 )
 from app.installed_products import PackageMissing, package_for
 from app.services.rate_limit import RateLimiter
@@ -277,7 +278,10 @@ def reset_private_demo(http: Request, user: AuthUser = Depends(require_auth)) ->
         raise HTTPException(status_code=409, detail="This demo cannot be restored.")
     if package.demo_seed_factory is None:
         raise HTTPException(status_code=409, detail="This demo cannot be restored.")
-    seed = package.demo_seed_factory()
+    try:
+        seed = package.demo_seed_factory()
+    except SeedNotApproved:
+        raise HTTPException(status_code=409, detail="This demo cannot be restored.")
     records = ProductDataStore(context)
     with get_connection() as connection:
         connection.execute("begin immediate")

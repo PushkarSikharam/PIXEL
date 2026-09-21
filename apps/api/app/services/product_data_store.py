@@ -162,7 +162,7 @@ class ProductDataStore:
         gives a single consistent view (used by the turn snapshot).
         """
         data = self._load_private(connection) if self.demo_context else self._load_all(connection)
-        return data if scope_ids is None else _filter_to_scopes(data, scope_ids)
+        return data if scope_ids is None else filter_to_scopes(data, scope_ids)
 
     def workspace_scope(self, scope_id: str) -> WorkspaceScope | None:
         if self.demo_context:
@@ -769,6 +769,13 @@ def _issue_from_row(row) -> dict[str, Any]:
 
 def _with_revision(row: dict[str, Any]) -> dict[str, Any]:
     return {**row["data"], "revision": row["revision"]}
+
+
+def filter_to_scopes(
+    data: dict[str, list[dict[str, Any]]], scope_ids: frozenset[str]
+) -> dict[str, list[dict[str, Any]]]:
+    """Only the records inside these workspaces; the same rule `load` applies."""
+    return _filter_to_scopes(data, scope_ids)
 
 
 def _filter_to_scopes(

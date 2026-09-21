@@ -12,7 +12,7 @@ from typing import Any
 
 from app.engine.lookup import PeopleMatch, PersonView, RecordView
 from app.record_access import RecordGrant
-from app.services.product_data_store import ProductDataStore
+from app.services.product_data_store import ProductDataStore, filter_to_scopes
 
 # The entities this product's definition declares, and where each one's records come from.
 ENTITY_SOURCES = {"issue": "issues", "project": "projects", "cycle": "cycles", "member": "team"}
@@ -108,7 +108,16 @@ class LinearLegacyLookup:
         One `load` call, so every entity in the snapshot comes from the same moment. The
         connection is not kept: the snapshot holds records, never a database handle.
         """
-        data = self._store.load(self._scope_ids, connection=connection)
+        return self.records_from(self._store.load(self._scope_ids, connection=connection))
+
+    def records_from(self, data: Mapping[str, Any]) -> Mapping[str, tuple[RecordView, ...]]:
+        """Immutable views of records the caller already loaded; nothing is read again.
+
+        The lookup's own scope is applied to them first, so a lookup narrowed to one workspace
+        never sees records the loaded data holds for the caller's other workspaces.
+        """
+        if self._scope_ids is not None:
+            data = filter_to_scopes(dict(data), self._scope_ids)
         materialized: dict[str, tuple[RecordView, ...]] = {}
         for entity, source in ENTITY_SOURCES.items():
             views = (self._view(entity, row) for row in data.get(source, []))

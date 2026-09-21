@@ -41,12 +41,16 @@ class NameMention:
         return tuple(self.text.lower().split())
 
 
-def name_mentions(original: str, known_words: frozenset[str]) -> list[NameMention]:
+def name_mentions(
+    original: str, known_words: frozenset[str], *, subjects_are_names: bool = False,
+) -> list[NameMention]:
     """Phrases that read like names of people who may not exist: capitalized words that are not
     the first word, not common or product words, and not part of a subject ("about ...").
 
     Visible people are found separately, by looking up every word; this only decides which
-    unmatched words are worth reporting as "not found".
+    unmatched words are worth reporting as "not found". `subjects_are_names` is for a message
+    already known to be about a person ("what about <person>" as a follow-up), where the word after
+    "about" is the name rather than a topic.
     """
     raw_tokens = _TOKEN.findall(original)
     tokens = [_POSSESSIVE.sub("", token) for token in raw_tokens]
@@ -55,7 +59,7 @@ def name_mentions(original: str, known_words: frozenset[str]) -> list[NameMentio
     in_subject = False
     for index, token in enumerate(tokens):
         word = _APOSTROPHE.sub("", raw_tokens[index]).lower()  # "I'm" -> "im"
-        if word in SUBJECT_CUES:
+        if word in SUBJECT_CUES and not subjects_are_names:
             in_subject = True
         is_name = (
             not in_subject

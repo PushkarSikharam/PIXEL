@@ -22,6 +22,9 @@ from app.engine.routing import RouteKind, RouteResult
 
 GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
 NOTES_PATH = GOLDEN_DIR / "router_comparison_notes.json"
+# Each definition version is compared with the same recordings and explains its own differences.
+# v1's notes are historical; v2's show which of them the new version answers.
+NOTES_PATHS = {1: NOTES_PATH, 2: GOLDEN_DIR / "router_comparison_notes_v2.json"}
 DEFAULT_WORKSPACE = "workspace-product-eng"
 
 # Today's action names and the definition actions that express them.
@@ -163,18 +166,18 @@ def routed_decision(result: RouteResult) -> dict:
     raise UnmappedDecision(f"unmapped route kind {kind}")
 
 
-def load_router() -> dict[str, IntentRouter]:
-    definition = load_definition(DEFAULT_SOURCE, "linear_simplified", 1).definition
+def load_router(version: int = 1) -> dict[str, IntentRouter]:
+    definition = load_definition(DEFAULT_SOURCE, "linear_simplified", version).definition
     return {
         scope: IntentRouter(definition, LinearComparisonLookup(scope))
         for scope in ("workspace-product-eng", "workspace-platform")
     }
 
 
-def compare_all() -> list[TurnComparison]:
+def compare_all(version: int = 1) -> list[TurnComparison]:
     cases = json.loads((GOLDEN_DIR / "conversations.json").read_text(encoding="utf-8"))["cases"]
     recorded = json.loads((GOLDEN_DIR / "backend_decisions.json").read_text(encoding="utf-8"))
-    routers = load_router()
+    routers = load_router(version)
     comparisons: list[TurnComparison] = []
     for case in cases:
         router = routers[case.get("workspace", DEFAULT_WORKSPACE)]
@@ -225,7 +228,9 @@ def report(comparisons: list[TurnComparison], notes: list[dict]) -> dict[str, li
 
 
 if __name__ == "__main__":
-    for comparison in compare_all():
+    import sys
+
+    for comparison in compare_all(int(sys.argv[1]) if len(sys.argv) > 1 else 1):
         marker = "DIFF" if comparison.differs else "same"
         print(f"{marker} {comparison.case}[{comparison.turn}] {comparison.message!r}")
         if comparison.differs:

@@ -88,7 +88,7 @@ class TurnIsolationTest(ProductAccessFixture):
         pin = self.agent.sessions.pin_for("s1")
         self.assertEqual(
             (pin.tenant_id, pin.team_id, pin.product_id, pin.definition_id, pin.definition_version),
-            ("pixel-dev", "planning-team", "linear-demo", DEFINITION_ID, 1),
+            ("pixel-dev", "planning-team", "linear-demo", DEFINITION_ID, 2),
         )
 
     def test_same_organization_different_teams(self):

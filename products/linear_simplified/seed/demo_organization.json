@@ -11,5 +11,5 @@
     {"user_id": "demo-visitor", "role": "team_member", "team": true,
      "records": {"scope_ids": ["workspace-product-eng", "workspace-platform"]}}
   ],
-  "product": {"product_id": "linear-demo", "definition_version": 1, "visitor_access": true, "legacy_records": true}
+  "product": {"product_id": "linear-demo", "definition_version": 2, "visitor_access": true, "legacy_records": true}
 }

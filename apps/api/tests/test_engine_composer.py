@@ -350,7 +350,7 @@ class NoRuntimeWiringTest(unittest.TestCase):
         new = {"app.engine.composer", "app.engine.conversation"}
         offenders = {}
         for module in package_modules(root, "app"):
-            if module in new or module.startswith("app.engine."):
+            if module in new or module.startswith("app.engine.") or module.startswith("app.services.shadow"):
                 continue
             source = module_path(root, module)
             if source is None:

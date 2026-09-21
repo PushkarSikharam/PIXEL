@@ -8,6 +8,7 @@ Each class reproduces one reviewed defect exactly, plus the positive cases that 
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+import json
 from pathlib import Path
 import sys
 import threading
@@ -33,6 +34,11 @@ from test_definition_registry import RegistryFixture
 from test_usage_ledger import LedgerFixture
 
 DEMO_TENANT, DEMO_PRODUCT, DEMO_DEFINITION = "pixel-dev", "linear-demo", "linear_simplified"
+# The version the demo seed binds; sessions started in these tests are pinned to it.
+DEMO_VERSION = json.loads(
+    (Path(__file__).resolve().parents[3] / "products" / "linear_simplified" / "seed" / "demo_organization.json")
+    .read_text(encoding="utf-8")
+)["product"]["definition_version"]
 
 
 def bearer(user_id: str, tenant_id: str | None = None) -> dict[str, str]:
@@ -255,12 +261,12 @@ class SpeechLifecycleTest(ApiFixture):
     # --- Reproduction ---
 
     def test_reproduction_revoked_definition_refuses_sessionless_speech(self):
-        self.registry.revoke(DEMO_DEFINITION, 1)
+        self.registry.revoke(DEMO_DEFINITION, DEMO_VERSION)
         self.assert_refused_before_spending(self.speak(), 409, "definition_not_published")
 
     def test_revoked_definition_ends_pinned_speech(self):
         self.start_session("mine")
-        self.registry.revoke(DEMO_DEFINITION, 1)
+        self.registry.revoke(DEMO_DEFINITION, DEMO_VERSION)
         self.assert_refused_before_spending(self.speak("mine"), 409, "definition_revoked")
 
     # --- Supplied sessions must be valid, never silently ignored ---
@@ -299,7 +305,7 @@ class SpeechLifecycleTest(ApiFixture):
 
     def test_retired_version_still_serves_its_pinned_session(self):
         self.start_session("mine")
-        self.registry.retire(DEMO_DEFINITION, 1)
+        self.registry.retire(DEMO_DEFINITION, DEMO_VERSION)
         self.assert_refused_before_spending(self.speak(), 409, "definition_not_published")
         response = self.speak("mine")
         self.assertEqual(response.status_code, 200)

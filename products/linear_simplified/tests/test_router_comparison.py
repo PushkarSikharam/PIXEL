@@ -13,6 +13,7 @@ import unittest
 from products.linear_simplified.tests.router_comparison import (
     LEGACY_ACTIONS,
     NOTES_PATH,
+    NOTES_PATHS,
     UnmappedDecision,
     compare_all,
     load_notes,
@@ -70,6 +71,43 @@ class RouterComparisonTest(unittest.TestCase):
             (hidden.result.kind, hidden.result.response_key, hidden.result.proposal),
             (unknown.result.kind, unknown.result.response_key, unknown.result.proposal),
         )
+
+
+class DefinitionV2ComparisonTest(unittest.TestCase):
+    """5a plan, section 7: v2 answers four v1 notes and decides the other two, changing nothing else."""
+
+    maxDiff = None
+    ANSWERED = {"assignment-workflow", "member-add-named", "github-explain", "scope-broad-request"}
+    DECIDED = {"scope-platform-own-person", "prospect-profile"}
+
+    @classmethod
+    def setUpClass(cls):
+        cls.v1 = {(c.case, c.turn): c for c in compare_all(1)}
+        cls.v2 = {(c.case, c.turn): c for c in compare_all(2)}
+        cls.notes = load_notes(NOTES_PATHS[2])
+
+    def test_every_v2_difference_is_explained_and_every_note_is_current(self):
+        result = report(list(self.v2.values()), self.notes)
+        self.assertEqual({key: len(value) for key, value in result.items()},
+                         {"unexplained": 0, "stale": 0, "outdated": 0}, result)
+
+    def test_v2_leaves_no_note_waiting_for_a_definition_change(self):
+        self.assertNotIn("definition_v2", {note["resolution"] for note in self.notes})
+        v1_waiting = {note["case"] for note in load_notes(NOTES_PATH) if note["resolution"] == "definition_v2"}
+        self.assertEqual(v1_waiting, self.ANSWERED | self.DECIDED)
+
+    def test_only_the_answered_turns_change(self):
+        changed = {key[0] for key in self.v1 if self.v1[key].actual != self.v2[key].actual}
+        self.assertEqual(changed, self.ANSWERED)
+        self.assertFalse(self.v2[("github-explain", 0)].differs, "v2 matches the recording here")
+        self.assertEqual(self.v2[("assignment-workflow", 0)].actual,
+                         {"outcome": "propose:highlight_assignment", "params": {}}, "no ticket is guessed")
+        self.assertEqual(self.v2[("member-add-named", 0)].actual["params"], {"prefill": {"name": "Priya Shah"}})
+        self.assertEqual(self.v2[("scope-broad-request", 0)].actual["outcome"], "refuse:broad_scope")
+
+    def test_decided_differences_are_reviewed_not_pending(self):
+        decided = {note["case"]: note["resolution"] for note in self.notes if note["case"] in self.DECIDED}
+        self.assertEqual(decided, dict.fromkeys(self.DECIDED, "reviewed_difference"))
 
 
 class MemoryAcrossTurnsTest(unittest.TestCase):

@@ -1,8 +1,8 @@
 # Private Demo Instances
 
-Status: implemented and live in production (PR #18, merge `6517c8b`). Four review findings are
-fixed in a follow-up change awaiting its CI run. Part of phase-3, before 5a. Evidence is recorded
-at the end of this document.
+Status: live in production and accepted by the stakeholder on 2026-09-21 (PR #18, merge
+`6517c8b`; review follow-up PR #19, merge `92eb06f`). Part of phase-3, before 5a. Evidence is
+recorded at the end of this document.
 Updated: 2026-09-21.
 
 ## Outcome
@@ -190,11 +190,10 @@ test), web checks and browser tests.
   IDs differ; it does not print them, and no tokens were recorded.)
 - In the live page: "Open Maya's ticket" and "Assign it to Noah" completed; after a reload the
   visitor still saw Noah on LIN-142, while a newly allocated visitor saw Maya.
-- Not yet done: the two-browser manual check from the release smoke test, run by a person.
-
-**Open item found in production.** The legacy member demo login still answered `200` for
-`demo-visitor`, so the shared member records remained reachable by direct API calls. Production must
-set `PIXEL_SYNTHETIC_DEMO=false`; see `docs/LIVE_DEPLOYMENT.md`.
+**Open item found in production, now closed.** The legacy member demo login still answered `200`
+for `demo-visitor`, so the shared member records remained reachable by direct API calls.
+Production now sets `PIXEL_SYNTHETIC_DEMO=false`, and the login answers `403 Demo login is
+disabled.` (verified after the PR #19 deployment).
 
 **Review findings fixed in the follow-up** (`apps/api/tests/test_private_demo_hardening.py`, each test
 shown to fail without its fix):
@@ -209,3 +208,17 @@ shown to fail without its fix):
    require the caller's records and refuse to run without them.
 4. The seed was rebuilt from files with no approved checksum. The product package now pins its
    version and checksum; an unreviewed change refuses new visitors and resets.
+
+**Follow-up evidence.** PR #19 (commit `d2a638e`): pull-request run 35622323715 and `main` push run
+35622688005 are green on all three jobs. Railway and Vercel both deployed `92eb06f` on 2026-09-21.
+Afterwards, on the public URL:
+
+- `scripts/smoke-live.mjs` passed again with the same checks as above.
+- A new visitor with empty browser storage ran the whole guided path: sprint planning opened,
+  "Open Maya's ticket" found LIN-142 with Maya Chen, "Assign it to Noah" updated it, the Lucifer
+  request handed off to Teams, and Salesforce was refused.
+- A browser session that had reassigned LIN-142 earlier resumed its own instance and still saw
+  Noah, while a separately allocated visitor saw Maya. This was run in one automated browser
+  session plus a second allocated visitor, not by a person using two browsers.
+
+**Stakeholder acceptance:** approved on 2026-09-21.

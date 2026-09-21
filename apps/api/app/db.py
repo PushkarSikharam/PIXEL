@@ -342,6 +342,20 @@ def migrate() -> None:
               label text,
               description text
             );
+
+            -- Shadow engine parity counts (5a): aggregate counts only, never text, values or
+            -- identifiers of sessions and visitors. Rows older than 30 days are pruned.
+            create table if not exists shadow_parity_daily(
+              day text not null,
+              tenant_id text not null,
+              product_id text not null,
+              definition_id text not null,
+              definition_version integer not null,
+              field text not null,
+              class text not null,
+              count integer not null check (count >= 0),
+              primary key (day, tenant_id, product_id, definition_id, definition_version, field, class)
+            );
             """
         )
         columns = {

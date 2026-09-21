@@ -10,11 +10,11 @@
       }
     },
     "actual": {
-      "outcome": "clarify:clarify_update_target",
+      "outcome": "propose:highlight_assignment",
       "params": {}
     },
-    "reason": "v1 declares highlight_assignment with record: true, so it needs a specific ticket. No ticket is open in this conversation, so the router asks which ticket to use instead of guessing. Today's engine silently picked LIN-142. v2 should make the assignment walkthrough work without a target record, or name an example record explicitly.",
-    "resolution": "definition_v2"
+    "reason": "v2 shows the assignment control without choosing a ticket, which answers the v1 note. Today's engine silently picked LIN-142, a ticket the visitor never named. v2 does not name an example ticket, because a definition carries no organization records and guessing one is exactly what the router refuses to do.",
+    "resolution": "reviewed_difference"
   },
   {
     "case": "update-outside-person",
@@ -95,10 +95,14 @@
     },
     "actual": {
       "outcome": "propose:highlight_add_member",
-      "params": {}
+      "params": {
+        "prefill": {
+          "name": "Priya Shah"
+        }
+      }
     },
-    "reason": "v1's second highlight_add_member rule has no unknown_person requirement, so the router proposes the add-member control but cannot prefill 'Priya Shah'. Today's engine gave a generic reply. v2 should give that rule the unknown_person requirement, so the named person is prefilled.",
-    "resolution": "definition_v2"
+    "reason": "v2 gives the named-member rule the unknown_person requirement, so 'Priya Shah' is prefilled in the add-member form, which answers the v1 note. Today's engine gave a generic reply instead, so the recording and v2 still differ, by design.",
+    "resolution": "reviewed_difference"
   },
   {
     "case": "member-add-unnamed",
@@ -116,21 +120,6 @@
     "resolution": "reviewed_difference"
   },
   {
-    "case": "github-explain",
-    "turn": 0,
-    "message": "How does GitHub work with tickets?",
-    "expected": {
-      "outcome": "propose:highlight_github",
-      "params": {}
-    },
-    "actual": {
-      "outcome": "propose:open_issues",
-      "params": {}
-    },
-    "reason": "Both highlight_github ('github') and open_issues ('tickets') match with one group and one term. Specificity then prefers the longer term, 'tickets'. Today's engine picked highlight_github because v1 was written for first-match order. v2 should make the GitHub rule more specific, for example with a second group for explanation words, or exclude 'github' from the issues rule.",
-    "resolution": "definition_v2"
-  },
-  {
     "case": "scope-broad-request",
     "turn": 0,
     "message": "Show me every team's projects across the company",
@@ -139,11 +128,11 @@
       "params": {}
     },
     "actual": {
-      "outcome": "propose:open_projects",
+      "outcome": "refuse:broad_scope",
       "params": {}
     },
-    "reason": "v1 places broad_scope_refused among clarifications, which apply only when no intent matched. 'projects' matches open_projects, so the router proposes the Projects view instead of refusing the cross-workspace request. v2 should move this rule to guardrails (topic broad_scope), where refusals run first and can only refuse.",
-    "resolution": "definition_v2"
+    "reason": "v2 moves the cross-workspace rule from clarifications to guardrails, which answers the v1 note: it now refuses before any intent can match. The recording shows the same refusal as a reply without an action; v2 reports it as a refusal with topic broad_scope, and the platform words it.",
+    "resolution": "reviewed_difference"
   },
   {
     "case": "scope-outside-person",
@@ -195,8 +184,8 @@
         "filter": "avery-brooks"
       }
     },
-    "reason": "'Show Avery's tickets' uses the plural, which matches issues_by_assignee (show + tickets, two groups) but not open_issue, whose group only lists the singular 'ticket'. The router filters to Avery's tickets (one result: LIN-131), while today's engine opened LIN-131 directly. v2 should state which of the two the plural request means.",
-    "resolution": "definition_v2"
+    "reason": "Decided in v2: a person's tickets (plural) is the filtered list, and a person's ticket (singular) opens one. So 'Show Avery's tickets' filters to Avery's tickets (one result, LIN-131) instead of opening LIN-131 as today's engine did. The v2 file states this rule next to the intents.",
+    "resolution": "reviewed_difference"
   },
   {
     "case": "greeting",
@@ -285,8 +274,8 @@
       "outcome": "fallback",
       "params": {}
     },
-    "reason": "The message matches open_teams ('team') and open_integrations ('jira') equally. The plan forbids breaking ties by file order, so the router falls back instead of guessing. Today's engine opened Teams because that rule comes first in v1. v2 should either separate these rules or treat profile statements through prospect signals rather than navigation.",
-    "resolution": "definition_v2"
+    "reason": "Decided in v2: a profile statement is a prospect signal, not a navigation request. The role and current tool are recorded as signals (5a plan, section 4.4). No navigation rule is added, because choosing Teams over Integrations here would be breaking a tie by file order, which the router never does.",
+    "resolution": "reviewed_difference"
   },
   {
     "case": "unknown-person-tickets",

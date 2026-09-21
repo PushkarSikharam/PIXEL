@@ -31,7 +31,7 @@ from app.engine.actions import (
     shape_errors,
 )
 from app.engine.lookup import PersonView, RecordLookup
-from app.engine.memory import ConversationMemory, PendingClarification, PendingConfirmation
+from app.engine.memory import ConversationMemory, PendingClarification, PendingConfirmation, PersonFollowUp
 from app.engine.mentions import (
     NameMention,
     enum_values,
@@ -404,7 +404,67 @@ class IntentRouter:
                 return self._clarify_or_fallback(clarification, RouteStage.INTENT_GROUPS, memory, context)
             return self._propose(leaders[0], memory, override=None)
 
+        if clarification is None:
+            follow_up = self._person_follow_up(text, people, memory, context)
+            if follow_up is not None:
+                return follow_up
         return self._clarify_or_fallback(clarification, RouteStage.CLARIFICATION_RULES, memory, context)
+
+    def _person_follow_up(
+        self, text: NormalizedMessage, people: _People, memory: ConversationMemory, context: TurnContext,
+    ) -> RoutedTurn | None:
+        """"What about <person>" re-applies the previous request to that person (5a plan, 4.5).
+
+        Only when nothing else matched, only on the turn right after that request was accepted,
+        and only for a message naming exactly one person. A person-based request is re-applied
+        as it was; any other request's subject is filtered by the person, through the one person
+        filter the definition declares for that entity (none, or more than one, means no guess).
+        The person is resolved exactly as any other request resolves it, so someone unknown or
+        out of scope gets `unknown_person`.
+        """
+        last = memory.person_follow_up
+        if last is None or last.turn != context.turn - 1:
+            return None
+        # Here the word after "about" is the person, so it counts as a name even when nobody by
+        # that name is visible; otherwise "what about Cara" and "Ben and Cara" would lose Cara.
+        people = self._people(text, subjects_are_names=True)
+        if len(people.visible) + len(people.unresolved) != 1:
+            return None
+        intent = next(
+            (item for item in self._definition.intents
+             if item.action == last.action_key and "person" in item.requires),
+            None,
+        ) or self._person_filter_for(last.action_key)
+        if intent is None:
+            return None
+        outcome = self._evaluate(intent, Specificity(0, 0, 0, 0, 0), text, people, memory, context)
+        if isinstance(outcome, _Met):
+            return self._propose(outcome, memory, override=None)
+        if outcome.reason == "not_visible" and outcome.slot == "person":
+            result = RouteResult(RouteKind.ANSWER, RouteStage.INTENT_GROUPS, "unknown_person",
+                                 placeholders={"person": outcome.name or ""})
+            return RoutedTurn(result, memory)
+        return None
+
+    def _person_filter_for(self, action_key: str) -> IntentSpec | None:
+        """The single person-filter intent over the entity `action_key` was about, if exactly one."""
+        spec = self._definition.actions.get(action_key)
+        if spec is None:
+            return None
+        entity = spec.entity
+        if entity is None and spec.view is not None and spec.view in self._definition.views:
+            entity = self._definition.views[spec.view].entity
+        if entity is None:
+            return None
+        filters = [
+            item for item in self._definition.intents
+            if "person" in item.requires
+            and self._definition.actions[item.action].capability == Capability.FILTER_RECORDS
+            and self._definition.actions[item.action].entity == entity
+        ]
+        if len({item.action for item in filters}) != 1:
+            return None
+        return filters[0]
 
     def _handle_unmet(
         self, failure: _Unmet, leaders: list[_Met], clarification: MatchRule | None,
@@ -613,7 +673,7 @@ class IntentRouter:
             raise ValueError(f"router built a malformed {action_key} proposal: {errors}")
         return proposal
 
-    def _people(self, text: NormalizedMessage) -> _People:
+    def _people(self, text: NormalizedMessage, *, subjects_are_names: bool = False) -> _People:
         found: dict[str, PersonView] = {}
         if self._people_entity is not None:
             for word in person_search_words(tuple(text.focused.split()), self._known_words):
@@ -621,7 +681,8 @@ class IntentRouter:
                     found.setdefault(person.id, person)
         focused_words = set(text.focused.split())
         mentions = [
-            mention for mention in name_mentions(text.original, self._known_words)
+            mention for mention in name_mentions(
+                text.original, self._known_words, subjects_are_names=subjects_are_names)
             if set(mention.words) & focused_words
         ]
         visible_words = {word for person in found.values() for word in person.name.lower().split()}
@@ -708,6 +769,8 @@ def remember_accepted(memory: ConversationMemory, result: RouteResult) -> Conver
         updates["focus"] = proposal.target
     if result.person is not None:
         updates["last_person"] = result.person
+    # Any accepted request can be followed by "what about <person>" on the next turn.
+    updates["person_follow_up"] = PersonFollowUp(proposal.action_key, memory.turn)
     if proposal.capability == Capability.NAVIGATE_VIEW:
         updates["last_view"] = proposal.view
     return replace(memory, **updates)

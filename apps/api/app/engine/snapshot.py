@@ -23,7 +23,7 @@ import time
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 from uuid import uuid4
 
 from app.db import get_connection
@@ -44,6 +44,21 @@ class SnapshotSource(Protocol):
     def scope_label(self) -> str:
         """What the snapshot is bound to, for evidence only. Never used to widen anything."""
         ...
+
+
+@runtime_checkable
+class LoadedRecordSource(Protocol):
+    """A product package that can convert records its caller already loaded (5a plan, 5.1).
+
+    The shadow engine builds its snapshot from the same records the live turn received, so both
+    engines see one moment and there is no second read. The conversion produces immutable views
+    and never keeps a reference to the loaded data.
+    """
+
+    def records_from(self, data: Mapping[str, Any]) -> Mapping[str, tuple[RecordView, ...]]: ...
+
+    @property
+    def scope_label(self) -> str: ...
 
 
 @dataclass(frozen=True)

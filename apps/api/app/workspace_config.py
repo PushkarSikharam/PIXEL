@@ -36,8 +36,19 @@ WORKSPACE_SCOPES_BY_ID = {scope.id: scope for scope in WORKSPACE_SCOPES}
 DEFAULT_WORKSPACE_SCOPE_ID = "workspace-product-eng"
 
 
-def get_workspace_scope(scope_id: str) -> WorkspaceScope | None:
+def get_workspace_scope(scope_id: str, data: dict | None = None) -> WorkspaceScope | None:
     """Resolve a workspace from persisted storage, so newly created projects are included."""
+    if data is not None:
+        row = next((scope for scope in data.get("workspaceScopes", []) if scope["id"] == scope_id), None)
+        if row is None:
+            return None
+        project_ids = frozenset(row["allowedProjectIds"])
+        return WorkspaceScope(
+            row["id"], row["name"], row["description"], project_ids,
+            frozenset(row["allowedIssueProjects"]),
+            frozenset(member["name"] for member in data.get("team", [])
+                      if project_ids.intersection(member.get("projectIds", []))),
+        )
     from app.services.product_data_store import ProductDataStore
 
     return ProductDataStore().workspace_scope(scope_id)

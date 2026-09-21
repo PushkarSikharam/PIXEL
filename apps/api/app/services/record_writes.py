@@ -78,7 +78,12 @@ class KeyedWriter:
 
         `reload` reads one record by ID under this caller's access, and serves a replay.
         """
-        owner = ExecutionOwner(principal.tenant_id, product_id, principal.user_id)
+        context = getattr(principal, "demo_context", None)
+        owner = ExecutionOwner(
+            principal.tenant_id, product_id, principal.user_id,
+            context.instance_id if context else None,
+            context.generation if context else None,
+        )
         rejection: Exception | None = None
         change: RecordChange | None = None
         with get_connection() as connection:

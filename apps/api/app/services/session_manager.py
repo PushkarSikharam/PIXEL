@@ -7,6 +7,7 @@ from uuid import uuid4
 from app.db import get_connection, use_connection
 from app.definitions.sessions import SessionPin
 from app.schemas import SessionSummary, Signal
+from app.services.demo_instances import DemoContext
 
 
 def utc_now() -> str:
@@ -22,6 +23,7 @@ class SessionManager:
         tenant_id: str | None = None,
         scope_id: str | None = None,
         pin: SessionPin | None = None,
+        demo_context: DemoContext | None = None,
     ) -> bool:
         """Create or reuse a session. Returns False if it belongs to someone else.
 
@@ -43,10 +45,18 @@ class SessionManager:
                 if user_id is None:
                     return True
                 owner = connection.execute(
-                    "select user_id, customer_id from conversation_owners where session_id = ?",
+                    "select user_id, customer_id, instance_id, instance_generation "
+                    "from conversation_owners where session_id = ?",
                     (session_id,),
                 ).fetchone()
-                if owner is None or (owner["user_id"], owner["customer_id"]) != (user_id, tenant_id):
+                expected_instance = (
+                    (demo_context.instance_id, demo_context.generation)
+                    if demo_context else (None, None)
+                )
+                if owner is None or (
+                    owner["user_id"], owner["customer_id"],
+                    owner["instance_id"], owner["instance_generation"],
+                ) != (user_id, tenant_id, *expected_instance):
                     return False
                 connection.execute(
                     "update conversation_owners set scope_id = ? where session_id = ?",
@@ -79,10 +89,14 @@ class SessionManager:
             if user_id is not None:
                 connection.execute(
                     """
-                    insert into conversation_owners(session_id, user_id, customer_id, product_id, scope_id)
-                    values (?, ?, ?, ?, ?)
+                    insert into conversation_owners(
+                      session_id, user_id, customer_id, product_id, scope_id,
+                      instance_id, instance_generation
+                    ) values (?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (session_id, user_id, tenant_id or "", product_id, scope_id or ""),
+                    (session_id, user_id, tenant_id or "", product_id, scope_id or "",
+                     demo_context.instance_id if demo_context else None,
+                     demo_context.generation if demo_context else None),
                 )
             return True
 
@@ -114,13 +128,20 @@ class SessionManager:
             expires_at=datetime.fromisoformat(row["expires_at"]),
         )
 
-    def owns_session(self, session_id: str, user_id: str, tenant_id: str, connection=None) -> bool:
+    def owns_session(self, session_id: str, user_id: str, tenant_id: str, connection=None,
+                     demo_context: DemoContext | None = None) -> bool:
         with use_connection(connection) as connection:
             owner = connection.execute(
-                "select user_id, customer_id from conversation_owners where session_id = ?",
+                "select user_id, customer_id, instance_id, instance_generation "
+                "from conversation_owners where session_id = ?",
                 (session_id,),
             ).fetchone()
-        return bool(owner and (owner["user_id"], owner["customer_id"]) == (user_id, tenant_id))
+        expected_instance = (
+            (demo_context.instance_id, demo_context.generation) if demo_context else (None, None)
+        )
+        return bool(owner and (
+            owner["user_id"], owner["customer_id"], owner["instance_id"], owner["instance_generation"]
+        ) == (user_id, tenant_id, *expected_instance))
 
     def activate_turn(self, session_id: str, turn_id: int) -> bool:
         with get_connection() as connection:

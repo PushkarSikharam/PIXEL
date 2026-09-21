@@ -358,6 +358,25 @@ def migrate() -> None:
         usage_columns = {row["name"] for row in connection.execute("pragma table_info(provider_attempts)")}
         if "team_id" not in usage_columns:
             connection.execute("alter table provider_attempts add column team_id text")
+        # Public demos use private visitor instances. These nullable columns preserve existing
+        # organization-member sessions and execution history while binding new visitor state.
+        for table, additions in {
+            "visitor_logins": {
+                "instance_id": "text", "instance_generation": "integer", "seed_version": "text",
+            },
+            "conversation_owners": {
+                "instance_id": "text", "instance_generation": "integer",
+            },
+            "action_executions": {
+                "instance_id": "text", "instance_generation": "integer",
+            },
+        }.items():
+            present = {row["name"] for row in connection.execute(f"pragma table_info({table})")}
+            for column, column_type in additions.items():
+                if column not in present:
+                    connection.execute(f"alter table {table} add column {column} {column_type}")
+        from app.services.demo_instances import create_instance_schema
+        create_instance_schema(connection)
         # Definitions registered before identities existed take the ownership of their first version.
         connection.execute(
             """

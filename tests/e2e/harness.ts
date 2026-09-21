@@ -13,7 +13,6 @@ import { E2E_SENTINEL_PORT } from "./ports";
 // request escaping to the Next.js rewrite target.
 
 export let apiPort: number;
-export let apiToken: string;
 export const agentApiRoute = "**/api/agent/**";
 export const agentTurnRoute = "**/api/agent/turn";
 export const agentCancelTurnOneRoute = "**/api/agent/turn/1/cancel";
@@ -77,10 +76,7 @@ export function setupIsolatedApp() {
           // Behave identically on developer machines and CI: no local .env files or keys.
           PIXEL_IGNORE_ENV_FILES: "true",
           LLM_ENABLED: "false",
-          // Test harness only: lets the harness sign in as the record administrator to reset
-          // data between tests. The browser still signs in as the public demo visitor.
-          PIXEL_DEMO_ADMIN_LOGIN: "true",
-          // Every test runs from one address against one identity; limits are covered by API tests.
+          // Every test gets a fresh private visitor instance; limits are covered by API tests.
           PIXEL_RATE_LIMITS: "off"
         },
         stdio: "ignore",
@@ -91,26 +87,23 @@ export function setupIsolatedApp() {
     apiProcess.unref();
     await waitForApi();
 
-    // Obtain an admin token for test-harness calls (reset, direct data reads). This works only
-    // because PIXEL_DEMO_ADMIN_LOGIN is set above; production refuses it.
-    const loginResponse = await fetch(`http://127.0.0.1:${apiPort}/api/auth/demo-login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: "demo-admin" })
-    });
-    expect(loginResponse.ok, "Harness admin login was refused").toBe(true);
-    const loginBody = (await loginResponse.json()) as { token: string };
-    apiToken = loginBody.token;
   });
 
   test.afterAll(async () => {
     if (apiProcess?.exitCode === null) {
       const exited = new Promise<void>((resolve) => apiProcess!.once("exit", () => resolve()));
       apiProcess.kill();
-      await exited;
+      await Promise.race([exited, delay(5_000)]);
+      if (apiProcess.exitCode === null) {
+        apiProcess.kill("SIGKILL");
+        await Promise.race([exited, delay(5_000)]);
+      }
     }
     apiProcess = null;
-    await new Promise<void>((resolve) => (sentinel ? sentinel.close(() => resolve()) : resolve()));
+    // A Next.js proxy connection can stay alive after the last page closes. End it explicitly so
+    // an otherwise successful suite cannot wait forever in Server.close().
+    sentinel?.close();
+    sentinel?.closeAllConnections();
     sentinel = null;
     if (apiDataDir) {
       await rm(apiDataDir, { recursive: true, force: true, maxRetries: 3 });
@@ -135,22 +128,13 @@ export function setupIsolatedApp() {
       externalRequests.push(new URL(route.request().url()).hostname);
       await route.abort();
     });
-    const reset = await fetch(`http://127.0.0.1:${apiPort}/api/demo-data/reset`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiToken}` }
-    });
-    expect(reset.ok).toBe(true);
-    await reset.arrayBuffer();
     await context.route(agentApiRoute, forwardToFreshBackend);
   });
 }
 
 export async function openApp(page: Page) {
-  await page.addInitScript(() => {
-    try { window.sessionStorage?.removeItem("demo_auth_token"); } catch { /* ignore */ }
-  });
   const authDone = page.waitForResponse(
-    (resp) => resp.url().includes("/auth/demo-login") && resp.status() === 200
+    (resp) => resp.url().includes("/visitor-sessions") && resp.status() === 200
   );
   const dataLoaded = page.waitForResponse(
     (resp) => new URL(resp.url()).pathname === "/api/agent/demo-data" && resp.status() === 200
@@ -187,8 +171,14 @@ export function freshBackendUrl(requestUrl: string): string {
   return `http://127.0.0.1:${apiPort}${backendPath}${url.search}`;
 }
 
-export function apiAuthHeaders(): Record<string, string> {
-  return { Authorization: `Bearer ${apiToken}` };
+export async function browserAuthHeaders(page: Page): Promise<Record<string, string>> {
+  const token = await page.evaluate(() => {
+    const key = Object.keys(window.sessionStorage)
+      .find((candidate) => candidate.startsWith("pixel_demo_auth:"));
+    return key ? window.sessionStorage.getItem(key) : null;
+  });
+  if (!token) throw new Error("The browser has no private demo token.");
+  return { Authorization: `Bearer ${token}` };
 }
 
 async function waitForApi() {

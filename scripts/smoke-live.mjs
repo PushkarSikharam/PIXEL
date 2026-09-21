@@ -1,17 +1,10 @@
-// Live smoke test for a deployed Pixel. Makes no paid provider call unless PIXEL_SMOKE_SPEECH=true.
+// Live smoke test for a deployed Pixel. It makes no paid call unless PIXEL_SMOKE_SPEECH=true.
 //
-// It must be able to FAIL. The previous version asserted only that "Open Salesforce" was denied,
-// which a backend refusing every conversation also satisfies — it passed while production could
-// not start a single session. So every check below has a positive half: something that only a
-// working deployment can produce.
-//
-// PIXEL_LIVE_URL      the deployed web origin; requests go through its /api/agent proxy.
-// PIXEL_SMOKE_API_URL  instead, an API's own /api base, e.g. http://127.0.0.1:8011/api for the
-//                      container CI builds. Plain HTTP is accepted only for this machine.
+// PIXEL_LIVE_URL       Deployed web origin; requests use its /api/agent proxy.
+// PIXEL_SMOKE_API_URL Direct API /api base. Plain HTTP is accepted only on this machine.
 
 const liveUrl = (process.env.PIXEL_LIVE_URL ?? "").replace(/\/$/, "");
 const directApiUrl = (process.env.PIXEL_SMOKE_API_URL ?? "").replace(/\/$/, "");
-const demoUser = process.env.PIXEL_SMOKE_USER ?? "demo-visitor";
 
 function apiBase() {
   if (directApiUrl) {
@@ -36,8 +29,7 @@ async function call(path, init = {}) {
 async function request(path, init = {}) {
   const response = await call(path, init);
   if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`${init.method ?? "GET"} ${path} returned ${response.status}: ${body}`);
+    throw new Error(`${init.method ?? "GET"} ${path} returned ${response.status}: ${await response.text()}`);
   }
   return response;
 }
@@ -54,52 +46,73 @@ function turnBody(sessionId, turnId, message) {
   });
 }
 
-// 1. Ready, meaning a conversation can start — not merely that the database opens.
+async function startVisitor() {
+  return (await request("/organizations/pixel-dev/products/linear-demo/visitor-sessions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" }
+  })).json();
+}
+
 const health = await (await request("/health")).json();
 if (health.status !== "ok") throw new Error("The API did not report ready.");
 
-// 2. The public demo identity signs in, and the administrator cannot be minted.
-const login = await (await request("/auth/demo-login", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ user_id: demoUser })
-})).json();
-const authorization = { Authorization: `Bearer ${login.token}` };
+const first = await startVisitor();
+const second = await startVisitor();
+if (first.visitor_id === second.visitor_id || first.instance_id === second.instance_id) {
+  throw new Error("Two public visitors received the same identity or private instance.");
+}
+const firstAuthorization = { Authorization: `Bearer ${first.token}` };
+const secondAuthorization = { Authorization: `Bearer ${second.token}` };
 
 const adminAttempt = await call("/auth/demo-login", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ user_id: "demo-admin" })
 });
-if (adminAttempt.ok) {
-  throw new Error("The public demo login issued an administrator token.");
+if (adminAttempt.ok) throw new Error("The public demo login issued an administrator token.");
+
+const firstData = await (await request("/demo-data", { headers: firstAuthorization })).json();
+const secondData = await (await request("/demo-data", { headers: secondAuthorization })).json();
+if (!Array.isArray(firstData.issues) || !Array.isArray(firstData.workspaceScopes)
+    || firstData.issues.length === 0) {
+  throw new Error("The private demo-data response is incomplete.");
+}
+if (JSON.stringify(firstData) !== JSON.stringify(secondData)) {
+  throw new Error("Fresh private instances did not start from identical seed data.");
 }
 
-// 3. Records load for the demo identity.
-const data = await (await request("/demo-data", { headers: authorization })).json();
-if (!Array.isArray(data.issues) || !Array.isArray(data.workspaceScopes) || data.issues.length === 0) {
-  throw new Error("The demo-data response is incomplete.");
+const maya = firstData.issues.find((issue) => issue.id === "LIN-142");
+if (!maya || typeof maya.revision !== "number") {
+  throw new Error("The private seed has no revisioned LIN-142.");
+}
+await request("/demo-data/issues/LIN-142", {
+  method: "PUT",
+  headers: { ...firstAuthorization, "Content-Type": "application/json" },
+  body: JSON.stringify({ ...maya, assignee: "Noah Patel" })
+});
+const firstChanged = await (await request("/demo-data", { headers: firstAuthorization })).json();
+const secondUnchanged = await (await request("/demo-data", { headers: secondAuthorization })).json();
+if (firstChanged.issues.find((issue) => issue.id === "LIN-142")?.assignee !== "Noah Patel"
+    || secondUnchanged.issues.find((issue) => issue.id === "LIN-142")?.assignee !== "Maya Chen") {
+  throw new Error("A private write crossed the visitor-instance boundary.");
 }
 
-// 4. A conversation actually starts, and a real request is answered. Deterministic: no model call.
 const sessionId = crypto.randomUUID();
 const opened = await (await request("/turn", {
   method: "POST",
-  headers: { ...authorization, "Content-Type": "application/json" },
+  headers: { ...secondAuthorization, "Content-Type": "application/json" },
   body: turnBody(sessionId, 1, "Show sprint planning")
 })).json();
 if (opened.status !== "completed" || opened.validated_action?.type !== "OPEN_CYCLES") {
   throw new Error(
-    `A working request was not answered: status=${opened.status}, ` +
-    `reason=${opened.intent_trace?.reason ?? "none"}`
+    `A working request was not answered: status=${opened.status}, `
+    + `reason=${opened.intent_trace?.reason ?? "none"}`
   );
 }
 
-// 5. The guardrail refuses an out-of-product request — for the guardrail's reason, in the same
-//    conversation, rather than because the backend refuses everything.
 const refused = await (await request("/turn", {
   method: "POST",
-  headers: { ...authorization, "Content-Type": "application/json" },
+  headers: { ...secondAuthorization, "Content-Type": "application/json" },
   body: turnBody(sessionId, 2, "Open Salesforce")
 })).json();
 const refusalReason = refused.intent_trace?.reason ?? "";
@@ -108,18 +121,27 @@ if (refused.status !== "denied" || refused.validated_action !== null
   throw new Error(`The guardrail did not refuse for its own reason: ${refusalReason || "none"}`);
 }
 
-// 6. A visitor cannot reset everyone's demo data.
-const reset = await call("/demo-data/reset", { method: "POST", headers: authorization });
-if (reset.status !== 403) {
-  throw new Error(`A demo visitor reached the global reset (status ${reset.status}).`);
+const globalReset = await call("/demo-data/reset", { method: "POST", headers: firstAuthorization });
+if (globalReset.status !== 403) {
+  throw new Error(`A visitor reached the global reset (status ${globalReset.status}).`);
+}
+const restored = await (await request("/demo-data/reset-mine", {
+  method: "POST",
+  headers: firstAuthorization
+})).json();
+if (restored.generation !== first.generation + 1
+    || restored.data.issues.find((issue) => issue.id === "LIN-142")?.assignee !== "Maya Chen") {
+  throw new Error("Private reset did not restore the seed and rotate the generation.");
+}
+if ((await call("/demo-data", { headers: firstAuthorization })).status !== 401) {
+  throw new Error("The token for the reset generation remained active.");
 }
 
-// 7. Optional, and paid: one short speech synthesis through the real provider.
 let speech = "not requested";
 if (process.env.PIXEL_SMOKE_SPEECH === "true") {
   const response = await request("/speech", {
     method: "POST",
-    headers: { ...authorization, "Content-Type": "application/json" },
+    headers: { ...secondAuthorization, "Content-Type": "application/json" },
     body: JSON.stringify({
       text: "Pixel deployment check.",
       product_id: "linear-demo",
@@ -132,10 +154,12 @@ if (process.env.PIXEL_SMOKE_SPEECH === "true") {
 console.log(JSON.stringify({
   target: base,
   health: health.status,
-  demo_user: login.user_id,
+  visitor_instances: "separate",
   administrator_login: "refused",
-  issues: data.issues.length,
-  workspaces: data.workspaceScopes.length,
+  issues: firstData.issues.length,
+  workspaces: firstData.workspaceScopes.length,
+  private_write: "isolated",
+  private_reset: `generation ${restored.generation}`,
   conversation: `${opened.status} (${opened.validated_action.type})`,
   guardrail: refused.status,
   global_reset: "refused",

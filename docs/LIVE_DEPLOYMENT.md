@@ -18,9 +18,11 @@ PIXEL_DEPLOYMENT_ID=live-demo
 PIXEL_AUTH_SECRET=<long random value>
 PIXEL_SYNTHETIC_DEMO=true
 PIXEL_DEMO_SEEDS=true
-PIXEL_DEMO_LOGIN_USERS=demo-visitor
-PIXEL_DEMO_IDLE_RESET_MINUTES=20
 PIXEL_SESSION_MAX_AGE_SECONDS=86400
+PIXEL_DEMO_INSTANCE_ACTIVE_LIMIT=100
+PIXEL_DEMO_INSTANCE_RECORD_LIMIT=1000
+PIXEL_DEMO_INSTANCE_TTL_SECONDS=86400
+PIXEL_DEMO_INSTANCE_IDLE_SECONDS=7200
 ```
 
 Never set `PIXEL_DEMO_ADMIN_LOGIN` or `PIXEL_RATE_LIMITS=off` on a deployment. Both exist only for
@@ -62,41 +64,43 @@ PYTHONPATH=apps/api python -m app.ops reset-demo-data
 ```
 
 `check-readiness` prints every active product that cannot start a conversation and why, and exits
-non-zero if there is one. `reset-demo-data` restores everyone's demo records to the seed. Neither
-is reachable through the public API.
+non-zero if there is one. `reset-demo-data` restores the legacy member-owned demo records to the
+seed; it does not alter private visitor instances. Neither command is reachable through the
+public API.
 
-### The public demo identity
+### Private public demos
 
-- The demo login signs in only seeded identities that are **not administrators**: never an
-  organization admin, never a member with administration over the product's records. The rule is
-  enforced by the API, not by which user ID the web app happens to send.
-- `PIXEL_DEMO_LOGIN_USERS=demo-visitor` narrows the demo login to the one public identity.
-- `demo-visitor` is an ordinary team member with record access to both demo workspaces.
-- `POST /api/demo-data/reset` resets everyone's data, so it requires a record administrator. No
-  public identity is one. The page's **Reset** button starts a fresh conversation for that visitor
-  and reloads the data; it never resets shared data. Operators use `reset-demo-data` above.
-- **Known limitation:** demo records are shared by every visitor. One visitor's change is visible
-  to anyone using the demo at the same time. Per-visitor, disposable demo state is not built yet.
-- **Interim remedy:** with `PIXEL_DEMO_IDLE_RESET_MINUTES=20`, a visitor who signs in after the
-  demo was changed and then left unused for 20 minutes starts from the seed. The log line
-  `demo_data_restored` (logger `pixel.demo`) records each restore. Unset or `0` turns it off.
+- The web app requests a product-scoped visitor session. The API allocates a unique visitor,
+  instance and generation, then binds all three to the signed token.
+- Every instance starts from the same approved immutable product seed. Tickets, projects, cycles,
+  members, conversations and execution receipts are private to that instance.
+- Refresh and **Restart** retain the visitor's records. **Reset** asks for confirmation, restores
+  only that visitor's seed, rotates the generation and token, and invalidates old sessions and
+  pending actions.
+- `POST /api/demo-data/reset` remains administrator-only and affects only legacy member-owned demo
+  records. Public visitors use `POST /api/demo-data/reset-mine` and cannot reset another visitor.
+- Expired instances fail closed and are pruned in bounded batches. A missing private context never
+  falls back to member records or product seed files.
+- `PIXEL_DEMO_LOGIN_USERS` and `PIXEL_DEMO_IDLE_RESET_MINUTES` apply only to the legacy member demo
+  login. The public web app does not use that login.
 
 ### Abuse limits
 
-Limits apply per client address and per authenticated identity. A refused request is not counted,
-and the response is `429` with `Retry-After`.
+Limits apply per client address, authenticated identity and deployment. A refused request is not
+counted, and the response is `429` with `Retry-After`.
 
 | Route | Per client, per minute | Per identity, per minute |
 | --- | --- | --- |
-| Demo and visitor login | 30 | — |
+| Visitor allocation and legacy demo login | 30 | — |
 | Conversation turn | 120 | 600 |
 | Speech | 60 | 300 |
-| Shared-record write | 30 | 120 |
+| Record write | 30 | 120 |
+| Private demo reset | 10 | 5 |
 | Global data reset | — | 5 |
 
-- **The client address is best effort.** It is the first `X-Forwarded-For` entry. Anyone calling
-  the API directly can forge it, which is why the identity limit exists: every public visitor
-  shares `demo-visitor`, so the identity limit is a ceiling on the whole public demo.
+- **The client address is best effort.** It is the first `X-Forwarded-For` entry. A caller can
+  forge it, so visitor allocation also has a deployment-wide ceiling that fresh identities and
+  changing addresses cannot bypass.
 - **Unverified assumption:** that the Vercel rewrite forwards the visitor's address. If it does
   not, every visitor shares one client bucket. Check it after each deployment (release smoke test
   below).
@@ -135,9 +139,9 @@ NEXT_PUBLIC_API_BASE_URL=/api/agent
 `PIXEL_AGENT_API_BASE_URL` is server-only. Production builds fail when it is missing, preventing a
 deployment that silently rewrites API requests to localhost.
 
-The web app signs in as `demo-visitor` unless `NEXT_PUBLIC_PIXEL_DEMO_USER` says otherwise. It is a
-build-time value, so changing it needs a redeploy. It is a convenience, not a security control:
-the API refuses administrators whatever the page sends.
+The web app requests a private session for the tenant and product declared in its product
+configuration. It does not send an employee identity. The API decides whether that product is
+publicly available and returns a token scoped to the allocated visitor instance.
 
 The web interface checks readiness before login. When the API is unavailable, it disables chat,
 guided prompts and voice and shows one retry control; it does not run browser-local demo behavior.
@@ -151,9 +155,10 @@ Run the automated smoke test against the deployed web origin:
 PIXEL_LIVE_URL=https://linear-simplified-web.vercel.app node scripts/smoke-live.mjs
 ```
 
-It fails unless: the API reports ready; `demo-visitor` signs in and the administrator cannot;
-records load; "Show sprint planning" completes with `OPEN_CYCLES`; "Open Salesforce" is refused for
-the guardrail's own reason, in the same conversation; and the visitor cannot reset shared data.
+It fails unless: the API reports ready; two visitors receive different private instances with the
+same seed; a write by A is invisible to B; "Show sprint planning" completes with `OPEN_CYCLES`;
+"Open Salesforce" is refused for the guardrail's own reason; global reset is denied; and A's
+private reset restores its seed, rotates its generation and invalidates the old token.
 CI runs the same script against the freshly built container (`PIXEL_SMOKE_API_URL`).
 `PIXEL_SMOKE_SPEECH=true` adds one paid speech call and needs explicit spending approval.
 
@@ -161,10 +166,11 @@ Then check by hand:
 
 1. Load the dashboard with no service warning.
 2. Show sprint planning, open Maya's ticket, and ask to open Salesforce (refused).
-3. Assign Maya's ticket to Noah and reload: the assignment persists. It is shared demo data, so
-   reset it afterwards with `reset-demo-data`.
+3. In browser A, assign Maya's ticket to Noah and reload: A still sees Noah. Open browser B in an
+   independent private context: B still sees Maya.
 4. Create a ticket for an unknown teammate and verify the Teams handoff.
-5. Press **Reset**: the conversation restarts and the data is unchanged.
+5. Press **Restart**: the conversation restarts and A still sees Noah. Then press **Reset**, accept
+   the confirmation, and verify A returns to Maya while B remains unchanged.
 6. Rate limits: from one network, the 31st demo login within a minute returns `429`. From a
    different network straight afterwards, a login succeeds. If it does not, the proxy is not
    forwarding client addresses and every visitor shares one limit.

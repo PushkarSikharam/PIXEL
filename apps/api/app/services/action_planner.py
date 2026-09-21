@@ -20,6 +20,7 @@ class ActionPlanner:
         intent_trace: IntentTrace,
         selected_issue_id: str | None = None,
         allowed_issue_projects: set[str] | None = None,
+        data: dict | None = None,
     ) -> ProposedAction | None:
         text = normalize_for_intent(message)
 
@@ -34,15 +35,15 @@ class ActionPlanner:
         if self._asks_about_new_issue_workflow(text):
             return ProposedAction(type="HIGHLIGHT_CREATE_TICKET_BUTTON")
         if self._mentions_new_issue_request(text):
-            assignee = extract_requested_assignee(message)
-            if not team_member_exists(assignee):
+            assignee = extract_requested_assignee(message, data)
+            if not team_member_exists(assignee, data):
                 return ProposedAction(
                     type="HIGHLIGHT_ADD_MEMBER_BUTTON",
                     payload={"name": assignee},
                 )
             return ProposedAction(
                 type="CREATE_DEMO_ISSUE",
-                payload=self._demo_issue_payload(message, allowed_issue_projects),
+                payload=self._demo_issue_payload(message, allowed_issue_projects, data),
             )
         if self._mentions_github_setup(text):
             return ProposedAction(type="OPEN_GITHUB_SETUP")
@@ -51,11 +52,11 @@ class ActionPlanner:
         if "slack" in text:
             return ProposedAction(type="HIGHLIGHT_SLACK_CARD")
 
-        issue_update = self._issue_update_payload(message, text, selected_issue_id)
+        issue_update = self._issue_update_payload(message, text, selected_issue_id, data)
         if issue_update:
             return ProposedAction(type="UPDATE_DEMO_ISSUE", payload=issue_update)
 
-        person_issue = find_issue_by_person(message)
+        person_issue = find_issue_by_person(message, data)
         if person_issue and self._mentions_all_matching_tickets(text):
             return ProposedAction(
                 type="FILTER_ISSUES_BY_ASSIGNEE",
@@ -148,16 +149,17 @@ class ActionPlanner:
         message: str,
         text: str,
         selected_issue_id: str | None,
+        data: dict | None = None,
     ) -> dict[str, str] | None:
         if "how do i assign" in text or "how to assign" in text or "show assignment" in text or "issue assignment" in text:
             return None
 
-        issue_id = self._target_issue_id(message, selected_issue_id)
+        issue_id = self._target_issue_id(message, selected_issue_id, data)
         if not issue_id:
             return None
 
         payload: dict[str, str] = {"issue_id": issue_id}
-        assignee = self._assignment_target(message)
+        assignee = self._assignment_target(message, data)
         if assignee:
             payload["assignee"] = assignee
 
@@ -171,7 +173,8 @@ class ActionPlanner:
 
         return payload if len(payload) > 1 else None
 
-    def _target_issue_id(self, message: str, selected_issue_id: str | None) -> str | None:
+    def _target_issue_id(self, message: str, selected_issue_id: str | None,
+                         data: dict | None = None) -> str | None:
         explicit = re.search(r"\b(?:LIN|PIX)-\d+\b", message, re.IGNORECASE)
         if explicit:
             return explicit.group(0).upper()
@@ -179,7 +182,7 @@ class ActionPlanner:
         if selected_issue_id and re.search(r"\b(this|that|it|current|same)\b", message, re.IGNORECASE):
             return selected_issue_id
 
-        person_issue = find_issue_by_person(message)
+        person_issue = find_issue_by_person(message, data)
         if person_issue:
             return person_issue.id
 
@@ -188,7 +191,7 @@ class ActionPlanner:
 
         return selected_issue_id
 
-    def _assignment_target(self, message: str) -> str | None:
+    def _assignment_target(self, message: str, data: dict | None = None) -> str | None:
         if not re.search(r"\b(assign|reassign|owner|assignee)\b", message, re.IGNORECASE):
             return None
         match = re.search(
@@ -209,7 +212,7 @@ class ActionPlanner:
             return None
 
         normalized_candidate = candidate.lower()
-        for member in load_team_member_names():
+        for member in load_team_member_names(data):
             member_parts = {part.lower() for part in member.split()}
             member_parts.add(member.lower())
             if normalized_candidate in member_parts:
@@ -251,38 +254,34 @@ class ActionPlanner:
         self,
         message: str,
         allowed_issue_projects: set[str] | None = None,
+        data: dict | None = None,
     ) -> dict[str, str]:
         text = normalize_for_intent(message)
-        assignee = extract_requested_assignee(message)
+        assignee = extract_requested_assignee(message, data)
         return {
-            "id": self._next_demo_issue_id(),
-            "title": self._demo_issue_title(message),
+            "id": self._next_demo_issue_id(data),
+            "title": self._demo_issue_title(message, data),
             "priority": self._demo_issue_priority(text),
             "assignee": assignee,
             "project": self._demo_issue_project(text, allowed_issue_projects),
             "status": "Todo",
         }
 
-    _created_count = 0
-
-    @classmethod
-    def reset_created_count(cls) -> None:
-        cls._created_count = 0
-
-    def _next_demo_issue_id(self) -> str:
-        ActionPlanner._created_count += 1
+    def _next_demo_issue_id(self, data: dict | None = None) -> str:
         issue_numbers = []
-        for issue in load_demo_issues():
+        for issue in load_demo_issues(data):
             match = re.search(r"LIN-(\d+)|PIX-(\d+)", issue.id)
             if match:
                 num = match.group(1) or match.group(2)
                 if num:
                     issue_numbers.append(int(num))
         base_number = max(issue_numbers, default=142)
-        next_number = base_number + ActionPlanner._created_count
+        # The materialized record snapshot is the source of truth. A process-global counter makes
+        # one visitor's IDs depend on unrelated visitors and breaks resume after a refresh.
+        next_number = base_number + 1
         return f"PIX-{next_number}"
 
-    def _demo_issue_title(self, message: str) -> str:
+    def _demo_issue_title(self, message: str, data: dict | None = None) -> str:
         text = normalize_for_intent(message)
         match = re.search(r"\b(?:about|title|regarding|named)\s+(.+)", message, re.IGNORECASE)
         if match:
@@ -297,7 +296,7 @@ class ActionPlanner:
         if "bug" in text:
             return "Investigate reported bug"
 
-        person = extract_requested_assignee(message)
+        person = extract_requested_assignee(message, data)
         if person and person != "Maya Chen":
             return f"Investigate request for {person}"
 

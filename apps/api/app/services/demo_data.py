@@ -23,7 +23,9 @@ ROOT_DIR = Path(__file__).resolve().parents[4]
 ISSUES_PATH = ROOT_DIR / "packages" / "shared" / "demo-data" / "issues.json"
 
 
-def load_demo_issues() -> tuple[DemoIssue, ...]:
+def load_demo_issues(data: dict | None = None) -> tuple[DemoIssue, ...]:
+    if data is not None:
+        return tuple(_issue_from_payload(issue) for issue in data.get("issues", []))
     try:
         from app.services.product_data_store import ProductDataStore
 
@@ -33,13 +35,13 @@ def load_demo_issues() -> tuple[DemoIssue, ...]:
     return tuple(_issue_from_payload(issue) for issue in raw_issues)
 
 
-def issue_exists(issue_id: str) -> bool:
-    return any(issue.id == issue_id for issue in load_demo_issues())
+def issue_exists(issue_id: str, data: dict | None = None) -> bool:
+    return any(issue.id == issue_id for issue in load_demo_issues(data))
 
 
-def find_issue_by_id(issue_id: str) -> DemoIssue | None:
+def find_issue_by_id(issue_id: str, data: dict | None = None) -> DemoIssue | None:
     normalized_issue_id = issue_id.upper()
-    for issue in load_demo_issues():
+    for issue in load_demo_issues(data):
         if issue.id.upper() == normalized_issue_id:
             return issue
     return None
@@ -53,25 +55,30 @@ def issue_in_scope(issue: DemoIssue, allowed_project_ids: set[str], allowed_issu
     return issue.project in allowed_issue_projects
 
 
-def issue_id_in_scope(issue_id: str, allowed_project_ids: set[str], allowed_issue_projects: set[str]) -> bool:
-    issue = find_issue_by_id(issue_id)
+def issue_id_in_scope(issue_id: str, allowed_project_ids: set[str], allowed_issue_projects: set[str],
+                      data: dict | None = None) -> bool:
+    issue = find_issue_by_id(issue_id, data)
     return bool(issue and issue_in_scope(issue, allowed_project_ids, allowed_issue_projects))
 
 
-def assignee_in_scope(assignee: str, allowed_project_ids: set[str], allowed_issue_projects: set[str]) -> bool:
+def assignee_in_scope(assignee: str, allowed_project_ids: set[str], allowed_issue_projects: set[str],
+                      data: dict | None = None) -> bool:
     return any(
         issue.assignee == assignee and issue_in_scope(issue, allowed_project_ids, allowed_issue_projects)
-        for issue in load_demo_issues()
+        for issue in load_demo_issues(data)
     )
 
 
-def team_member_in_scope(assignee: str, allowed_project_ids: set[str]) -> bool:
-    try:
-        from app.services.product_data_store import ProductDataStore
+def team_member_in_scope(assignee: str, allowed_project_ids: set[str], data: dict | None = None) -> bool:
+    if data is not None:
+        members = data.get("team", [])
+    else:
+        try:
+            from app.services.product_data_store import ProductDataStore
 
-        members = ProductDataStore().load()["team"]
-    except Exception:
-        return False
+            members = ProductDataStore().load()["team"]
+        except Exception:
+            return False
 
     normalized_assignee = _normalize(assignee)
     for member in members:
@@ -83,41 +90,47 @@ def team_member_in_scope(assignee: str, allowed_project_ids: set[str]) -> bool:
     return False
 
 
-def team_member_exists(name: str) -> bool:
-    try:
-        from app.services.product_data_store import ProductDataStore
+def team_member_exists(name: str, data: dict | None = None) -> bool:
+    if data is not None:
+        members = data.get("team", [])
+    else:
+        try:
+            from app.services.product_data_store import ProductDataStore
 
-        members = ProductDataStore().load()["team"]
-    except Exception:
-        return name in {"Maya Chen", "Noah Patel", "Avery Brooks", "Iris Morgan"}
+            members = ProductDataStore().load()["team"]
+        except Exception:
+            return name in {"Maya Chen", "Noah Patel", "Avery Brooks", "Iris Morgan"}
 
     normalized_name = _normalize(name)
     return any(_normalize(str(member.get("name", ""))) == normalized_name for member in members)
 
 
-def load_team_member_names() -> tuple[str, ...]:
-    try:
-        from app.services.product_data_store import ProductDataStore
+def load_team_member_names(data: dict | None = None) -> tuple[str, ...]:
+    if data is not None:
+        members = data.get("team", [])
+    else:
+        try:
+            from app.services.product_data_store import ProductDataStore
 
-        members = ProductDataStore().load()["team"]
-        names = [str(member.get("name", "")) for member in members]
-        return tuple(name for name in names if name)
-    except Exception:
-        return ("Maya Chen", "Noah Patel", "Avery Brooks", "Iris Morgan")
+            members = ProductDataStore().load()["team"]
+        except Exception:
+            return ("Maya Chen", "Noah Patel", "Avery Brooks", "Iris Morgan")
+    names = [str(member.get("name", "")) for member in members]
+    return tuple(name for name in names if name)
 
 
-def find_issues_by_person(message: str) -> tuple[DemoIssue, ...]:
+def find_issues_by_person(message: str, data: dict | None = None) -> tuple[DemoIssue, ...]:
     normalized_message = normalize_for_intent(message)
     matched_issues: list[DemoIssue] = []
-    for issue in load_demo_issues():
+    for issue in load_demo_issues(data):
         assignee_parts = _name_parts(issue.assignee)
         if any(part in normalized_message for part in assignee_parts):
             matched_issues.append(issue)
     return tuple(matched_issues)
 
 
-def find_issue_by_person(message: str) -> DemoIssue | None:
-    issues = find_issues_by_person(message)
+def find_issue_by_person(message: str, data: dict | None = None) -> DemoIssue | None:
+    issues = find_issues_by_person(message, data)
     return issues[0] if issues else None
 
 
@@ -125,10 +138,11 @@ def find_issues_by_person_in_scope(
     message: str,
     allowed_project_ids: set[str],
     allowed_issue_projects: set[str],
+    data: dict | None = None,
 ) -> tuple[DemoIssue, ...]:
     return tuple(
         issue
-        for issue in find_issues_by_person(message)
+        for issue in find_issues_by_person(message, data)
         if issue_in_scope(issue, allowed_project_ids, allowed_issue_projects)
     )
 
@@ -137,8 +151,11 @@ def find_issue_by_person_in_scope(
     message: str,
     allowed_project_ids: set[str],
     allowed_issue_projects: set[str],
+    data: dict | None = None,
 ) -> DemoIssue | None:
-    issues = find_issues_by_person_in_scope(message, allowed_project_ids, allowed_issue_projects)
+    issues = find_issues_by_person_in_scope(
+        message, allowed_project_ids, allowed_issue_projects, data
+    )
     return issues[0] if issues else None
 
 
@@ -165,8 +182,8 @@ def extract_unknown_person(message: str) -> str | None:
     return None
 
 
-def extract_requested_assignee(message: str) -> str:
-    issue = find_issue_by_person(message)
+def extract_requested_assignee(message: str, data: dict | None = None) -> str:
+    issue = find_issue_by_person(message, data)
     if issue:
         return issue.assignee
 

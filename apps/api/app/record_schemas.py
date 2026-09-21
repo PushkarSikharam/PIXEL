@@ -8,6 +8,7 @@ class RecordInput(BaseModel):
 
 
 class IssueInput(RecordInput):
+    revision: int | None = Field(default=None, ge=1)
     id: str = Field(default="", max_length=100)
     title: str = Field(min_length=1, max_length=300)
     priority: str = Field(min_length=1, max_length=30)
@@ -22,6 +23,7 @@ class IssueInput(RecordInput):
 
 
 class ProjectInput(RecordInput):
+    revision: int | None = Field(default=None, ge=1)
     id: str = Field(default="", max_length=100)
     name: str = Field(min_length=1, max_length=200)
     description: str = Field(max_length=10000)
@@ -33,6 +35,7 @@ class ProjectInput(RecordInput):
 
 
 class CycleInput(RecordInput):
+    revision: int | None = Field(default=None, ge=1)
     id: str = Field(default="", max_length=100)
     name: str = Field(min_length=1, max_length=200)
     projectId: str | None = Field(default=None, max_length=100)
@@ -55,6 +58,7 @@ class CycleInput(RecordInput):
 
 
 class MemberInput(RecordInput):
+    revision: int | None = Field(default=None, ge=1)
     name: str = Field(min_length=1, max_length=100)
     initials: str = Field(min_length=1, max_length=8)
     role: str = Field(min_length=1, max_length=100)

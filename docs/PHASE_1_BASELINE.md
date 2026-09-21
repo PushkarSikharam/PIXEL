@@ -4,6 +4,10 @@ Audit date: 2026-09-15. Scope: the checked-out Pixel application, backend, persi
 conversation routing, voice plumbing, and automated tests. This document describes
 observed implementation, not the future architecture.
 
+Historical note: this audit predates private visitor demo instances. Current deployment behavior
+and configuration are documented in `LIVE_DEPLOYMENT.md`; the findings below remain the Phase 1
+record and must not be used as current operating instructions.
+
 ## Decision
 
 Pixel has a working single-product demo foundation. It is not ready to accept private

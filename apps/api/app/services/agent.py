@@ -52,7 +52,8 @@ class DemoAgent:
         self.retriever = ProductRetriever()
         self.directory = OrganizationDirectory()
 
-    def handle_turn(self, request: TurnRequest, principal: AuthUser) -> TurnResponse:
+    def handle_turn(self, request: TurnRequest, principal: AuthUser,
+                    data: dict | None = None) -> TurnResponse:
         """Run one turn of the Pixel for the product the principal is allowed to use."""
         try:
             access = authorize_product(principal, request.product_id, self.directory)
@@ -63,7 +64,7 @@ class DemoAgent:
                 reason=f"Denied because the product cannot be used ({denied.reason}).",
             )
 
-        workspace_scope = get_workspace_scope(request.workspace_scope_id)
+        workspace_scope = get_workspace_scope(request.workspace_scope_id, data)
         if workspace_scope is None:
             return self._denied_response(
                 request,
@@ -90,6 +91,7 @@ class DemoAgent:
             tenant_id=principal.tenant_id,
             scope_id=request.workspace_scope_id,
             pin=pin,
+            demo_context=principal.demo_context,
         ):
             return self._denied_response(
                 request,
@@ -168,6 +170,7 @@ class DemoAgent:
         follow_up_action, follow_up_signals = self.conversation_manager.follow_up_action(
             request.message,
             last_feature=self.sessions.latest_signal_value(request.session_id, "feature_interest"),
+            data=data,
         )
         signals.extend(follow_up_signals)
         proposed_action = self._hard_boundary_action(normalized_message) or follow_up_action
@@ -186,6 +189,7 @@ class DemoAgent:
                 principal.user_id,
                 access,
                 definition_id,
+                data,
             )
             if llm_result:
                 intent_trace, signals, proposed_action = self._apply_llm_result(
@@ -198,6 +202,7 @@ class DemoAgent:
                 intent_trace,
                 selected_issue_id=request.selected_issue_id,
                 allowed_issue_projects=set(workspace_scope.allowed_issue_projects),
+                data=data,
             )
         if (
             proposed_action is None
@@ -211,6 +216,7 @@ class DemoAgent:
                 principal.user_id,
                 access,
                 definition_id,
+                data,
             )
             if llm_result:
                 intent_trace, signals, proposed_action = self._apply_llm_result(
@@ -222,10 +228,13 @@ class DemoAgent:
             definition_id,
             proposed_action,
             request.workspace_scope_id,
+            data,
         )
-        self._refine_issue_targeting(request.message, intent_trace, validated_action, workspace_scope)
+        self._refine_issue_targeting(
+            request.message, intent_trace, validated_action, workspace_scope, data
+        )
         if validated_action:
-            signals.extend(self._person_signals(request.message, workspace_scope))
+            signals.extend(self._person_signals(request.message, workspace_scope, data))
         retrieved_docs = []
         if proposed_action and not validated_action:
             retrieved_docs = []
@@ -244,7 +253,9 @@ class DemoAgent:
         if proposed_action and not validated_action:
             intent_trace.status = "denied"
             intent_trace.reason = self._denied_reason(proposed_action.type, workspace_scope)
-            speech = self._denied_speech(proposed_action.type, request.message, workspace_scope)
+            speech = self._denied_speech(
+                proposed_action.type, request.message, workspace_scope, data
+            )
             status = "denied"
         else:
             speech = (
@@ -252,7 +263,10 @@ class DemoAgent:
                 if llm_result and not validated_action and llm_result.clarification_question
                 else llm_result.speech
                 if llm_result
-                else self._speech(request.message, intent_trace, validated_action, retrieved_docs, workspace_scope)
+                else self._speech(
+                    request.message, intent_trace, validated_action, retrieved_docs,
+                    workspace_scope, data,
+                )
             )
             status = "completed"
 
@@ -351,6 +365,7 @@ class DemoAgent:
         proposed_action_type: str,
         message: str,
         workspace_scope: WorkspaceScope,
+        data: dict | None = None,
     ) -> str:
         if proposed_action_type in {
             "OPEN_DEMO_ISSUE",
@@ -359,7 +374,7 @@ class DemoAgent:
             "HIGHLIGHT_ASSIGNMENT_CONTROL",
             "CREATE_DEMO_ISSUE",
         }:
-            issue = find_issue_by_person(message)
+            issue = find_issue_by_person(message, data)
             if issue:
                 return (
                     f"{issue.assignee} is outside {workspace_scope.name}, "
@@ -396,6 +411,7 @@ class DemoAgent:
         validated_action,
         retrieved_docs: list[RetrievedDocument],
         workspace_scope: WorkspaceScope,
+        data: dict | None = None,
     ) -> str:
         if validated_action and validated_action.type == "OPEN_SYSTEM_ARCHITECTURE":
             return (
@@ -405,7 +421,7 @@ class DemoAgent:
 
         if validated_action and validated_action.type == "OPEN_DEMO_ISSUE":
             issue_id = validated_action.payload.get("issue_id")
-            issue = find_issue_by_id(issue_id) if isinstance(issue_id, str) else None
+            issue = find_issue_by_id(issue_id, data) if isinstance(issue_id, str) else None
             if issue:
                 return f"I found {issue.id}, assigned to {issue.assignee}. I'll open that ticket."
 
@@ -440,6 +456,7 @@ class DemoAgent:
                 message,
                 set(workspace_scope.allowed_project_ids),
                 set(workspace_scope.allowed_issue_projects),
+                data,
             )
             assignee = validated_action.payload.get("assignee")
             if issues and isinstance(assignee, str):
@@ -465,10 +482,11 @@ class DemoAgent:
 
         if validated_action and validated_action.type == "HIGHLIGHT_ASSIGNMENT_CONTROL":
             issue_id = validated_action.payload.get("issue_id")
-            issue = find_issue_by_id(issue_id) if isinstance(issue_id, str) else find_issue_by_person_in_scope(
+            issue = find_issue_by_id(issue_id, data) if isinstance(issue_id, str) else find_issue_by_person_in_scope(
                 message,
                 set(workspace_scope.allowed_project_ids),
                 set(workspace_scope.allowed_issue_projects),
+                data,
             )
             assignment_context = self._grounded_sentence(
                 retrieved_docs,
@@ -533,11 +551,13 @@ class DemoAgent:
             )
         return "I can help demonstrate planning, issues, projects, teams, and integrations in this product."
 
-    def _person_signals(self, message: str, workspace_scope: WorkspaceScope) -> list[Signal]:
+    def _person_signals(self, message: str, workspace_scope: WorkspaceScope,
+                        data: dict | None = None) -> list[Signal]:
         issue = find_issue_by_person_in_scope(
             message,
             set(workspace_scope.allowed_project_ids),
             set(workspace_scope.allowed_issue_projects),
+            data,
         )
         if not issue:
             return []
@@ -598,6 +618,7 @@ class DemoAgent:
         user_id: str,
         access: ProductAccess,
         definition_id: str,
+        data: dict | None = None,
     ) -> tuple[AgentReasoningResult | None, list[RetrievedDocument]]:
         # Per-session, per-user and per-deployment limits are enforced by the usage ledger.
         if not self.llm_reasoner.enabled():
@@ -616,6 +637,7 @@ class DemoAgent:
                 user_id=user_id,
                 session_id=request.session_id,
                 request_id=f"turn:{request.session_id}:{request.turn_id}",
+                visible_data=data,
             )
         )
         return llm_result, retrieved_docs
@@ -762,6 +784,7 @@ class DemoAgent:
         intent_trace: IntentTrace,
         validated_action,
         workspace_scope: WorkspaceScope,
+        data: dict | None = None,
     ) -> None:
         if validated_action and validated_action.type == "OPEN_SYSTEM_ARCHITECTURE":
             intent_trace.goal = "System architecture"
@@ -797,10 +820,11 @@ class DemoAgent:
                 return
 
             issue_id = validated_action.payload.get("issue_id")
-            issue = find_issue_by_id(issue_id) if isinstance(issue_id, str) else find_issue_by_person_in_scope(
+            issue = find_issue_by_id(issue_id, data) if isinstance(issue_id, str) else find_issue_by_person_in_scope(
                 message,
                 set(workspace_scope.allowed_project_ids),
                 set(workspace_scope.allowed_issue_projects),
+                data,
             )
             if issue:
                 intent_trace.goal = "Issue lookup"

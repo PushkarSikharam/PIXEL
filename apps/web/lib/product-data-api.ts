@@ -5,15 +5,13 @@ import type {
   DemoProject,
   DemoTeamMember
 } from "@/types/demo";
+import { productConfig } from "@/lib/product-config";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL
   ?? (typeof window === "undefined" ? "http://127.0.0.1:8001/api" : "/api/agent");
 
-// Which seeded demo identity the browser signs in as. The default is the public demo visitor:
-// both demo workspaces, and no administration. The backend refuses to issue an administrator's
-// token through the demo login, so this default is a convenience, not the security boundary.
-const DEMO_USER_ID = process.env.NEXT_PUBLIC_PIXEL_DEMO_USER ?? "demo-visitor";
+const AUTH_STORAGE_KEY = `pixel_demo_auth:${productConfig.tenantId}:${productConfig.id}:v2`;
 
 /** A record write the server rejected. Its message is safe to show to the user. */
 export class RecordSaveError extends Error {
@@ -31,7 +29,7 @@ let _loginPromise: Promise<void> | null = null;
 export function getAuthToken(): string | null {
   if (!_authToken && typeof window !== "undefined") {
     try {
-      _authToken = window.sessionStorage?.getItem("demo_auth_token");
+      _authToken = window.sessionStorage?.getItem(AUTH_STORAGE_KEY);
     } catch {
       // sessionStorage not accessible
     }
@@ -44,9 +42,9 @@ export function setAuthToken(token: string | null): void {
   if (typeof window !== "undefined") {
     try {
       if (token) {
-        window.sessionStorage?.setItem("demo_auth_token", token);
+        window.sessionStorage?.setItem(AUTH_STORAGE_KEY, token);
       } else {
-        window.sessionStorage?.removeItem("demo_auth_token");
+        window.sessionStorage?.removeItem(AUTH_STORAGE_KEY);
       }
     } catch {
       // sessionStorage not accessible
@@ -65,15 +63,17 @@ export class RateLimitedError extends Error {
   }
 }
 
-export async function ensureDemoLogin(userId = DEMO_USER_ID): Promise<void> {
+export async function ensureDemoLogin(): Promise<void> {
   if (getAuthToken()) return;
   if (_loginPromise) return _loginPromise;
   _loginPromise = (async () => {
     try {
-      const response = await fetch(apiUrl("/auth/demo-login"), {
+      const response = await fetch(apiUrl(
+        `/organizations/${encodeURIComponent(productConfig.tenantId)}`
+        + `/products/${encodeURIComponent(productConfig.id)}/visitor-sessions`
+      ), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: userId })
+        headers: { "Content-Type": "application/json" }
       });
       if (response.status === 429) throw new RateLimitedError();
       if (!response.ok) {
@@ -118,6 +118,24 @@ export async function loadDemoData(): Promise<DemoDataResponse> {
     cache: "no-store"
   });
   return parseJsonResponse<DemoDataResponse>(response);
+}
+
+type PrivateDemoResetResponse = {
+  token: string;
+  instance_id: string;
+  generation: number;
+  data: DemoDataResponse;
+};
+
+export async function resetPrivateDemo(): Promise<DemoDataResponse> {
+  const response = await authorizedFetch(apiUrl("/demo-data/reset-mine"), {
+    method: "POST",
+    headers: jsonHeaders()
+  });
+  const body = await parseJsonResponse<PrivateDemoResetResponse>(response);
+  // Reset increments the private generation. Store its rotated token before any later request.
+  setAuthToken(body.token);
+  return body.data;
 }
 
 export async function saveStoredIssue(issue: DemoIssue, requestKey?: string): Promise<DemoIssue> {

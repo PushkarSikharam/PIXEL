@@ -19,6 +19,7 @@ class ActionValidator:
         product_id: str,
         proposed_action: ProposedAction | None,
         workspace_scope_id: str = DEFAULT_WORKSPACE_SCOPE_ID,
+        data: dict | None = None,
     ) -> ValidatedAction | None:
         if proposed_action is None:
             return None
@@ -30,11 +31,13 @@ class ActionValidator:
         if proposed_action.type not in product.allowed_actions:
             return None
 
-        workspace_scope = get_workspace_scope(workspace_scope_id)
+        workspace_scope = get_workspace_scope(workspace_scope_id, data)
         if workspace_scope is None:
             return None
 
-        payload = self._safe_payload(proposed_action.type, proposed_action.payload, workspace_scope)
+        payload = self._safe_payload(
+            proposed_action.type, proposed_action.payload, workspace_scope, data
+        )
         if payload is None:
             return None
 
@@ -45,6 +48,7 @@ class ActionValidator:
         action_type: str,
         payload: dict[str, Any],
         workspace_scope: WorkspaceScope,
+        data: dict | None = None,
     ) -> dict[str, Any] | None:
         if action_type in {
             "OPEN_DASHBOARD",
@@ -71,10 +75,10 @@ class ActionValidator:
             return None
 
         if action_type == "CREATE_DEMO_ISSUE":
-            return self._safe_demo_issue_payload(payload, workspace_scope)
+            return self._safe_demo_issue_payload(payload, workspace_scope, data)
 
         if action_type == "UPDATE_DEMO_ISSUE":
-            return self._safe_issue_update_payload(payload, workspace_scope)
+            return self._safe_issue_update_payload(payload, workspace_scope, data)
 
         if action_type == "OPEN_DEMO_ISSUE":
             issue_id = payload.get("issue_id")
@@ -84,6 +88,7 @@ class ActionValidator:
                     issue_id,
                     set(workspace_scope.allowed_project_ids),
                     set(workspace_scope.allowed_issue_projects),
+                    data,
                 )
             ):
                 return {"issue_id": issue_id}
@@ -97,6 +102,7 @@ class ActionValidator:
                     assignee,
                     set(workspace_scope.allowed_project_ids),
                     set(workspace_scope.allowed_issue_projects),
+                    data,
                 )
             ):
                 return {"assignee": assignee}
@@ -112,6 +118,7 @@ class ActionValidator:
                     issue_id,
                     set(workspace_scope.allowed_project_ids),
                     set(workspace_scope.allowed_issue_projects),
+                    data,
                 )
             ):
                 return {"issue_id": issue_id}
@@ -123,6 +130,7 @@ class ActionValidator:
         self,
         payload: dict[str, Any],
         workspace_scope: WorkspaceScope,
+        data: dict | None = None,
     ) -> dict[str, Any] | None:
         issue_id = payload.get("id")
         title = payload.get("title")
@@ -154,6 +162,7 @@ class ActionValidator:
         if assignee not in workspace_scope.allowed_team_members and not team_member_in_scope(
             assignee,
             allowed_project_ids,
+            data,
         ):
             return None
 
@@ -171,6 +180,7 @@ class ActionValidator:
         self,
         payload: dict[str, Any],
         workspace_scope: WorkspaceScope,
+        data: dict | None = None,
     ) -> dict[str, Any] | None:
         issue_id = payload.get("issue_id")
         if not (
@@ -179,6 +189,7 @@ class ActionValidator:
                 issue_id,
                 set(workspace_scope.allowed_project_ids),
                 set(workspace_scope.allowed_issue_projects),
+                data,
             )
         ):
             return None
@@ -188,15 +199,15 @@ class ActionValidator:
         priority = payload.get("priority")
         status = payload.get("status")
         allowed_project_ids = set(workspace_scope.allowed_project_ids)
-        known_assignees = {issue.assignee for issue in load_demo_issues()}
+        known_assignees = {issue.assignee for issue in load_demo_issues(data)}
 
         if assignee is not None:
             if not (
                 isinstance(assignee, str)
-                and (assignee in known_assignees or team_member_in_scope(assignee, allowed_project_ids))
+                and (assignee in known_assignees or team_member_in_scope(assignee, allowed_project_ids, data))
                 and (
                     assignee in workspace_scope.allowed_team_members
-                    or team_member_in_scope(assignee, allowed_project_ids)
+                    or team_member_in_scope(assignee, allowed_project_ids, data)
                 )
             ):
                 return None

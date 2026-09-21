@@ -29,8 +29,11 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from app.db import get_connection
 from app.definitions.access import AccessDenied, authorize_product
 from app.definitions.organizations import OrganizationDirectory
+from app.definitions.sessions import DefinitionUnavailable, pin_new_session
 from app.record_access import RecordGrant, legacy_record_owner, record_grant
 from app.services.env import env_bool, env_value
+from app.services.demo_instances import DemoContext, DemoInstanceStore, InstanceUnavailable
+from app.installed_products import PackageMissing, package_for
 
 # The secret rotates per process; tokens don't survive a server restart,
 # which is fine for the demo.  Set PIXEL_AUTH_SECRET for stable tokens.
@@ -47,6 +50,17 @@ class AuthUser:
     role: str | None = None
     team_id: str | None = None
     product_id: str | None = None
+    instance_id: str | None = None
+    instance_generation: int | None = None
+
+    @property
+    def demo_context(self) -> DemoContext | None:
+        if self.kind != "visitor" or not self.product_id or not self.instance_id or not self.instance_generation:
+            return None
+        return DemoContext(
+            self.tenant_id, self.product_id, self.user_id,
+            self.instance_id, self.instance_generation,
+        )
 
 
 def demo_login_enabled() -> bool:
@@ -122,18 +136,72 @@ def create_visitor_token(tenant_id: str, product_id: str) -> tuple[str, str]:
     Raises AccessDenied unless the product exists, is active, and accepts visitors.
     """
     visitor_id = f"visitor-{uuid4()}"
-    authorize_product(_visitor(visitor_id, tenant_id, product_id), product_id)
-    token = _SERIALIZER.dumps(
-        {"k": "visitor", "vid": visitor_id, "tid": tenant_id, "pid": product_id, "n": secrets.token_hex(8)}
-    )
+    directory = OrganizationDirectory()
+    access = authorize_product(_visitor(visitor_id, tenant_id, product_id), product_id, directory)
+    try:
+        # Allocation is useful only when this product can start a conversation. Check before the
+        # write transaction so a broken or revoked definition cannot consume visitor capacity.
+        pin_new_session(access, directory.definitions)
+    except DefinitionUnavailable as unavailable:
+        raise AccessDenied("definition_unavailable") from unavailable
+    try:
+        package = package_for(access.binding.definition_id)
+    except PackageMissing as missing:
+        raise AccessDenied("demo_package_unavailable") from missing
+    if package.demo_seed_factory is None:
+        raise AccessDenied("demo_seed_unavailable")
+    seed = package.demo_seed_factory()
+    instances = DemoInstanceStore()
+    # The login and every seeded record commit together. A valid token can never point at a
+    # partial instance, and a failed login leaves no orphan consuming capacity.
     with get_connection() as connection:
+        connection.execute("begin immediate")
+        context = instances.allocate(tenant_id, product_id, visitor_id, seed, connection=connection)
+        # Sign the final server-allocated instance, never an ID supplied by the browser.
+        token = _SERIALIZER.dumps(
+            {"k": "visitor", "vid": visitor_id, "tid": tenant_id, "pid": product_id,
+             "iid": context.instance_id, "gen": context.generation, "n": secrets.token_hex(8)}
+        )
         connection.execute("delete from visitor_logins where expires_at < ?", (time.time(),))
         connection.execute(
-            "insert into visitor_logins(token_hash, visitor_id, tenant_id, product_id, expires_at) "
-            "values (?, ?, ?, ?, ?)",
-            (_hash(token), visitor_id, tenant_id, product_id, time.time() + _TOKEN_MAX_AGE_SECONDS),
+            "insert into visitor_logins(token_hash, visitor_id, tenant_id, product_id, expires_at, "
+            "instance_id, instance_generation, seed_version) values (?, ?, ?, ?, ?, ?, ?, ?)",
+            (_hash(token), visitor_id, tenant_id, product_id, time.time() + _TOKEN_MAX_AGE_SECONDS,
+             context.instance_id, context.generation, seed.version),
         )
     return token, visitor_id
+
+
+def visitor_from_token(token: str) -> AuthUser:
+    """Resolve a token the server just issued through the persisted visitor-login boundary."""
+    payload, encoded = _decode(f"Bearer {token}")
+    if payload.get("k") != "visitor":
+        raise HTTPException(status_code=401, detail="Invalid visitor token.")
+    return _visitor_from(payload, encoded)
+
+
+def replace_visitor_token(user: AuthUser, context: DemoContext, seed_version: str,
+                          connection) -> str:
+    """Rotate a visitor token after reset. The old generation and token stop working at commit."""
+    if user.demo_context is None or (
+        user.tenant_id, user.product_id, user.user_id, user.instance_id
+    ) != (context.tenant_id, context.product_id, context.visitor_id, context.instance_id):
+        raise HTTPException(status_code=403, detail="This demo cannot be reset.")
+    token = _SERIALIZER.dumps(
+        {"k": "visitor", "vid": user.user_id, "tid": user.tenant_id, "pid": user.product_id,
+         "iid": context.instance_id, "gen": context.generation, "n": secrets.token_hex(8)}
+    )
+    connection.execute(
+        "delete from visitor_logins where visitor_id=? and tenant_id=? and product_id=?",
+        (user.user_id, user.tenant_id, user.product_id),
+    )
+    connection.execute(
+        "insert into visitor_logins(token_hash, visitor_id, tenant_id, product_id, expires_at, "
+        "instance_id, instance_generation, seed_version) values (?, ?, ?, ?, ?, ?, ?, ?)",
+        (_hash(token), user.user_id, user.tenant_id, user.product_id,
+         time.time() + _TOKEN_MAX_AGE_SECONDS, context.instance_id, context.generation, seed_version),
+    )
+    return token
 
 
 def require_auth(authorization: str | None = Header(default=None)) -> AuthUser:
@@ -171,7 +239,7 @@ def require_org_admin(user: AuthUser) -> None:
         raise HTTPException(status_code=403, detail="This operation requires an organization administrator.")
 
 
-def require_record_access(user: AuthUser = Depends(require_member)) -> RecordGrant:
+def require_record_access(user: AuthUser = Depends(require_auth)) -> RecordGrant:
     """FastAPI dependency for the legacy record endpoints.
 
     The caller must belong to the organization of the designated record-owning product, be
@@ -190,7 +258,18 @@ def product_record_grant(user: AuthUser, product_id: str) -> RecordGrant:
         authorize_product(user, product_id)
     except AccessDenied:
         raise _no_record_access()
-    grant = record_grant(user.tenant_id, product_id, user.user_id) if user.kind == "member" else None
+    if user.kind == "visitor":
+        context = user.demo_context
+        if context is None:
+            raise _no_record_access()
+        from app.services.product_data_store import ProductDataStore
+        scopes = ProductDataStore(context).load()["workspaceScopes"]
+        return RecordGrant(
+            scope_ids=frozenset(scope["id"] for scope in scopes),
+            is_admin=False,
+            demo_context=context,
+        )
+    grant = record_grant(user.tenant_id, product_id, user.user_id)
     if grant is None:
         raise _no_record_access()
     return grant
@@ -258,21 +337,33 @@ def _member_from(payload: dict, token: str) -> AuthUser:
 
 def _visitor_from(payload: dict, token: str) -> AuthUser:
     visitor_id, tenant_id, product_id = payload.get("vid"), payload.get("tid"), payload.get("pid")
-    if not visitor_id or not tenant_id or not product_id:
+    instance_id, generation = payload.get("iid"), payload.get("gen")
+    if not visitor_id or not tenant_id or not product_id or not instance_id or type(generation) is not int:
         raise HTTPException(status_code=401, detail="Invalid token payload.")
     with get_connection() as connection:
         active = connection.execute(
             "select 1 from visitor_logins where token_hash = ? and visitor_id = ? and tenant_id = ? "
-            "and product_id = ? and expires_at > ?",
-            (_hash(token), visitor_id, tenant_id, product_id, time.time()),
+            "and product_id = ? and instance_id = ? and instance_generation = ? and expires_at > ?",
+            (_hash(token), visitor_id, tenant_id, product_id, instance_id, generation, time.time()),
         ).fetchone()
     if active is None:
         raise HTTPException(status_code=401, detail="Visitor session is not active.")
-    return _visitor(visitor_id, tenant_id, product_id)
+    user = _visitor(visitor_id, tenant_id, product_id, instance_id, generation)
+    try:
+        # Successful visitor activity extends only the idle deadline. The absolute lifetime is
+        # fixed when the instance is allocated and cannot be extended by repeated requests.
+        DemoInstanceStore().touch(user.demo_context)
+    except InstanceUnavailable:
+        raise HTTPException(status_code=401, detail="Visitor session is not active.")
+    return user
 
 
-def _visitor(visitor_id: str, tenant_id: str, product_id: str) -> AuthUser:
-    return AuthUser(kind="visitor", user_id=visitor_id, tenant_id=tenant_id, product_id=product_id)
+def _visitor(visitor_id: str, tenant_id: str, product_id: str,
+             instance_id: str | None = None, generation: int | None = None) -> AuthUser:
+    return AuthUser(
+        kind="visitor", user_id=visitor_id, tenant_id=tenant_id, product_id=product_id,
+        instance_id=instance_id, instance_generation=generation,
+    )
 
 
 def _hash(token: str) -> str:

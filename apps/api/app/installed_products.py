@@ -25,6 +25,9 @@ class ProductPackage:
     # Builds a scope-bound KnowledgeLookup for one caller (added in slice 4b). A product without
     # documents leaves this unset, and the platform then answers knowledge questions honestly.
     knowledge_factory: Callable[..., Any] | None = None
+    # Immutable synthetic seed for a new private demo instance. Missing means the product cannot
+    # offer public demo sessions; the platform never falls back to edited member records.
+    demo_seed_factory: Callable[[], Any] | None = None
 
 
 class PackageMissing(LookupError):

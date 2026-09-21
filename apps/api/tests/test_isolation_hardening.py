@@ -110,10 +110,13 @@ class RecordAccessTest(ApiFixture):
             connection.execute("delete from legacy_record_owner")
         self.assertEqual(self.client.get("/api/demo-data", headers=bearer("demo-admin")).status_code, 403)
 
-    def test_visitors_have_no_record_access(self):
+    def test_visitors_have_only_their_private_record_instance(self):
         token = create_visitor_token(DEMO_TENANT, DEMO_PRODUCT)[0]
-        self.assertEqual(self.client.get("/api/demo-data", headers={"Authorization": f"Bearer {token}"}).status_code,
-                         403)
+        headers = {"Authorization": f"Bearer {token}"}
+        private = self.client.get("/api/demo-data", headers=headers)
+        self.assertEqual(private.status_code, 200)
+        self.assertTrue(private.json()["issues"])
+        self.assertEqual(self.client.post("/api/demo-data/reset", headers=headers).status_code, 403)
 
 
 class DefinitionOwnershipInvariantTest(RegistryFixture):

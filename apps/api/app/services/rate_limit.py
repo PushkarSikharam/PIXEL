@@ -4,13 +4,14 @@ Provider budgets bound what abuse can *cost*; they do nothing about how fast one
 the demo, how many tokens they can mint, or how often shared data can be disturbed. These limits
 bound the rate.
 
-Two keys, because each covers the other's blind spot:
+Three keys, because each covers the others' blind spots:
 
 - **The client address** (best effort). It comes from the first `X-Forwarded-For` entry, which the
   web tier sets. Anyone calling the API directly can forge that header, so this key alone proves
   nothing — it spreads honest visitors apart so one of them cannot exhaust another's allowance.
-- **The authenticated identity** (not forgeable). Every public visitor currently shares one demo
-  identity, so this acts as a ceiling for the whole public demo. It is what a forger still hits.
+- **The authenticated identity** (not forgeable). This limits one private visitor session.
+- **The deployment** (not visitor-controlled). This is the process-wide ceiling that remains when
+  someone forges client addresses and repeatedly allocates fresh visitor identities.
 
 Limits are armed when the server starts (`arm()` in the application's startup), so a unit test
 that talks to the app without starting it is not throttled by the requests of unrelated tests.
@@ -30,6 +31,7 @@ from dataclasses import dataclass
 from fastapi import HTTPException, Request
 
 from app.services.env import env_bool
+from app.tenancy import deployment_id
 
 
 @dataclass(frozen=True)
@@ -42,13 +44,19 @@ class Limit:
 # come from a handful of proxy addresses — is never throttled, and low enough to stop a flood.
 DEFAULT_LIMITS: dict[tuple[str, str], Limit] = {
     ("login", "client"): Limit(30, 60),
+    ("login", "deployment"): Limit(120, 60),
     ("turn", "client"): Limit(120, 60),
-    ("turn", "identity"): Limit(600, 60),
+    ("turn", "identity"): Limit(60, 60),
+    ("turn", "deployment"): Limit(600, 60),
     ("speech", "client"): Limit(60, 60),
-    ("speech", "identity"): Limit(300, 60),
+    ("speech", "identity"): Limit(60, 60),
+    ("speech", "deployment"): Limit(300, 60),
     ("write", "client"): Limit(30, 60),
-    ("write", "identity"): Limit(120, 60),
+    ("write", "identity"): Limit(60, 60),
+    ("write", "deployment"): Limit(180, 60),
+    ("reset", "client"): Limit(10, 60),
     ("reset", "identity"): Limit(5, 60),
+    ("reset", "deployment"): Limit(120, 60),
 }
 
 TOO_MANY = "Too many requests. Please wait a moment and try again."
@@ -84,7 +92,7 @@ class RateLimiter:
         """
         if not self._armed:
             return None
-        keys = {"client": client, "identity": identity}
+        keys = {"client": client, "identity": identity, "deployment": deployment_id()}
         with self._lock:
             now = self._clock()
             applicable: list[tuple[tuple[str, str, str], Limit]] = []

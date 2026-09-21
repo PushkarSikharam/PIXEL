@@ -60,6 +60,8 @@ class ExecutionOwner:
     tenant_id: str
     product_id: str
     user_id: str
+    instance_id: str | None = None
+    instance_generation: int | None = None
 
 
 @dataclass(frozen=True)
@@ -131,15 +133,17 @@ class ExecutionLedger:
         key = token_urlsafe(24)
         row = (
             key, owner.tenant_id, owner.product_id, session_id, turn_id, owner.user_id,
+            owner.instance_id, owner.instance_generation,
             action.action_key, str(action.capability), action.target.entity if action.target else None,
             action.target.id if action.target else None, digest(write_request),
             ActionState.DISPATCHED.value, _now(), time.time() + KEY_LIFETIME_SECONDS,
         )
         statement = """
             insert into action_executions(
-              execution_key, tenant_id, product_id, session_id, turn_id, user_id, action_key,
+              execution_key, tenant_id, product_id, session_id, turn_id, user_id,
+              instance_id, instance_generation, action_key,
               capability, entity, target_id, request_digest, state, created_at, expires_at
-            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         if connection is not None:
             connection.execute(statement, row)
@@ -166,7 +170,13 @@ class ExecutionLedger:
         ).fetchone()
         if row is None:
             raise ExecutionRefused("unknown_execution_key")
-        if (row["tenant_id"], row["product_id"], row["user_id"]) != (owner.tenant_id, owner.product_id, owner.user_id):
+        if (
+            row["tenant_id"], row["product_id"], row["user_id"],
+            row["instance_id"], row["instance_generation"],
+        ) != (
+            owner.tenant_id, owner.product_id, owner.user_id,
+            owner.instance_id, owner.instance_generation,
+        ):
             # Never say the key belongs to someone else.
             raise ExecutionRefused("unknown_execution_key")
         if session_id is not None and row["session_id"] != session_id:

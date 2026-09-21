@@ -171,6 +171,17 @@ class RateLimitTest(PublicDemoFixture):
                     for index in range(3)]
         self.assertEqual(statuses, [200, 200, 429])
 
+    def test_fresh_identities_and_client_addresses_still_hit_the_deployment_ceiling(self):
+        limiter = RateLimiter(limits={
+            ("turn", "client"): Limit(100, 60),
+            ("turn", "identity"): Limit(100, 60),
+            ("turn", "deployment"): Limit(2, 60),
+        })
+        limiter.arm()
+        self.assertIsNone(limiter.retry_after("turn", client="a", identity="visitor-a"))
+        self.assertIsNone(limiter.retry_after("turn", client="b", identity="visitor-b"))
+        self.assertIsNotNone(limiter.retry_after("turn", client="c", identity="visitor-c"))
+
     def test_speech_is_limited(self):
         headers = self.token("demo-visitor")
         self.limited(speech__identity=Limit(1, 60))

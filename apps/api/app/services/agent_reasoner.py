@@ -70,6 +70,7 @@ class AgentReasoningContext:
     user_id: str | None = None
     session_id: str | None = None
     request_id: str | None = None
+    visible_data: dict[str, list[dict[str, Any]]] | None = None
 
 
 class AgentReasoner:
@@ -254,7 +255,7 @@ class AgentReasoner:
 
     def _prompt_sections(self, context: AgentReasoningContext) -> list[PromptSection]:
         product = PRODUCTS_BY_ID[context.definition_id]
-        visible = self._visible_workspace_data(context.workspace_scope)
+        visible = self._visible_workspace_data(context.workspace_scope, context.visible_data)
         docs = "\n".join(
             f"- {doc.title}: {doc.snippet}"
             for doc in context.retrieved_docs[:2]
@@ -298,10 +299,13 @@ class AgentReasoner:
             "- Salesforce, Gmail, external CRM/email -> no action; explain Pixel-only boundary.\n"
         )
 
-    def _visible_workspace_data(self, workspace_scope: WorkspaceScope) -> dict[str, list[str]]:
+    def _visible_workspace_data(
+        self, workspace_scope: WorkspaceScope,
+        visible_data: dict[str, list[dict[str, Any]]] | None = None,
+    ) -> dict[str, list[str]]:
         allowed_project_ids = set(workspace_scope.allowed_project_ids)
         allowed_issue_projects = set(workspace_scope.allowed_issue_projects)
-        data = ProductDataStore().load()
+        data = visible_data if visible_data is not None else ProductDataStore().load()
 
         projects = [
             str(project["name"])
@@ -315,7 +319,7 @@ class AgentReasoner:
         ]
         issues = [
             f"{issue.id} {issue.title} ({issue.assignee}, {issue.project})"
-            for issue in load_demo_issues()
+            for issue in load_demo_issues(data)
             if issue_in_scope(issue, allowed_project_ids, allowed_issue_projects)
         ]
 

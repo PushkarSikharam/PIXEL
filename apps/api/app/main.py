@@ -14,9 +14,11 @@ from app.auth import (
     demo_identity_allowed,
     demo_login_enabled,
     product_record_grant,
+    replace_visitor_token,
     require_any_scope,
     require_auth,
     require_member,
+    visitor_from_token,
     require_org_admin,
     require_record_access,
     require_record_admin,
@@ -39,8 +41,16 @@ from app.services.product_data_store import (
     ScopeViolation,
 )
 from app.services.demo_refresh import IdleDemoReset
+from app.services.demo_instances import (
+    DemoInstanceStore,
+    InstanceCapacity,
+    InstanceConflict,
+    InstanceUnavailable,
+)
+from app.installed_products import PackageMissing, package_for
 from app.services.rate_limit import RateLimiter
 from app.services.record_writes import KeyedWriter, RecordChange, require_visible_scope
+from app.services.session_manager import utc_now
 from app.services.speech_service import SpeechService, SpeechUnavailable
 from app.services.env import env_bool
 from app.services.usage_ledger import UsageLedger
@@ -55,7 +65,7 @@ keyed_writes = KeyedWriter()
 readiness = ReadinessCheck()
 # Armed at startup (see `lifespan`), so tests that never start the server are not throttled.
 rate_limits = RateLimiter()
-# Restores the shared demo between visitors; off unless PIXEL_DEMO_IDLE_RESET_MINUTES is set.
+# Legacy member-demo refresh; public visitors use disposable private instances instead.
 idle_reset = IdleDemoReset()
 
 
@@ -65,6 +75,7 @@ async def lifespan(_: FastAPI):
     was_armed = rate_limits.armed
     reset_was_armed = idle_reset.armed
     migrate()
+    DemoInstanceStore().prune(limit=1000)
     rate_limits.arm()
     idle_reset.arm()
     try:
@@ -113,6 +124,23 @@ async def execution_refused_handler(_: Request, error: ExecutionRefused):
 @app.exception_handler(InvalidReference)
 async def invalid_reference_handler(_: Request, error: InvalidReference):
     return JSONResponse(status_code=422, content={"detail": str(error)})
+
+
+@app.exception_handler(InstanceUnavailable)
+async def private_instance_missing_handler(_: Request, __: InstanceUnavailable):
+    return JSONResponse(status_code=404, content={"detail": "This demo is unavailable."})
+
+
+@app.exception_handler(InstanceConflict)
+async def private_instance_conflict_handler(_: Request, error: InstanceConflict):
+    return JSONResponse(status_code=409, content={"detail": str(error)})
+
+
+@app.exception_handler(InstanceCapacity)
+async def private_instance_capacity_handler(_: Request, error: InstanceCapacity):
+    return JSONResponse(
+        status_code=429, content={"detail": str(error)}, headers={"Retry-After": "60"}
+    )
 
 app.add_middleware(
     CORSMiddleware,
@@ -176,6 +204,8 @@ class VisitorSessionResponse(BaseModel):
     visitor_id: str
     tenant_id: str
     product_id: str
+    instance_id: str
+    generation: int
 
 
 @app.post(
@@ -190,7 +220,12 @@ def start_visitor_session(tenant_id: str, product_id: str, http: Request) -> Vis
     except AccessDenied:
         # One answer for unknown, private, disabled and suspended alike.
         raise HTTPException(status_code=404, detail="This product is not available.")
-    return VisitorSessionResponse(token=token, visitor_id=visitor_id, tenant_id=tenant_id, product_id=product_id)
+    # Resolve through the persisted login row rather than trusting anything from the request.
+    visitor = visitor_from_token(token)
+    return VisitorSessionResponse(
+        token=token, visitor_id=visitor_id, tenant_id=tenant_id, product_id=product_id,
+        instance_id=visitor.instance_id or "", generation=visitor.instance_generation or 0,
+    )
 
 
 # --- Authenticated endpoints ---
@@ -201,8 +236,9 @@ def start_visitor_session(tenant_id: str, product_id: str, http: Request) -> Vis
 
 @app.get("/api/demo-data")
 def get_demo_data(grant: RecordGrant = Depends(require_record_access)) -> dict[str, list[dict]]:
-    idle_reset.touched()
-    return product_data.load(grant.visible_scope_ids())
+    if grant.demo_context is None:
+        idle_reset.touched()
+    return _product_data(grant).load(grant.visible_scope_ids())
 
 
 @app.post("/api/demo-data/reset")
@@ -220,16 +256,72 @@ def reset_demo_data(http: Request, user: AuthUser = Depends(require_member),
     return data
 
 
+class PrivateDemoResetResponse(BaseModel):
+    token: str
+    instance_id: str
+    generation: int
+    data: dict[str, list[dict]]
+
+
+@app.post("/api/demo-data/reset-mine", response_model=PrivateDemoResetResponse)
+def reset_private_demo(http: Request, user: AuthUser = Depends(require_auth)) -> PrivateDemoResetResponse:
+    """Restore only this visitor's synthetic records and invalidate the old generation."""
+    context = user.demo_context
+    if context is None or not user.product_id:
+        raise HTTPException(status_code=403, detail="This operation requires a private demo visitor.")
+    rate_limits.enforce("reset", http, identity=user.user_id)
+    access = authorize_product(user, user.product_id, agent.directory)
+    try:
+        package = package_for(access.binding.definition_id)
+    except PackageMissing:
+        raise HTTPException(status_code=409, detail="This demo cannot be restored.")
+    if package.demo_seed_factory is None:
+        raise HTTPException(status_code=409, detail="This demo cannot be restored.")
+    seed = package.demo_seed_factory()
+    records = ProductDataStore(context)
+    with get_connection() as connection:
+        connection.execute("begin immediate")
+        updated, data = records.reset_private(seed, connection=connection)
+        # A delayed turn or execution from the old generation can no longer affect reset data.
+        session_rows = connection.execute(
+            "select session_id from conversation_owners where user_id=? and customer_id=? "
+            "and product_id=? and instance_id=? and instance_generation=?",
+            (user.user_id, user.tenant_id, user.product_id, context.instance_id, context.generation),
+        ).fetchall()
+        session_ids = [row["session_id"] for row in session_rows]
+        for session_id in session_ids:
+            connection.execute(
+                "update sessions set active_turn_id=null, ended_at=? where id=?",
+                (utc_now(), session_id),
+            )
+        connection.execute(
+            "update action_executions set state='cancelled', reason='demo_reset', settled_at=? "
+            "where tenant_id=? and product_id=? and user_id=? and instance_id=? "
+            "and instance_generation=? and state='dispatched'",
+            (utc_now(), user.tenant_id, user.product_id, user.user_id,
+             context.instance_id, context.generation),
+        )
+        token = replace_visitor_token(user, updated, seed.version, connection)
+    return PrivateDemoResetResponse(
+        token=token, instance_id=updated.instance_id, generation=updated.generation, data=data
+    )
+
+
+def _product_data(grant: RecordGrant) -> ProductDataStore:
+    return ProductDataStore(grant.demo_context) if grant.demo_context else product_data
+
+
 @app.post("/api/demo-data/issues")
 def create_demo_issue(issue: IssueInput,
                       http: Request,
-                      user: AuthUser = Depends(require_member),
+                      user: AuthUser = Depends(require_auth),
                       idempotency_key: str | None = Header(default=None, max_length=200),
                       x_execution_key: str | None = Header(default=None, max_length=200),
                       x_session_id: str | None = Header(default=None, max_length=100)) -> dict:
     rate_limits.enforce("write", http, identity=user.user_id)
-    idle_reset.touched(changed=True)
-    payload = issue.model_dump(mode="json")
+    if user.kind == "member":
+        idle_reset.touched(changed=True)
+    payload = _record_payload(issue)
     if x_execution_key:
         _refuse_legacy_idempotency(idempotency_key)
         # No legacy request key reaches the store: a second mechanism could report an older
@@ -237,40 +329,44 @@ def create_demo_issue(issue: IssueInput,
         return _keyed(x_execution_key, x_session_id, user, ["create_issue", payload],
                       lambda product_id: _create_issue(payload, None, user, product_id))
     grant = require_record_access(user)
-    require_any_scope(product_data.scopes_for_record(issue.projectId, issue.project), grant)
-    return product_data.save_issue(payload, idempotency_key)
+    records = _product_data(grant)
+    require_any_scope(records.scopes_for_record(issue.projectId, issue.project), grant)
+    return records.save_issue(payload, idempotency_key)
 
 
 @app.put("/api/demo-data/issues/{issue_id}")
 def update_demo_issue(issue_id: str, issue: IssueInput,
                       http: Request,
-                      user: AuthUser = Depends(require_member),
+                      user: AuthUser = Depends(require_auth),
                       x_execution_key: str | None = Header(default=None, max_length=200),
                       x_session_id: str | None = Header(default=None, max_length=100)) -> dict:
     rate_limits.enforce("write", http, identity=user.user_id)
-    idle_reset.touched(changed=True)
-    payload = issue.model_dump(mode="json")
+    if user.kind == "member":
+        idle_reset.touched(changed=True)
+    payload = _record_payload(issue)
     if x_execution_key:
         return _keyed(x_execution_key, x_session_id, user, ["update_issue", issue_id, payload],
                       lambda product_id: _update_issue(issue_id, payload, user, product_id))
     grant = require_record_access(user)
-    existing = product_data.get_issue(issue_id)
+    records = _product_data(grant)
+    existing = records.get_issue(issue_id)
     if existing is None:
         raise RecordNotFound("This ticket no longer exists.")
     # The user must be able to see the ticket now and wherever the edit moves it.
-    require_any_scope(product_data.scopes_for_record(existing["projectId"], existing["project"]), grant)
-    require_any_scope(product_data.scopes_for_record(issue.projectId, issue.project), grant)
-    return product_data.update_issue(issue_id, payload)
+    require_any_scope(records.scopes_for_record(existing["projectId"], existing["project"]), grant)
+    require_any_scope(records.scopes_for_record(issue.projectId, issue.project), grant)
+    return records.update_issue(issue_id, payload)
 
 
 def _create_issue(issue: dict, idempotency_key: str | None, user: AuthUser, product_id: str):
     """The change a create key authorizes, run inside the keyed write's transaction."""
     def apply(connection, grant: RecordGrant) -> RecordChange:
         _require_record_owner(connection, user, product_id)
-        scopes = product_data.scopes_for_record(issue.get("projectId"), issue.get("project"),
-                                                connection=connection)
+        records = _product_data(grant)
+        scopes = records.scopes_for_record(issue.get("projectId"), issue.get("project"),
+                                           connection=connection)
         require_visible_scope(scopes, grant)
-        record = product_data.save_issue(issue, idempotency_key, connection=connection)
+        record = records.save_issue(issue, idempotency_key, connection=connection)
         return RecordChange(record["id"], "created", record)
 
     return apply
@@ -280,15 +376,16 @@ def _update_issue(issue_id: str, issue: dict, user: AuthUser, product_id: str):
     """The change an update key authorizes; the ticket must be visible now and after the change."""
     def apply(connection, grant: RecordGrant) -> RecordChange:
         _require_record_owner(connection, user, product_id)
-        existing = product_data.get_issue(issue_id, connection=connection)
+        records = _product_data(grant)
+        existing = records.get_issue(issue_id, connection=connection)
         if existing is None:
             raise RecordNotFound("This ticket no longer exists.")
         for project_id, project in ((existing["projectId"], existing["project"]),
                                     (issue.get("projectId"), issue.get("project"))):
             require_visible_scope(
-                product_data.scopes_for_record(project_id, project, connection=connection), grant
+                records.scopes_for_record(project_id, project, connection=connection), grant
             )
-        record = product_data.update_issue(issue_id, issue, connection=connection)
+        record = records.update_issue(issue_id, issue, connection=connection)
         return RecordChange(issue_id, "updated", record)
 
     return apply
@@ -296,11 +393,11 @@ def _update_issue(issue_id: str, issue: dict, user: AuthUser, product_id: str):
 
 def _reload_issue(connection, grant: RecordGrant, issue_id: str) -> dict | None:
     """Read one ticket for a replay, under the access the caller has right now."""
-    record = product_data.get_issue(issue_id, connection=connection)
+    records = _product_data(grant)
+    record = records.get_issue(issue_id, connection=connection)
     if record is None:
         return None
-    scopes = product_data.scopes_for_record(record["projectId"], record["project"],
-                                            connection=connection)
+    scopes = records.scopes_for_record(record["projectId"], record["project"], connection=connection)
     return record if grant.may_use_any(scopes) else None
 
 
@@ -344,41 +441,56 @@ def _keyed(execution_key: str, session_id: str | None, user: AuthUser, request: 
 @app.post("/api/demo-data/projects")
 def create_demo_project(project: ProjectInput, workspace_scope_id: str,
                         http: Request,
-                        user: AuthUser = Depends(require_member),
+                        user: AuthUser = Depends(require_auth),
                         grant: RecordGrant = Depends(require_record_access),
                         idempotency_key: str | None = Header(default=None, max_length=200)) -> dict:
     rate_limits.enforce("write", http, identity=user.user_id)
-    idle_reset.touched(changed=True)
+    if user.kind == "member":
+        idle_reset.touched(changed=True)
     require_scope(workspace_scope_id, grant)
-    return product_data.save_project(project.model_dump(mode="json"), workspace_scope_id, idempotency_key)
+    return _product_data(grant).save_project(
+        _record_payload(project), workspace_scope_id, idempotency_key
+    )
 
 
 @app.post("/api/demo-data/cycles")
 def create_demo_cycle(cycle: CycleInput,
                       http: Request,
-                      user: AuthUser = Depends(require_member),
+                      user: AuthUser = Depends(require_auth),
                       grant: RecordGrant = Depends(require_record_access),
                       idempotency_key: str | None = Header(default=None, max_length=200)) -> dict:
     rate_limits.enforce("write", http, identity=user.user_id)
-    idle_reset.touched(changed=True)
+    if user.kind == "member":
+        idle_reset.touched(changed=True)
     # Cycles without a project are workspace-wide and reserved for record administrators.
     if cycle.projectId is None:
         require_record_admin(grant)
     else:
-        require_any_scope(product_data.scopes_for_record(cycle.projectId), grant)
-    return product_data.save_cycle(cycle.model_dump(mode="json"), idempotency_key)
+        require_any_scope(_product_data(grant).scopes_for_record(cycle.projectId), grant)
+    return _product_data(grant).save_cycle(_record_payload(cycle), idempotency_key)
 
 
 @app.post("/api/demo-data/team-members")
 def create_demo_team_member(member: MemberInput, workspace_scope_id: str,
                             http: Request,
-                            user: AuthUser = Depends(require_member),
+                            user: AuthUser = Depends(require_auth),
                             grant: RecordGrant = Depends(require_record_access),
                             idempotency_key: str | None = Header(default=None, max_length=200)) -> dict:
     rate_limits.enforce("write", http, identity=user.user_id)
-    idle_reset.touched(changed=True)
+    if user.kind == "member":
+        idle_reset.touched(changed=True)
     require_scope(workspace_scope_id, grant)
-    return product_data.save_team_member(member.model_dump(mode="json"), workspace_scope_id, idempotency_key)
+    return _product_data(grant).save_team_member(
+        _record_payload(member), workspace_scope_id, idempotency_key
+    )
+
+
+def _record_payload(model: BaseModel) -> dict:
+    """Keep the additive private revision out of unchanged shared-record responses."""
+    payload = model.model_dump(mode="json")
+    if payload.get("revision") is None:
+        payload.pop("revision", None)
+    return payload
 
 
 # --- Paid-provider capabilities (the API is the only component that calls providers) ---
@@ -405,7 +517,8 @@ def synthesize_speech(body: SpeechRequest, http: Request,
                       user: AuthUser = Depends(require_auth)) -> Response:
     """Every check runs before any budget is reserved or any provider is contacted."""
     rate_limits.enforce("speech", http, identity=user.user_id)
-    idle_reset.touched()
+    if user.kind == "member":
+        idle_reset.touched()
     try:
         access = authorize_product(user, body.product_id, agent.directory)
     except AccessDenied:
@@ -444,7 +557,9 @@ def _speech_definition(user: AuthUser, access: ProductAccess, session_id: str | 
         except DefinitionUnavailable as unavailable:
             raise SpeechUnavailable(409, unavailable.reason) from unavailable
     pin = agent.sessions.pin_for(session_id)
-    if not agent.sessions.owns_session(session_id, user.user_id, user.tenant_id) or (
+    if not agent.sessions.owns_session(
+        session_id, user.user_id, user.tenant_id, demo_context=user.demo_context
+    ) or (
         pin is not None and pin.product_id != access.binding.product_id
     ):
         raise HTTPException(status_code=404, detail="This conversation was not found.")
@@ -469,20 +584,27 @@ def usage_summary(day: str | None = None, user: AuthUser = Depends(require_membe
 def create_turn(request: TurnRequest, http: Request,
                 user: AuthUser = Depends(require_auth)) -> TurnResponse:
     rate_limits.enforce("turn", http, identity=user.user_id)
-    idle_reset.touched()
+    if user.kind == "member":
+        idle_reset.touched()
     try:
         authorize_product(user, request.product_id, agent.directory)
     except AccessDenied:
         # The agent answers with the same denial every unusable product gets.
         return agent.handle_turn(request, user)
-    require_scope(request.workspace_scope_id, product_record_grant(user, request.product_id))
-    return agent.handle_turn(request, user)
+    grant = product_record_grant(user, request.product_id)
+    require_scope(request.workspace_scope_id, grant)
+    # One materialized snapshot drives both language understanding and action validation. A
+    # visitor's turn can never consult the shared member demo or another visitor's records.
+    visible_data = _product_data(grant).load(grant.visible_scope_ids())
+    return agent.handle_turn(request, user, visible_data)
 
 
 @app.post("/api/turn/{turn_id}/cancel", response_model=CancelTurnResponse)
 def cancel_turn(turn_id: int, request: CancelTurnRequest,
                 user: AuthUser = Depends(require_auth)) -> CancelTurnResponse:
-    if not agent.sessions.owns_session(request.session_id, user.user_id, user.tenant_id):
+    if not agent.sessions.owns_session(
+        request.session_id, user.user_id, user.tenant_id, demo_context=user.demo_context
+    ):
         raise HTTPException(status_code=404, detail="This conversation was not found.")
     cancelled = agent.cancel_turn(request.session_id, turn_id)
     return CancelTurnResponse(

@@ -1,6 +1,7 @@
 import type { DemoActionType, NavigableDemoPage } from "@/types/demo";
 
 export type ProductConfig = {
+  tenantId: string;
   id: string;
   name: string;
   docsPath: string;
@@ -13,7 +14,8 @@ export type ProductConfig = {
 };
 
 export const productConfig: ProductConfig = {
-  // The organization's product, not the Product Definition it runs on.
+  // Server-owned identifiers for the public product demo, not a Product Definition ID.
+  tenantId: "pixel-dev",
   id: "linear-demo",
   name: "Pixel",
   docsPath: "docs/product",

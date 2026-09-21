@@ -108,11 +108,13 @@ class DemoAgent:
             )
         definition_id = session_pin.definition_id
         if not self.sessions.activate_turn(request.session_id, request.turn_id):
-            return self._stale_response(
+            stale = self._stale_response(
                 request,
                 proposed_action=None,
                 reason="Discarded because a newer turn already exists for this session.",
             )
+            stale._engine_entered = False
+            return stale
         self.sessions.store_message(
             request.session_id,
             request.turn_id,
@@ -936,7 +938,8 @@ class DemoAgent:
         ]
 
     def _denied_response(self, request: TurnRequest, speech: str, reason: str) -> TurnResponse:
-        return TurnResponse(
+        """Every caller returns before the turn is activated, so the conversation is unchanged."""
+        response = TurnResponse(
             session_id=request.session_id,
             turn_id=request.turn_id,
             status="denied",
@@ -947,3 +950,5 @@ class DemoAgent:
             signals=[],
             retrieved_context=[],
         )
+        response._engine_entered = False
+        return response

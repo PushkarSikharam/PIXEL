@@ -18,6 +18,7 @@ import sys
 import tempfile
 import threading
 import time
+from datetime import UTC, datetime, timedelta
 import unittest
 from unittest.mock import patch
 
@@ -44,6 +45,7 @@ from app.services.agent import DemoAgent  # noqa: E402
 from app.services.product_data_store import ProductDataStore  # noqa: E402
 from app.services.shadow import (  # noqa: E402
     LOCK_STRIPES,
+    ShadowController,
     ShadowEntry,
     ShadowKey,
     ShadowMemoryStore,
@@ -260,13 +262,27 @@ class ShadowIsolationTest(unittest.TestCase):
         self.assertNotEqual(base, ShadowKey("t1", "p1", "s1", "u2", "inst-1", 1))
         self.assertNotEqual(base, ShadowKey("t1", "p1", "s1", "u1", None, 0), "member and visitor never share")
 
-    def test_lost_memory_is_memory_reset_for_the_rest_of_the_session(self):
+    def test_a_restart_resets_a_session_that_started_before_it(self):
         with HermeticDatabase() as hermetic:
-            # Turn 1 happened before the shadow existed (a restart): the live engine saw it.
-            hermetic.turn(hermetic.request("restart", 1, "Show me the issues"), shadow=False)
+            # Turn 1 is compared by the process that was running then.
+            _, first = hermetic.turn(hermetic.request("restart", 1, "Show me the issues"))
+            self.assertIn(first.turn_class, {COMPARED, OVER_BUDGET})
+            # A new process starts later: its shadow never saw turn 1.
+            hermetic.runner = ShadowRunner(hermetic.agent.directory, hermetic.agent.sessions.pin_for,
+                                           package_for, epoch_started=datetime.now(UTC) + timedelta(seconds=1))
             _, second = hermetic.turn(hermetic.request("restart", 2, "what about Noah"))
             _, third = hermetic.turn(hermetic.request("restart", 3, "Show me the cycles"))
-            self.assertEqual((second.turn_class, third.turn_class), (MEMORY_RESET, MEMORY_RESET))
+            self.assertEqual((second.turn_class, second.reason), (MEMORY_RESET, "restart"))
+            self.assertEqual(third.turn_class, MEMORY_RESET)
+
+    def test_a_session_that_starts_after_the_process_is_not_reset(self):
+        with HermeticDatabase() as hermetic:
+            hermetic.runner = ShadowRunner(hermetic.agent.directory, hermetic.agent.sessions.pin_for,
+                                           package_for, epoch_started=datetime.now(UTC) - timedelta(seconds=1))
+            _, first = hermetic.turn(hermetic.request("fresh", 1, "Show me the issues"))
+            _, second = hermetic.turn(hermetic.request("fresh", 2, "what about Noah"))
+            self.assertIn(first.turn_class, {COMPARED, OVER_BUDGET})
+            self.assertIn(second.turn_class, {COMPARED, OVER_BUDGET})
 
     def test_turns_advance_the_entry_in_order_only(self):
         with HermeticDatabase() as hermetic:
@@ -409,7 +425,7 @@ class ShadowSwitchAndFailureTest(unittest.TestCase):
                         os.environ.pop("PIXEL_SHADOW_ENGINE", None)
                     client = TestClient(main.app, raise_server_exceptions=True)
                     headers = {"Authorization": f"Bearer {create_token(PRINCIPAL.user_id)}"}
-                    with patch("app.main.shadow_runner", side_effect=AssertionError("shadow entered")):
+                    with patch("app.main.shadow_controller", side_effect=AssertionError("shadow entered")):
                         response = client.post("/api/turn", headers=headers, json={
                             "session_id": "switch", "turn_id": 1, "product_id": PRODUCT_ID,
                             "message": "Show me the issues", "workspace_scope_id": DEFAULT_WORKSPACE,
@@ -420,20 +436,23 @@ class ShadowSwitchAndFailureTest(unittest.TestCase):
 
     def test_on_enters_the_shadow_through_the_endpoint(self):
         with HermeticDatabase({"PIXEL_SHADOW_ENGINE": "on"}) as hermetic:
-            runner = hermetic.runner
-            with patch("app.main.shadow_runner", return_value=runner):
-                client = TestClient(main.app)
-                headers = {"Authorization": f"Bearer {create_token(PRINCIPAL.user_id)}"}
-                response = client.post("/api/turn", headers=headers, json={
-                    "session_id": "switch-on", "turn_id": 1, "product_id": PRODUCT_ID,
-                    "message": "Show me the issues", "workspace_scope_id": DEFAULT_WORKSPACE,
-                })
-            self.assertEqual(response.status_code, 200)
-            # The first flush is due at once, so the background task has already written the counts
-            # after the response was sent.
-            self.assertFalse(runner.counters.pending())
-            counted = {row["class"] for row in shadow_parity.report(1) if row["field"] == TURN}
-            self.assertTrue(counted & {COMPARED, OVER_BUDGET}, counted)
+            controller = ShadowController(hermetic.runner)
+            try:
+                with patch("app.main.shadow_controller", return_value=controller):
+                    client = TestClient(main.app)
+                    headers = {"Authorization": f"Bearer {create_token(PRINCIPAL.user_id)}"}
+                    response = client.post("/api/turn", headers=headers, json={
+                        "session_id": "switch-on", "turn_id": 1, "product_id": PRODUCT_ID,
+                        "message": "Show me the issues", "workspace_scope_id": DEFAULT_WORKSPACE,
+                    })
+                self.assertEqual(response.status_code, 200)
+                # The comparison runs on the worker, after the response.
+                self.assertTrue(controller.wait_until_idle(10))
+                controller.counters.flush()
+                counted = {row["class"] for row in shadow_parity.report(1) if row["field"] == TURN}
+                self.assertTrue(counted & {COMPARED, OVER_BUDGET}, counted)
+            finally:
+                controller.close()
 
     def test_stale_and_cancelled_turns_are_not_compared(self):
         with HermeticDatabase() as hermetic:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 import threading
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request
@@ -69,9 +70,15 @@ readiness = ReadinessCheck()
 rate_limits = RateLimiter()
 # Legacy member-demo refresh; public visitors use disposable private instances instead.
 idle_reset = IdleDemoReset()
-# The 5a shadow engine, created on first use and only while PIXEL_SHADOW_ENGINE=on.
+# The shadow engine's controller (5a, reworked in 5b section 10), created on first use and only
+# while PIXEL_SHADOW_ENGINE=on. Its lifecycle ends with the application's lifespan.
 _shadow = None
 _shadow_lock = threading.Lock()
+# Whether the last turn saw the switch on; None until a turn has been seen.
+_shadow_seen_on: bool | None = None
+# When this application instance started serving (set in `lifespan`). A conversation that started
+# earlier was not seen by this process's shadow, so its shadow memory is incomplete.
+_process_started: datetime | None = None
 
 
 def shadow_switch_on() -> bool:
@@ -79,19 +86,43 @@ def shadow_switch_on() -> bool:
     return (env_value("PIXEL_SHADOW_ENGINE") or "").strip().lower() == "on"
 
 
-def shadow_runner():
-    global _shadow
+def note_shadow_off() -> None:
+    global _shadow_seen_on
+    _shadow_seen_on = False
+
+
+def shadow_controller():
+    """The process's shadow controller. Turning the switch back on starts a new epoch."""
+    global _shadow, _shadow_seen_on
     with _shadow_lock:
         if _shadow is None:
-            from app.services.shadow import ShadowRunner
+            from app.services.shadow import ShadowController, ShadowRunner
 
-            _shadow = ShadowRunner(agent.directory, agent.sessions.pin_for, package_for)
+            started = _process_started or datetime.now(UTC)
+            _shadow = ShadowController(ShadowRunner(
+                agent.directory, agent.sessions.pin_for, package_for, epoch_started=started,
+            ))
+        elif _shadow_seen_on is False:
+            _shadow.new_epoch(datetime.now(UTC))
+        _shadow_seen_on = True
         return _shadow
+
+
+def close_shadow() -> None:
+    global _shadow
+    with _shadow_lock:
+        controller, _shadow = _shadow, None
+    if controller is not None:
+        # Sheds queued work, stops the worker and watchdog briefly, and flushes counts; a failure
+        # is logged, never raised.
+        controller.close()
 
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    global _process_started
+    _process_started = datetime.now(UTC)
     was_armed = rate_limits.armed
     reset_was_armed = idle_reset.armed
     migrate()
@@ -105,9 +136,7 @@ async def lifespan(_: FastAPI):
             product_data.seed_if_empty()
         yield
     finally:
-        if _shadow is not None:
-            # Counts gathered since the last flush; a failure is logged, never raised.
-            _shadow.counters.flush()
+        close_shadow()
         # A TestClient owns only the lifecycle state it started. Production remains armed until
         # process shutdown; a temporary test server must not throttle later direct-app tests.
         if not was_armed:
@@ -623,15 +652,20 @@ def create_turn(request: TurnRequest, http: Request, background: BackgroundTasks
     # visitor's turn can never consult the shared member demo or another visitor's records.
     visible_data = _product_data(grant).load(grant.visible_scope_ids())
     if not shadow_switch_on():
+        note_shadow_off()
         return agent.handle_turn(request, user, visible_data)
-    # Shadow mode (5a): the new engine answers the same turn on the same records, and nothing it
-    # does reaches the visitor or the database. See app/services/shadow.py.
-    shadow = shadow_runner()
-    prepared = shadow.prepare(user, grant, request.product_id, visible_data, request.workspace_scope_id)
-    response = agent.handle_turn(request, user, visible_data)
-    if prepared is not None:
-        shadow.complete(prepared, user, request, response)
-        shadow.counters.schedule(background.add_task)
+    # Shadow mode: the new engine answers the same turn on the same records, and nothing it does
+    # reaches the visitor or the database. Only bounded preparation and a non-blocking hand-off run
+    # here; the comparison runs on the shadow worker. See app/services/shadow.py.
+    shadow = shadow_controller()
+    admitted = shadow.begin(user, grant, request, visible_data)
+    try:
+        response = agent.handle_turn(request, user, visible_data)
+    except BaseException:
+        shadow.abandon(admitted)
+        raise
+    shadow.finish(admitted, request, response)
+    shadow.counters.schedule(background.add_task)
     return response
 
 

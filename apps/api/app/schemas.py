@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator
 
 from app.workspace_config import DEFAULT_WORKSPACE_SCOPE_ID
 
@@ -124,6 +124,10 @@ class TurnResponse(BaseModel):
     signals: list[Signal] = Field(default_factory=list)
     retrieved_context: list[RetrievedContext] = Field(default_factory=list)
     session_summary: SessionSummary = Field(default_factory=SessionSummary)
+    # Server-side only, never serialized: whether this turn reached the conversation engine. A turn
+    # refused or discarded before it could change the conversation is not context the 5a shadow
+    # lost (5b plan, section 10.2).
+    _engine_entered: bool = PrivateAttr(default=True)
 
 
 class CancelTurnResponse(BaseModel):

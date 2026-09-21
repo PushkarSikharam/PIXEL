@@ -52,9 +52,23 @@ GATED = "gated"
 SHADOW_ERROR = "shadow_error"
 OVER_BUDGET = "over_budget"
 COMPARED = "compared"
+# Turns the scheduler could not compare (5b plan, section 10).
+SHED = "shed"
+CIRCUIT_OPEN = "circuit_open"
+WORKER_UNHEALTHY = "worker_unhealthy"
 CLASSES = frozenset({
     MATCH, LIFECYCLE, PLATFORM_WORDING, BEHAVIOUR, SECURITY, COVERAGE, MEMORY_RESET,
-    NOT_COMPARED, GATED, SHADOW_ERROR, OVER_BUDGET, COMPARED,
+    NOT_COMPARED, GATED, SHADOW_ERROR, OVER_BUDGET, COMPARED, SHED, CIRCUIT_OPEN, WORKER_UNHEALTHY,
+})
+# Why a turn was not compared or a session was reset, counted under the field `turn_reason`.
+TURN_REASON = "turn_reason"
+REASONS = frozenset({
+    # shed
+    "queue_full", "snapshot_too_large", "too_many_in_flight", "worker_unhealthy", "shutdown",
+    # not compared
+    "no_context_effect", "lost", "stale", "late",
+    # memory reset: why the shadow's context for the session is incomplete
+    "restart", "epoch", "evicted", "gap_lost", "circuit_open", "error",
 })
 
 # Every field of the live response, in schema order (parent plan, exit criterion 9).
@@ -299,7 +313,7 @@ class ParityCounters:
         day = self._today().strftime("%Y-%m-%d")
         with self._lock:
             for field, cls in classes.items():
-                if cls not in CLASSES:
+                if cls not in (REASONS if field == TURN_REASON else CLASSES):
                     raise ValueError(f"unknown class {cls}")
                 self._counts[CountKey(day, tenant_id, product_id, definition_id, definition_version, field, cls)] += 1
 

@@ -1,15 +1,8 @@
-"""Platform conversation intents (3.2 plan, section 8.5).
+"""Platform conversation detection and descriptions of offerable operations.
 
-Greetings, identity and "what can you do" are recognised by the platform, not declared by a
-product: the action contract requires every intent to name an action, and revision 4.1 does not
-add reply-only execution to the product schema. So detection lives here, generically. A greeting
-or an introduction is the product's own identity copy; what the assistant says it can do is the
-platform's, built from the filtered offers below (see the composer's response boundary).
-
-The capability reply is the part that needs care. Listing every declared action would advertise
-things that cannot happen — an action the installed adapter cannot express, one the caller may not
-use, or one whose records are outside their scope. The assistant may only offer what it could
-actually carry out for this caller, right now.
+Detection is generic. A capability's verb, target, and allowed fields come from its contract;
+product-authored action descriptions are not evidence of what the assistant can execute.
+Adapter support, caller permissions, and visible records restrict the offered actions.
 """
 from __future__ import annotations
 
@@ -18,7 +11,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from app.definitions.contract import ProductDefinition
-from app.definitions.vocabulary import MUTATING_CAPABILITIES
+from app.definitions.copy_rules import name_problems
+from app.definitions.vocabulary import Capability
 from app.engine.normalizer import NormalizedMessage, contains_term
 from app.engine.snapshot import TurnSnapshot
 
@@ -168,13 +162,13 @@ def offerable(
             # promise it cannot keep. Creating is the one thing still possible on an empty scope.
             continue
         keys.append(key)
-        descriptions.append(spec.description)
+        descriptions.append(action_description(definition, key))
     return OfferableActions(tuple(keys), tuple(descriptions))
 
 
-def capability_sentence(offers: OfferableActions, *, limit: int = 6) -> str:
-    """A plain list of what can actually be done, from the actions' own descriptions."""
-    chosen = [_trim(description) for description in offers.descriptions[:limit]]
+def capability_sentence(offers: OfferableActions, definition: ProductDefinition, *, limit: int = 6) -> str:
+    """Regenerate from declared operations; cached or product-written descriptions are not speech."""
+    chosen = [action_description(definition, key) for key in offers.keys[:limit]]
     if not chosen:
         return ""
     if len(chosen) == 1:
@@ -182,8 +176,32 @@ def capability_sentence(offers: OfferableActions, *, limit: int = 6) -> str:
     return ", ".join(chosen[:-1]) + f" and {chosen[-1]}"
 
 
-def _trim(description: str) -> str:
-    return description.rstrip(".").strip()
+def action_description(definition: ProductDefinition, key: str) -> str:
+    """The operation determines the verb. Product nouns are explicitly presented as names."""
+    spec = definition.actions[key]
+    if spec.capability == Capability.NAVIGATE_VIEW:
+        label = 'System architecture' if spec.view == 'architecture' else definition.views[spec.view].label
+        return f'open the {_quoted_name(label)} view'
+    if spec.capability == Capability.HIGHLIGHT_CONTROL:
+        view = definition.views[spec.view]
+        return f'highlight {_quoted_name(view.controls[spec.control].label)} in the {_quoted_name(view.label)} view'
+    label = _quoted_name(definition.entities[spec.entity].label)
+    if spec.capability == Capability.OPEN_RECORD:
+        return f'open a {label} record'
+    if spec.capability == Capability.FILTER_RECORDS:
+        return f'filter {label} records by "{spec.by}"'
+    fields = ', '.join(f'"{field}"' for field in sorted(spec.fields))
+    if spec.capability == Capability.CREATE_RECORD:
+        return f'create a {label} record with {fields}'
+    if spec.capability == Capability.UPDATE_RECORD:
+        return f'update {fields} on a {label} record'
+    raise ValueError(f'no platform description for {spec.capability}')
+
+
+def _quoted_name(label: str) -> str:
+    if name_problems(label):
+        raise ValueError('capability labels must be plain names')
+    return f'"{label}"'
 
 
 # The reply for a question no installed knowledge source can answer. Knowledge availability is

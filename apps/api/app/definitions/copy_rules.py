@@ -1,22 +1,9 @@
-"""Rules for the words a product definition controls (3.2 slice 4b, response-integrity boundary).
+"""Compatibility checks for legacy product copy and names.
 
-The platform owns every sentence that asserts something: that an action ran or will run, that a
-request is refused or permitted, what is in scope, how many of something exist, what a record
-says, what happened earlier, that something failed, or what knowledge is available. A product
-controls only:
-
-- **identity copy**: its greeting and how its assistant introduces itself;
-- **choice questions**: the menus it asks to tell its own requests apart ("a contact or a note?");
-- **names and labels**: its product and assistant names, entity and view labels, action
-  descriptions. These are inserted into the platform's own sentences, so they must stay names.
-
-A definition that uses any of these to assert state is rejected when it is validated, which every
-registration, publication and load goes through.
-
-The structural guarantee is elsewhere: the response composer never speaks product copy in any
-stage that asserts state. These rules make an author's mistake fail loudly at
-publication instead of being silently ignored at runtime. They are lexical, so they are a second
-line, not the boundary itself.
+Published definitions retain their existing copy fields and validation. These lexical checks
+catch common authoring errors but cannot prove a sentence makes no false claim. The generic
+composer therefore never speaks product response bodies or action descriptions. It generates
+platform wording and inserts product names as names.
 """
 from __future__ import annotations
 
@@ -170,7 +157,7 @@ def choice_question_problems(text: str) -> list[str]:
     """A menu the product asks to tell its own requests apart. One question; no statements."""
     problems = _placeholders(text) + _violations(text, COPY_RULES)
     stripped = text.strip()
-    if not stripped.endswith("?") or re.search(r"[.!](?:\s|$)", stripped):
+    if stripped.count("?") != 1 or not stripped.endswith("?") or re.search(r"[.!](?:\s|$)", stripped):
         problems.append("is not a single question")
     return problems
 

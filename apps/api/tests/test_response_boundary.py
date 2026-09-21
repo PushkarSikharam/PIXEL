@@ -5,10 +5,9 @@ clarifications, so a definition could word a refusal as a success or invent a co
 
 - the platform owns assertions about execution, refusal, authorization, scope, counts, retrieved
   facts, history, failures and knowledge availability;
-- product definitions supply nouns, labels, tone and identity copy;
-- product definitions own clarification questions only when those cannot assert state;
-- validation rejects state-changing language in product-controlled templates;
-- replacing every product template with adversarial wording changes nothing a protected stage says.
+- product definitions supply nouns and labels, never response sentences;
+- validation of legacy copy is retained for compatibility, not as the truthfulness boundary;
+- replacing product templates cannot change a generic-engine reply.
 """
 from __future__ import annotations
 
@@ -27,6 +26,7 @@ from app.definitions.contract import ProductDefinition, TenantSettings
 from app.definitions.copy_rules import definition_copy_problems
 from app.definitions.loader import DEFAULT_SOURCE, load_definition
 from app.definitions.vocabulary import (
+    LEGACY_PRODUCT_COPY_KEYS,
     PLATFORM_RESPONSE_KEYS,
     PRODUCT_CHOICE_KEYS,
     PRODUCT_IDENTITY_KEYS,
@@ -95,7 +95,7 @@ WHAT_A_PRODUCT_CANNOT_SAY = {
 def adversarial_document(product_voice: dict[str, str] | None = None) -> dict:
     """Every platform-owned key declared, each with a different adversarial sentence."""
     document = engine_definition()
-    for index, key in enumerate(sorted(PLATFORM_RESPONSE_KEYS)):
+    for index, key in enumerate(sorted(PLATFORM_RESPONSE_KEYS - LEGACY_PRODUCT_COPY_KEYS)):
         document["responses"][key] = f"{ADVERSARIAL[index % len(ADVERSARIAL)]} ({key})"
     document["responses"].update(product_voice or {})
     return document
@@ -158,10 +158,6 @@ def every_reply(composer: ResponseComposer, definition: ProductDefinition) -> di
     return replies
 
 
-def is_product_voice(reply) -> bool:
-    return reply.template_key in PRODUCT_VOICE_KEYS and reply.stage in (Stage.ANSWER, Stage.CLARIFICATION)
-
-
 class OwnershipTableTest(unittest.TestCase):
     def test_every_response_key_has_exactly_one_owner(self):
         self.assertEqual(PRODUCT_VOICE_KEYS | PLATFORM_RESPONSE_KEYS, RESPONSE_KEYS)
@@ -210,7 +206,7 @@ class AdversarialTemplateTest(unittest.TestCase):
 
     def test_adversarial_wording_in_platform_keys_is_accepted_and_inert(self):
         """A definition may carry text for platform-owned keys; nothing ever speaks it."""
-        for key in PLATFORM_RESPONSE_KEYS:
+        for key in PLATFORM_RESPONSE_KEYS - LEGACY_PRODUCT_COPY_KEYS:
             self.assertIn("ADVERSARIAL", self.adversarial.responses[key])
 
     def test_no_protected_reply_speaks_any_product_template(self):
@@ -219,9 +215,8 @@ class AdversarialTemplateTest(unittest.TestCase):
         for where, reply in replies.items():
             with self.subTest(where=where):
                 self.assertNotIn("ADVERSARIAL", reply.speech)
-                if not is_product_voice(reply):
-                    self.assertNotIn("PV-", reply.speech)
-                    self.assertFalse(reply.product_copy)
+                self.assertNotIn("PV-", reply.speech)
+                self.assertFalse(reply.product_copy)
 
     def test_protected_replies_are_identical_whatever_the_product_wrote(self):
         """The strongest form: swapping every template changes no protected reply at all."""
@@ -229,20 +224,16 @@ class AdversarialTemplateTest(unittest.TestCase):
         swapped = every_reply(ResponseComposer(self.adversarial), self.adversarial)
         self.assertEqual(baseline.keys(), swapped.keys())
         for where in baseline:
-            if is_product_voice(baseline[where]):
-                continue
             with self.subTest(where=where):
                 self.assertEqual(swapped[where].speech, baseline[where].speech)
                 self.assertEqual(swapped[where].template_key, baseline[where].template_key)
 
-    def test_product_copy_reaches_only_its_own_stage(self):
+    def test_legacy_product_copy_is_not_spoken_in_any_stage(self):
         replies = every_reply(ResponseComposer(self.adversarial), self.adversarial)
         spoken = {reply.template_key for reply in replies.values() if "PV-" in reply.speech}
-        self.assertEqual(spoken, PRODUCT_VOICE_KEYS)
+        self.assertEqual(spoken, set())
         for reply in replies.values():
-            if "PV-" in reply.speech:
-                self.assertTrue(reply.product_copy)
-                self.assertIn(reply.stage, (Stage.ANSWER, Stage.CLARIFICATION))
+            self.assertFalse(reply.product_copy)
 
     def test_a_failure_is_never_worded_by_the_product(self):
         replies = every_reply(ResponseComposer(self.adversarial), self.adversarial)
@@ -256,7 +247,7 @@ class ProductCopyValidationTest(unittest.TestCase):
     """Validation, which every registration, publication and load passes through."""
 
     def test_state_changing_language_in_product_copy_is_rejected(self):
-        for key in sorted(PRODUCT_VOICE_KEYS):
+        for key in sorted(LEGACY_PRODUCT_COPY_KEYS):
             for category, wording in WHAT_A_PRODUCT_CANNOT_SAY.items():
                 with self.subTest(key=key, category=category):
                     if key in PRODUCT_CHOICE_KEYS and not wording.endswith("?"):
@@ -268,7 +259,7 @@ class ProductCopyValidationTest(unittest.TestCase):
 
     def test_a_choice_question_must_be_a_question_and_nothing_else(self):
         for wording in ("Pick a contact or a note.", "Contact or note? Either works.",
-                        "Which one do you want. Contact or note?"):
+                        "Which one do you want. Contact or note?", "A contact or a note? All contacts vanished?"):
             with self.subTest(wording):
                 document = engine_definition()
                 document["responses"]["clarify_create"] = wording
@@ -362,8 +353,9 @@ class RuntimeDefenceTest(unittest.TestCase):
         valid = load_engine_definition(document=engine_definition())
         responses = {**valid.responses, "greeting": "Done! I deleted every contact."}
         bypassed = valid.model_copy(update={"responses": responses})
-        with self.assertRaises(UnsafeProductCopy):
-            ResponseComposer(bypassed).answer("greeting")
+        reply = ResponseComposer(bypassed).answer("greeting")
+        self.assertNotIn("deleted", reply.speech)
+        self.assertFalse(reply.product_copy)
 
     def test_unknown_and_inaccessible_people_read_identically(self):
         composer = ResponseComposer(load_engine_definition(document=engine_definition()))
@@ -379,8 +371,7 @@ class RuntimeDefenceTest(unittest.TestCase):
         offers = offerable(definition, snapshot(), CapabilityPolicy(
             translatable=lambda key: key == "open_contacts", permitted=lambda key: True))
         reply = composer.capabilities(offers)
-        self.assertEqual(reply.speech, "Here's what I can do in Sample Desk: "
-                                       f"{definition.actions['open_contacts'].description.rstrip('.')}.")
+        self.assertEqual(reply.speech, 'Here\'s what I can do in Sample Desk: open the "Contacts" view.')
 
 
 if __name__ == "__main__":

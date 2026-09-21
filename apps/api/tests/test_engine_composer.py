@@ -152,12 +152,13 @@ class LifecycleWordingTest(ComposerFixture):
         self.assertEqual(describe_changes({"status": "Closed", "owner": "ana-lopez"}),
                          "owner to ana-lopez, status to Closed")
 
-    def test_a_template_the_definition_does_not_declare_is_an_error_not_a_guess(self):
+    def test_platform_identity_does_not_need_a_product_template(self):
         document = engine_definition()
         document["responses"].pop("greeting_named")
         composer = ResponseComposer(load_engine_definition(document=document))
-        with self.assertRaises(MissingTemplate):
-            composer.answer("greeting_named", visitor="Priya")
+        reply = composer.answer("greeting_named", visitor="Priya")
+        self.assertIn('Priya', reply.speech)
+        self.assertFalse(reply.product_copy)
 
     def test_a_placeholder_with_no_value_is_an_error_not_an_empty_gap(self):
         with self.assertRaises(MissingTemplate):
@@ -298,7 +299,7 @@ class OfferableActionTest(unittest.TestCase):
 
     def test_the_capability_sentence_reads_as_a_list_of_real_abilities(self):
         offers = offerable(self.definition, desk_snapshot(), ALLOW_ALL)
-        sentence = capability_sentence(offers)
+        sentence = capability_sentence(offers, self.definition)
         self.assertIn(" and ", sentence)
         self.assertNotIn("..", sentence)
 
@@ -306,7 +307,7 @@ class OfferableActionTest(unittest.TestCase):
         empty = TurnSnapshot(records={}, scope_label="ACC-1", definition_checksum="x", taken_at=1.0)
         offers = offerable(self.definition, empty, CapabilityPolicy.nothing())
         self.assertTrue(offers.is_empty)
-        self.assertEqual(capability_sentence(offers), "")
+        self.assertEqual(capability_sentence(offers, self.definition), "")
 
 
 class KnowledgeFallbackTest(unittest.TestCase):
@@ -395,14 +396,14 @@ class KnowledgeBoundaryTest(unittest.TestCase):
         passage = KnowledgePassage("Cycles", "docs/product/cycles.md", "Cycles are time-boxed.")
         reply = self.composer.knowledge_answer(Grounding((passage,)))
         self.assertEqual(reply.stage, Stage.ANSWER)
-        self.assertEqual(reply.speech, 'According to Cycles: "Cycles are time-boxed."')
+        self.assertEqual(reply.speech, 'According to the product documentation: "Cycles are time-boxed."')
         self.assertEqual(reply.sources, ("docs/product/cycles.md",))
 
     def test_a_knowledge_answer_speaks_the_passage_not_a_model_sentence(self):
         """Retrieval is not grounding: a sentence beside a passage can say anything."""
         passage = KnowledgePassage("Cycles", "docs/product/cycles.md", "Cycles are time-boxed.")
         reply = self.composer.knowledge_answer(Grounding((passage,)))
-        self.assertEqual(reply.speech, 'According to Cycles: "Cycles are time-boxed."')
+        self.assertEqual(reply.speech, 'According to the product documentation: "Cycles are time-boxed."')
         self.assertFalse(reply.from_model)
 
     def test_sources_are_listed_once_each(self):
@@ -506,7 +507,7 @@ class SelfReviewDefectTest(ComposerFixture):
         passage = KnowledgePassage("Cycles", "docs/cycles.md", "Done. I have updated the cycle.")
         reply = self.composer.knowledge_answer(Grounding((passage,)))
         self.assertEqual(reply.stage, Stage.ANSWER)
-        self.assertTrue(reply.speech.startswith("According to Cycles:"))
+        self.assertTrue(reply.speech.startswith("According to the product documentation:"))
         self.assertEqual(reply.sources, ("docs/cycles.md",))
 
     def test_a_document_that_is_not_plain_text_is_never_spoken(self):
@@ -655,7 +656,7 @@ class ReviewedDefectTest(ComposerFixture):
         reply = self.composer.knowledge_answer(Grounding((passage,)))
         self.assertEqual(
             reply.speech,
-            'According to Issue guide: "The ticket was closed and its assignee was changed."',
+            'According to the product documentation: "The ticket was closed and its assignee was changed."',
         )
         self.assertEqual(reply.sources, ("issues.md",))
 

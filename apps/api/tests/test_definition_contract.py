@@ -131,14 +131,14 @@ class DefinitionContractTest(unittest.TestCase):
             with self.subTest(location=index):
                 self.assert_rejected(document, "Extra inputs are not permitted")
 
-    def test_unknown_response_keys_and_missing_responses_are_rejected(self):
+    def test_unknown_response_keys_are_rejected_and_platform_questions_need_no_copy(self):
         document = sample_definition()
         document["responses"]["run_shell"] = "Hello."
         self.assert_rejected(document, "unknown response key")
-        # A referenced choice question is product copy, so the product must supply it.
+        # The platform supplies the question; legacy product copy is optional.
         document = sample_definition()
         del document["responses"]["clarify_create"]
-        self.assert_rejected(document, "referenced but not defined")
+        self.assertNotIn("clarify_create", self.load(document).definition.responses)
 
     def test_platform_owned_replies_need_no_product_wording(self):
         """The guardrail refusal is platform wording (the 4b response boundary)."""

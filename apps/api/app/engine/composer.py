@@ -1,29 +1,11 @@
-"""The response composer (3.2 plan, slice 4b; sections 8.2 and 8.5).
+"""Deterministic replies for the generic engine (3.2 slice 4b).
 
-Everything the assistant says comes from here, and the rule that matters most is simple: **the
-wording follows the lifecycle state, not the model's enthusiasm.** A proposal is described as a proposal.
-Only a committed write is described as done.
+The platform owns every sentence, including introductions and clarifications. Product response
+bodies and action descriptions are never spoken. Definitions supply validated names; verified
+actions and committed results supply facts. The caller must choose the correct lifecycle stage.
 
-    proposed             "I'll close CON-1."            nothing has happened yet
-    awaiting_confirmation "Should I close CON-1?"       the visitor has not agreed yet
-    executed             "CON-1 is now closed."         the write committed
-    failed               "I could not close CON-1."     a rule rejected it
-    cancelled            "Okay, I won't change anything."
-    clarification        "Which contact do you mean?"
-
-No model-written sentence is spoken in this slice.
-
-**Who owns the words** (the response-integrity boundary). The platform owns every sentence that
-asserts something — execution, refusal, authorization, scope, counts, retrieved facts, history,
-failure and knowledge availability — and fills it only from validated actions, committed results
-and platform lookups. A product definition supplies nouns (its product, assistant, entity and view
-names), its identity copy (greeting, introduction) and the choice questions it asks to tell its
-own requests apart. Nothing else it declares is ever spoken: a definition may still carry wording
-for a platform-owned key (definitions published before this boundary do), and the composer
-never reads it.
-
-Product copy is checked when a definition is validated (`app.definitions.copy_rules`), and again
-here before it is spoken, so a definition that bypassed validation still cannot assert state.
+Knowledge excerpts use a fixed attribution. Document titles are metadata, never spoken prose.
+No model-written sentence is accepted in this slice.
 """
 from __future__ import annotations
 
@@ -33,9 +15,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from app.definitions.contract import ProductDefinition
-from app.definitions.copy_rules import choice_question_problems, identity_copy_problems
+from app.definitions.copy_rules import name_problems
 from app.definitions.safety import check_text
-from app.definitions.vocabulary import PRODUCT_CHOICE_KEYS, PRODUCT_VOICE_KEYS
 from app.engine.actions import GenericAction
 from app.engine.conversation import OfferableActions, capability_sentence
 from app.engine.knowledge import Grounding
@@ -140,6 +121,11 @@ PLATFORM_NOTHING_OFFERED = "There's nothing I can do for you in {product} right 
 # kind of record (an entity label or plural, chosen by the caller for the count); every other
 # value is supplied by the platform from what it actually found or did.
 PLATFORM_CONVERSATION_TEMPLATES: Mapping[tuple[Stage, str], str] = {
+    (Stage.ANSWER, "greeting"): 'Welcome to "{product}". I am "{assistant}", your demo guide. What would you like to explore?',
+    (Stage.ANSWER, "greeting_named"): 'Hello {visitor}, welcome to "{product}". What would you like to explore?',
+    (Stage.ANSWER, "identity"): 'I am "{assistant}", the demo guide for "{product}".',
+    (Stage.CLARIFICATION, "clarify_create"): "Which type of record would you like to create?",
+    (Stage.CLARIFICATION, "clarify_all_items"): "Which records do you mean?",
     # Answers: what can be done, what exists, what happened, what is known.
     (Stage.ANSWER, "capabilities"): "Here's what I can do in {product}: {capabilities}.",
     (Stage.ANSWER, "guided_path"): "A good place to start in {product}: {capabilities}.",
@@ -215,14 +201,18 @@ class Reply:
     from_model: bool = False
     replaced_model_speech: bool = False
     sources: tuple[str, ...] = ()
-    # True only when the sentence is the product's own identity copy or choice question.
+    # Compatibility field: always false while all response sentences are platform-owned.
     product_copy: bool = False
+    source_titles: tuple[str, ...] = ()
 
 
 class ResponseComposer:
-    """Turns verified state into platform wording; products contribute names and identity copy."""
+    """Turns verified state into platform wording; products contribute names only."""
 
     def __init__(self, definition: ProductDefinition, *, visitor_name: str | None = None) -> None:
+        for name in (definition.identity.product_name, definition.identity.assistant_name):
+            if name_problems(name):
+                raise UnsafeProductCopy("identity must contain plain names")
         self._definition = definition
         self._visitor = visitor_name
 
@@ -277,7 +267,7 @@ class ResponseComposer:
     def _offer_reply(self, key: str, offers: OfferableActions) -> Reply:
         if offers.is_empty:
             return self._render_platform(Stage.ANSWER, key, PLATFORM_NOTHING_OFFERED, {})
-        return self._render(Stage.ANSWER, key, {"capabilities": capability_sentence(offers)})
+        return self._render(Stage.ANSWER, key, {"capabilities": capability_sentence(offers, self._definition)})
 
     def knowledge_answer(self, grounding: Grounding) -> Reply:
         """Answer with an approved passage, or say plainly that there is nothing to answer from.
@@ -291,14 +281,16 @@ class ResponseComposer:
             return self._render_platform(
                 Stage.UNGROUNDED, "knowledge_unavailable", PLATFORM_KNOWLEDGE_UNAVAILABLE, {}
             )
-        snippet = grounding.passages[0].snippet
-        if not _is_plain(snippet):
+        passage = grounding.passages[0]
+        snippet = passage.snippet
+        title = passage.title or "Product documentation"
+        if (not _is_plain(snippet) or len(snippet) > 1800 or '"' in snippet
+                or not _is_plain(title) or len(title) > 160):
             return self._render_platform(
                 Stage.UNGROUNDED, "knowledge_unavailable", PLATFORM_KNOWLEDGE_UNAVAILABLE, {}
             )
-        title = grounding.passages[0].title or "Product documentation"
-        speech = f'According to {title}: "{snippet}"'
-        return Reply(speech, Stage.ANSWER, None, sources=grounding.sources)
+        speech = f'According to the product documentation: "{snippet}"'
+        return Reply(speech, Stage.ANSWER, None, sources=(passage.source,), source_titles=(title,))
 
     # --- model-written speech ---
 
@@ -328,23 +320,10 @@ class ResponseComposer:
         allowed = STAGE_TEMPLATES.get(stage, frozenset())
         if key not in allowed:
             raise TemplateNotAllowed(f"{stage} may not be worded with {key}")
-        if key in PRODUCT_VOICE_KEYS:
-            return Reply(self._fill(self._product_copy(key), values), stage, key, product_copy=True)
         template = PLATFORM_CONVERSATION_TEMPLATES.get((stage, key))
         if template is None:
             raise TemplateNotAllowed(f"no platform wording for {stage}:{key}")
         return self._render_platform(stage, key, template, values)
-
-    def _product_copy(self, key: str) -> str:
-        """The product's own wording for identity copy or a choice question, checked again."""
-        template = self._definition.responses.get(key)
-        if template is None:
-            raise MissingTemplate(key)
-        check = choice_question_problems if key in PRODUCT_CHOICE_KEYS else identity_copy_problems
-        problems = check(template)
-        if problems:
-            raise UnsafeProductCopy(f"{key}: {'; '.join(problems)}")
-        return template
 
     def _render_lifecycle(self, stage: Stage, key: str, values: Mapping[str, str]) -> Reply:
         allowed = STAGE_TEMPLATES.get(stage, frozenset())
@@ -364,10 +343,10 @@ class ResponseComposer:
 
     def _fill(self, template: str, values: Mapping[str, str]) -> str:
         supplied = {
+            **{name: str(value) for name, value in values.items() if value is not None},
             "product": self._definition.identity.product_name,
             "assistant": self._definition.identity.assistant_name,
             **({"visitor": self._visitor} if self._visitor else {}),
-            **{name: str(value) for name, value in values.items() if value is not None},
         }
         missing = set(_PLACEHOLDER.findall(template)) - set(supplied)
         if missing:

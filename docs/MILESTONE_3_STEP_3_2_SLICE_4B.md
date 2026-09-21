@@ -1,12 +1,60 @@
 # Milestone 3.2, Slice 4b: Response Composer, Conversation Intents and the Knowledge Boundary
 
-Status: **MERGED; SIGN-OFF REOPENED, THEN CLOSED LOCALLY. Linux CI on the pull request that carries the response-integrity boundary is the remaining sign-off evidence. Nothing is wired into the runtime.**
+Status: **PR #13 MERGED, SIGN-OFF REOPENED by the 2026-09-20 review. Revision 4.3 corrections are locally verified and await review and fresh CI evidence. The composer is not wired into the live runtime.**
 
 - Merged through PR #10 (commit `d3ddf25`). Pull-request run 35380052283 and the `main` push run 35380344483 are green on all three jobs.
-- The stakeholder review of 2026-09-18 found that product-controlled templates were still spoken in answers, refusals and clarifications, and reopened the sign-off. The boundary it required is described below under "The response-integrity boundary". It is built and passes every local gate, and it is not merged yet.
+- The stakeholder review of 2026-09-18 found that product-controlled templates were still spoken in answers, refusals and clarifications, and reopened the sign-off. The boundary it required is described below under "The response-integrity boundary". It is built and carried by PR #13 (commit `f5f5f97`). Pull-request run 35396288897 is green on all three jobs: API tests, including the container build and its live smoke test; web checks; and browser tests. PR #13 merged as `f3cc571c4a3e49aa780947b9b49a7d03ec0c0f89`. Its CI evidence covers `f5f5f97`, not the new revision 4.3 edits.
 
 Date: 2026-09-18. Plan: `docs/MILESTONE_3_STEP_3_2_PLAN.md` (revision 4.2), sections 7.2, 8.2 and 8.5.
 Approved scope: the response composer as a lifecycle state machine, platform conversation intents, the response-integrity boundary (revision 4.2), and the `KnowledgeLookup` honest fallback.
+
+## Current contract: revision 4.3
+
+The 2026-09-20 review reproduced three remaining output paths and a shared-demo defect.
+The shared-demo defect is not fixed by the composer; its implementation plan is
+`docs/DEMO_VISITOR_ISOLATION_PLAN.md` and awaits review before schema work.
+
+- **Capability descriptions:** generated from capability, entity, view, control and allowed field
+  keys. A navigation action cannot advertise refunds by changing its description. The composer
+  regenerates from offer keys, ignoring even a supplied offer-description string.
+- **Identity and clarification:** every sentence is platform-owned. The product supplies names,
+  presented as names, not greeting or question prose. Legacy templates remain accepted under their
+  existing validation for published-definition compatibility. They are never rendered by 4b.
+  Identity values cannot be overridden by caller-supplied product/assistant prose.
+- **Knowledge:** a fixed "According to the product documentation" attribution precedes one
+  checked, bounded excerpt. Checked source titles remain metadata. Malformed titles, oversized
+  excerpts and embedded double-quote breakouts fall back to ungrounded. Only the quoted passage
+  supplies the reply's source ID and title.
+- **Lifecycle:** existing platform wording and stage allowlists remain. No model-authored speech
+  is accepted. The future orchestrator must supply verified results and the correct stage.
+- **Copy validation:** still lexical and intentionally not the security guarantee. Multiple
+  questions now fail the single-question rule. The structural guarantee is no product response
+  body or action-description text in any generic-engine reply.
+- **5a:** platform-wording differences must be recorded separately, shadow memory must be
+  independent, and shadow must create neither provider calls nor execution keys.
+
+`test_response_integrity_regressions.py` adds the exact validated-definition reproductions and
+tests direct offer-description substitution, all-response replacement, attribution metadata,
+unrelated citations and protected identity values. The original six tests failed before the fix
+(seven failing assertions including subcases); the expanded nine pass locally.
+
+Local verification completed on 2026-09-21:
+
+- Core API: 715 run, 712 passed, 3 CI-only skips.
+- Product: 82 passed.
+- Browser: 112 passed (4.3 minutes).
+- Focused response-boundary suite: 21 passed; the nine new regression tests also pass.
+- TypeScript check, all 34 web unit tests and the production build passed on the fresh verification run.
+
+No new CI sign-off is claimed. These edits are not deployed. No paid provider
+calls or changes to production data were made. The shared-demo isolation issue remains open
+pending review and implementation of its separate migration plan.
+
+## Earlier implementation record
+
+The sections below preserve earlier review evidence and design decisions. Wording ownership and
+knowledge attribution statements from those revisions are superseded by the current contract
+above; they are not requirements for 5a.
 
 ## What was built
 
@@ -157,7 +205,7 @@ A probe of my own work found five defects. Each has a regression test.
 | # | Severity | Defect | Fix |
 | --- | --- | --- | --- |
 | 1 | **High** | **The completion-claim denylist was trivially evadable.** "The contact was closed.", "That is taken care of.", "Closed.", "Sorted." all passed as a *proposal*. A phrase list cannot be the guarantee against something that writes English. | Narrowed to two stages at the time, and then removed entirely by the stakeholder review below: no stage accepts model speech. |
-| 2 | **High** | **A document that claimed completion was spoken verbatim.** A passage reading "Done. I have updated the cycle." became the answer. | Passages are checked like any other untrusted content; one that claims completion or is not plain text is never spoken. |
+| 2 | **High** | **A document that claimed completion was spoken verbatim.** A passage reading "Done. I have updated the cycle." became the answer. | Passages are checked like any other untrusted content; malformed markup is refused; completion claims later became explicitly attributed quotations, and revision 4.3 removes titles from spoken attribution. |
 | 3 | **High** | **Ordinary sentences were read as introductions.** "call me back later" greeted the visitor as "Back Later"; "this is urgent" as "Urgent". | Those cues are gone, a stoplist rejects ordinary words, and a name must appear **capitalized in what the visitor actually typed**. |
 | 4 | Medium | **Mutations were offered on an empty scope.** With no visible contacts, updating and reassigning were still advertised. | Only creating survives an empty scope; everything needing an existing record is withheld. |
 | 5 | Medium | **Model speech had no length bound in the composer.** A 5000-character sentence passed through. | Capped independently of the parser. Now moot for this slice, since no stage uses model speech, but the cap stays for when one does. |
@@ -198,7 +246,7 @@ readiness fixes described in `docs/LIVE_DEPLOYMENT.md`.
 
 | Suite | Result |
 | --- | --- |
-| Core API | **681 run: 678 passed, 3 skipped** (CI-only) |
+| Core API | **682 run: 679 passed, 3 skipped** (CI-only) |
 | Product (Linear) | **82 passed** |
 | Response boundary | `apps/api/tests/test_response_boundary.py` — **21 passed** |
 | Composer, conversation and knowledge | `apps/api/tests/test_engine_composer.py` — **67 passed** |
@@ -207,7 +255,8 @@ readiness fixes described in `docs/LIVE_DEPLOYMENT.md`.
 | Web unit tests | **30 passed** |
 | Browser regression | **111 passed** |
 
-No paid provider call was made. Linux CI on the pull request is the sign-off evidence.
+No paid provider call was made. The sign-off evidence is the Linux CI run on PR #13 (run
+35396288897): API tests, web checks and browser tests, all green.
 
 ## Notes for the review
 

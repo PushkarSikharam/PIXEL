@@ -46,6 +46,27 @@ unless set to exactly `on`.
   the definition into the cache). Budget: p95 under 25 ms. **Not yet measured on the production
   image.**
 
+## Production (2026-09-21)
+
+- PR #20 merged; `main` CI run 35632762962 green on all three jobs (API tests, web checks,
+  browser tests). Note: the PR was merged before its own CI finished; the `main` run is the
+  evidence.
+- `move-product-version --version 2` moved `linear-demo` from v1 to v2. The reported checksum
+  `725202389f3a1c0f215f6df7fcec931f538ca3ed905c9d3e66603adf11e8dff0` equals the sha256 of `v2.yaml`
+  on `main`. Readiness: ready, no problems.
+- `PIXEL_SHADOW_ENGINE=on` set. The live smoke test passed unchanged (private instances separate,
+  administrator login refused, private write isolated, reset to a new generation, conversation
+  completed with `OPEN_CYCLES`, guardrail denied, global reset refused).
+- First `shadow-report`: the smoke conversation turn was `compared` (within budget) on v2.
+  Status, both actions, retrieved context, session summary and the absent `execution` field
+  `match`; speech, trace wording and signal confidence are `platform_wording`, as the golden entry
+  for `nav-sprint-planning` expects. No `behaviour`, `coverage`, `gated` or `shadow_error`.
+- Counts reach the table on the next flush, at most once a minute and only when a request
+  arrives, or at shutdown. With little traffic the report lags; that is expected.
+
+Remaining for sign-off: a `shadow-report` over real visitor traffic, reviewed against
+`shadow_differences.json`, with `over_budget` rare.
+
 ## Security findings from building the shadow
 
 1. **The shadow must be narrowed to the selected workspace.** The first build converted every

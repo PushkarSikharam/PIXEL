@@ -63,6 +63,19 @@ class DemoOrganizationSeed(Strict):
     product: _SeedProduct
 
 
+def publish_lineage(registry: DefinitionRegistry, definition_id: str, version: int):
+    """Publish `version` after every earlier version that was never registered.
+
+    Publishing in order means each version is classified against its predecessor, so a breaking
+    change is refused even on a fresh database, and an earlier version is there to roll back to.
+    Earlier versions already registered are left in whatever state an operator put them.
+    """
+    for earlier in registry.source.versions(definition_id):
+        if earlier < version and registry.get(definition_id, earlier) is None:
+            registry.ensure_published(definition_id, earlier)
+    return registry.ensure_published(definition_id, version)
+
+
 def load_demo_seeds(source: DefinitionSource | None = None) -> None:
     if not env_bool("PIXEL_DEMO_SEEDS", default=False):
         return
@@ -85,7 +98,7 @@ def _apply(directory: OrganizationDirectory, definition_id: str, seed: DemoOrgan
         if directory.membership(tenant_id, member.user_id) is None:
             directory.add_member(tenant_id, member.user_id, member.role, team_id if member.team else None)
     if directory.product(tenant_id, seed.product.product_id) is None:
-        directory.definitions.ensure_published(definition_id, seed.product.definition_version)
+        publish_lineage(directory.definitions, definition_id, seed.product.definition_version)
         directory.bind_product(
             tenant_id,
             seed.product.product_id,

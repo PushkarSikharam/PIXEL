@@ -76,6 +76,11 @@ def detect(text: NormalizedMessage, *, visitor_name: str | None = None) -> Conve
         return ConversationalTurn(Conversational.CAPABILITIES, "capabilities")
 
     name = _introduced_name(whole, text.original)
+    if name is None:
+        # "Hi, I'm Priya": a greeting, then an introduction.
+        opener = next((g for g in sorted(GREETINGS, key=len, reverse=True) if whole.startswith(g + " ")), None)
+        if opener is not None:
+            name = _introduced_name(whole[len(opener) + 1:], text.original)
     if name:
         return ConversationalTurn(Conversational.GREETING_NAMED, "greeting_named", name)
     return None

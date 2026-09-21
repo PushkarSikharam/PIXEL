@@ -1,6 +1,10 @@
 """The Linear demo is a valid platform-shared Product Definition, run by the seeded demo organization."""
 from __future__ import annotations
 
+from contextlib import redirect_stdout
+from dataclasses import dataclass
+import io
+import json
 import os
 from pathlib import Path
 import sys
@@ -15,7 +19,9 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from app import db  # noqa: E402
 from app.auth import create_token  # noqa: E402
-from app.definitions.loader import DEFAULT_SOURCE, load_definition  # noqa: E402
+from app import ops  # noqa: E402
+from app.definitions.compatibility import ChangeClass, classify  # noqa: E402
+from app.definitions.loader import DEFAULT_SOURCE, DefinitionSource, load_definition  # noqa: E402
 from app.definitions.organizations import OrganizationDirectory  # noqa: E402
 from app.definitions.registry import DefinitionRegistry  # noqa: E402
 from app.definitions.vocabulary import Capability  # noqa: E402
@@ -51,10 +57,12 @@ LEGACY_ACTIONS = {
 
 
 class LinearDefinitionTest(unittest.TestCase):
-    def setUp(self):
-        self.definition = load_definition(DEFAULT_SOURCE, DEFINITION_ID, 1).definition
+    VERSION = 1
 
-    def test_v1_loads_and_validates(self):
+    def setUp(self):
+        self.definition = load_definition(DEFAULT_SOURCE, DEFINITION_ID, self.VERSION).definition
+
+    def test_loads_and_validates(self):
         identity = self.definition.definition
         self.assertEqual((identity.definition_id, identity.ownership), (DEFINITION_ID, "platform_shared"))
         self.assertIsNone(identity.owner_organization)
@@ -76,15 +84,40 @@ class LinearDefinitionTest(unittest.TestCase):
         self.assertEqual(self.definition.entities["project"].fields["lead"].target, "member")
 
     def test_no_tenant_business_data_in_the_definition(self):
-        text = DEFAULT_SOURCE.definition_path(DEFINITION_ID, 1).read_text(encoding="utf-8")
+        text = DEFAULT_SOURCE.definition_path(DEFINITION_ID, self.VERSION).read_text(encoding="utf-8")
         for record_value in ("Maya", "Noah", "Avery", "Iris", "Sam Rivera", "LIN-142", "PRJ-10", "workspace-",
                              TENANT_ID, PRODUCT_ID, "planning-team"):
             with self.subTest(value=record_value):
                 self.assertNotIn(record_value, text)
 
 
-class LinearDemoOrganizationTest(unittest.TestCase):
-    """The seed package creates the demo organization, and its chat turns run on pinned sessions."""
+class LinearDefinitionV2Test(LinearDefinitionTest):
+    """5a plan, section 7: v2 changes routing only and carries no reply text."""
+
+    VERSION = 2
+
+    def test_v2_is_additive_over_v1(self):
+        v1 = load_definition(DEFAULT_SOURCE, DEFINITION_ID, 1).definition
+        self.assertEqual(classify(v1, self.definition).change, ChangeClass.ADDITIVE_COMPATIBLE)
+        self.assertEqual(self.definition.entities, v1.entities)
+
+    def test_v2_carries_no_reply_text(self):
+        self.assertEqual(self.definition.responses, {})
+
+    def test_v2_file_is_byte_stable(self):
+        raw = DEFAULT_SOURCE.definition_path(DEFINITION_ID, 2).read_bytes()
+        self.assertNotIn(b"\r\n", raw, "definitions are LF on every checkout")
+
+    def test_the_reviewed_routing_changes(self):
+        self.assertFalse(self.definition.actions["highlight_assignment"].record)
+        self.assertIn("broad_scope", {rule.topic for rule in self.definition.guardrails})
+        self.assertNotIn("broad_scope_refused", {rule.response for rule in self.definition.clarifications})
+        add_member = [intent.requires for intent in self.definition.intents if intent.action == "highlight_add_member"]
+        self.assertEqual(sorted(map(tuple, add_member)), [(), ("unknown_person",), ("unknown_person",)])
+
+
+class SeededOrganizationFixture(unittest.TestCase):
+    """A fresh database with the demo organization seeded, and the live turn endpoint."""
 
     def setUp(self):
         files_patch = patch.object(env_module, "_env_files", lambda: ())
@@ -110,12 +143,19 @@ class LinearDemoOrganizationTest(unittest.TestCase):
             "session_id": session_id, "turn_id": turn_id, "product_id": PRODUCT_ID, "message": message,
         }).json()
 
-    def test_the_seeded_product_runs_v1_for_its_team(self):
+
+class LinearDemoOrganizationTest(SeededOrganizationFixture):
+    """The seed package creates the demo organization, and its chat turns run on pinned sessions."""
+
+    def test_the_seeded_product_runs_v2_for_its_team(self):
         binding = self.directory.product(TENANT_ID, PRODUCT_ID)
         self.assertEqual(
             (binding.team_id, binding.definition_id, binding.definition_version, binding.state),
-            ("planning-team", DEFINITION_ID, 1, "active"),
+            ("planning-team", DEFINITION_ID, 2, "active"),
         )
+        # v1 is published first, so v2 was classified against it and v1 is there to roll back to.
+        self.assertEqual([self.registry.get(DEFINITION_ID, version).state for version in (1, 2)],
+                         ["published", "published"])
         self.assertEqual(self.directory.membership(TENANT_ID, "demo-admin").role, "org_admin")
         for user_id in ("demo-product-eng", "demo-platform"):
             with self.subTest(user_id=user_id):
@@ -130,13 +170,13 @@ class LinearDemoOrganizationTest(unittest.TestCase):
             ).fetchone()
         self.assertEqual(
             (row["tenant_id"], row["team_id"], row["product_id"], row["definition_id"], row["definition_version"]),
-            (TENANT_ID, "planning-team", PRODUCT_ID, DEFINITION_ID, 1),
+            (TENANT_ID, "planning-team", PRODUCT_ID, DEFINITION_ID, 2),
         )
-        self.assertEqual(row["definition_checksum"], self.registry.get(DEFINITION_ID, 1).checksum)
+        self.assertEqual(row["definition_checksum"], self.registry.get(DEFINITION_ID, 2).checksum)
 
     def test_revoking_the_version_ends_live_conversations(self):
         self.assertEqual(self.turn("live")["status"], "completed")
-        self.registry.revoke(DEFINITION_ID, 1)
+        self.registry.revoke(DEFINITION_ID, 2)
         ended = self.turn("live", turn_id=2)
         self.assertEqual(ended["status"], "denied")
         self.assertIn("definition_revoked", ended["intent_trace"]["reason"])
@@ -146,6 +186,86 @@ class LinearDemoOrganizationTest(unittest.TestCase):
         self.assertEqual(self.turn("live")["status"], "completed")
         self.directory.set_product_state(TENANT_ID, PRODUCT_ID, "disabled")
         self.assertIn("product_disabled", self.turn("live", turn_id=2)["intent_trace"]["reason"])
+
+
+@dataclass(frozen=True)
+class _Problem:
+    tenant_id: str
+    product_id: str
+    reason: str
+
+
+class MoveProductVersionTest(SeededOrganizationFixture):
+    """5a plan, section 7: moving the product between versions is explicit and reversible."""
+
+    def move(self, version: int) -> tuple[int, dict]:
+        output = io.StringIO()
+        with redirect_stdout(output):
+            code = ops.main(["move-product-version", "--tenant", TENANT_ID, "--product", PRODUCT_ID,
+                             "--version", str(version)])
+        return code, json.loads(output.getvalue())
+
+    def pinned_version(self, session_id: str) -> int:
+        with db.get_connection() as connection:
+            return connection.execute(
+                "select definition_version from sessions where id = ?", (session_id,)
+            ).fetchone()["definition_version"]
+
+    def binding_version(self) -> int:
+        return self.directory.product(TENANT_ID, PRODUCT_ID).definition_version
+
+    def test_moving_back_and_forth_keeps_open_sessions_on_their_version(self):
+        code, result = self.move(1)
+        self.assertEqual((code, result["moved"], result["from_version"], result["to_version"]), (0, True, 2, 1))
+        self.assertEqual(self.turn("on-v1")["status"], "completed")
+        self.assertEqual(self.move(2)[0], 0)
+        self.assertEqual(self.turn("on-v2")["status"], "completed")
+        # The session opened on v1 keeps its pin and keeps working after the move.
+        self.assertEqual(self.turn("on-v1", turn_id=2)["status"], "completed")
+        self.assertEqual((self.pinned_version("on-v1"), self.pinned_version("on-v2")), (1, 2))
+        self.assertEqual(result["definition_checksum"], self.registry.get(DEFINITION_ID, 1).checksum)
+
+    def test_a_version_without_a_file_is_refused_and_nothing_moves(self):
+        code, result = self.move(9)
+        self.assertEqual((code, result["moved"]), (1, False))
+        self.assertEqual(self.binding_version(), 2)
+        self.assertIsNone(self.registry.get(DEFINITION_ID, 9))
+
+    def test_a_breaking_version_is_refused_and_nothing_moves(self):
+        with tempfile.TemporaryDirectory() as root:
+            definitions = Path(root) / DEFINITION_ID / "definition"
+            definitions.mkdir(parents=True)
+            source_dir = REPO_ROOT / "products" / DEFINITION_ID / "definition"
+            for version in (1, 2):
+                name = f"v{version}.yaml"
+                (definitions / name).write_bytes((source_dir / name).read_bytes())
+            breaking = (source_dir / "v2.yaml").read_bytes().decode("utf-8")
+            breaking = breaking.replace("  version: 2\n", "  version: 3\n", 1)
+            breaking = breaking.replace("      estimate: { type: text, max: 30 }\n", "", 1)
+            (definitions / "v3.yaml").write_bytes(breaking.encode("utf-8"))
+            registry = DefinitionRegistry(DefinitionSource(products_root=Path(root)))
+            with patch.object(ops, "OrganizationDirectory", lambda: OrganizationDirectory(registry)):
+                code, result = self.move(3)
+        self.assertEqual((code, result["moved"]), (1, False))
+        self.assertIn("issue.estimate was removed", result["reason"])
+        self.assertEqual(self.binding_version(), 2)
+        self.assertNotEqual(self.registry.get(DEFINITION_ID, 3).state, "published")
+
+    def test_failed_readiness_moves_the_binding_back(self):
+        problem = _Problem(TENANT_ID, PRODUCT_ID, "definition_checksum_mismatch")
+        with patch.object(ops, "session_start_problems", lambda: [problem]):
+            code, result = self.move(1)
+        self.assertEqual((code, result["moved"], result["to_version"]), (1, False, 2))
+        self.assertEqual(self.binding_version(), 2)
+        self.assertEqual(self.turn("still-v2")["status"], "completed")
+        self.assertEqual(self.pinned_version("still-v2"), 2)
+
+    def test_an_unknown_product_is_refused(self):
+        output = io.StringIO()
+        with redirect_stdout(output):
+            code = ops.main(["move-product-version", "--tenant", TENANT_ID, "--product", "nothing-here",
+                             "--version", "2"])
+        self.assertEqual((code, json.loads(output.getvalue())["moved"]), (1, False))
 
 
 if __name__ == "__main__":

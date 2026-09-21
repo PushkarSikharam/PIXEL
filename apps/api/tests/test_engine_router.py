@@ -417,6 +417,67 @@ class VisibilityTest(RouterFixture):
             self.assertEqual((rule_result.kind, rule_result.proposal), (RouteKind.REFUSE, None))
 
 
+class PersonFollowUpTest(RouterFixture):
+    """"What about <person>" on the next turn re-applies the last request (5a plan, section 4.5)."""
+
+    def test_a_list_view_is_followed_by_its_person_filter(self):
+        chat = self.chat()
+        chat.say("show me the contacts")
+        result = chat.say("what about Ben")
+        self.assertEqual((result.kind, result.proposal.action_key, result.proposal.filter.value),
+                         (RouteKind.PROPOSE, "contacts_by_owner", "ben-okafor"))
+
+    def test_a_person_based_request_is_reapplied_to_the_new_person(self):
+        chat = self.chat()
+        chat.say("contacts for Cara")
+        self.open_bens_contact(chat)
+        chat.say("contacts for Ben")
+        again = self.chat()
+        again.say("open Ben's contact")
+        self.assertEqual(again.say("what about Ben").proposal.action_key, "open_contact")
+
+    def test_unknown_and_hidden_people_are_answered_alike(self):
+        def outcome(name):
+            chat = self.chat()
+            chat.say("show me the contacts")
+            result = chat.say(f"what about {name}")
+            return result.kind, result.response_key, result.proposal, dict(result.placeholders)
+
+        self.assertEqual(outcome("Cara"), (RouteKind.ANSWER, "unknown_person", None, {"person": "Cara"}))
+        self.assertEqual(outcome("Priya"), (RouteKind.ANSWER, "unknown_person", None, {"person": "Priya"}))
+
+    def test_the_follow_up_lasts_one_turn_only(self):
+        chat = self.chat()
+        chat.say("show me the contacts")
+        chat.say("tell me a joke")
+        self.assertEqual(chat.say("what about Ben").kind, RouteKind.FALLBACK)
+
+    def test_a_refusal_ends_the_follow_up(self):
+        chat = self.chat()
+        chat.say("show me the contacts")
+        self.assertEqual(chat.say("delete the contact").kind, RouteKind.REFUSE)
+        self.assertEqual(chat.say("what about Ben").kind, RouteKind.FALLBACK)
+
+    def test_an_unaccepted_proposal_starts_no_follow_up(self):
+        chat = self.chat()
+        chat.say("show me the contacts", assume_validated=False)
+        self.assertEqual(chat.say("what about Ben").kind, RouteKind.FALLBACK)
+
+    def test_two_people_are_never_guessed_between(self):
+        chat = self.chat()
+        chat.say("show me the contacts")
+        self.assertEqual(chat.say("what about Ben and Cara").kind, RouteKind.FALLBACK)
+
+    def test_two_person_filters_on_one_entity_are_never_guessed_between(self):
+        document = engine_definition()
+        document["actions"]["contacts_by_owner_too"] = dict(document["actions"]["contacts_by_owner"])
+        document["intents"].append({"action": "contacts_by_owner_too", "requires": ["person"],
+                                    "match": [["managed by"], ["contacts"]], "response": "records_filtered"})
+        chat = Conversation(IntentRouter(load_engine_definition(document=document), self.lookup))
+        chat.say("show me the contacts")
+        self.assertEqual(chat.say("what about Ben").kind, RouteKind.FALLBACK)
+
+
 class SyntheticDefinitionTest(unittest.TestCase):
     """Changing the definition changes behaviour, with no core edits."""
 

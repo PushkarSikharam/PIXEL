@@ -66,6 +66,10 @@ class LinearLegacyTranslator:
     def __init__(self, lookup: RecordLookup) -> None:
         self._lookup = lookup
 
+    def can_translate(self, action_key: str) -> bool:
+        """Whether today's app can express this action at all; offers are limited to these."""
+        return action_key in LEGACY_TYPES
+
     def translate(self, validated: ValidatedAction) -> LegacyAction:
         action = validated.action
         legacy_type = LEGACY_TYPES.get(action.action_key)
@@ -85,7 +89,9 @@ class LinearLegacyTranslator:
         return {"issue_id": self._target(action)}
 
     def _payload_highlight_assignment(self, action) -> dict[str, Any]:
-        return {"issue_id": self._target(action)}
+        # v2 shows the assignment control without choosing a ticket for the visitor; the web app
+        # accepts the action with no ticket.
+        return {"issue_id": self._target(action)} if action.target is not None else {}
 
     def _payload_issues_by_assignee(self, action) -> dict[str, Any]:
         if action.filter is None:

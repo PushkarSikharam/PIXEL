@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import threading
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
@@ -53,7 +54,7 @@ from app.services.rate_limit import RateLimiter
 from app.services.record_writes import KeyedWriter, RecordChange, require_visible_scope
 from app.services.session_manager import utc_now
 from app.services.speech_service import SpeechService, SpeechUnavailable
-from app.services.env import env_bool
+from app.services.env import env_bool, env_value
 from app.services.usage_ledger import UsageLedger
 from app.product_config import PRODUCTS_BY_ID
 from app.tenancy import deployment_id
@@ -68,6 +69,24 @@ readiness = ReadinessCheck()
 rate_limits = RateLimiter()
 # Legacy member-demo refresh; public visitors use disposable private instances instead.
 idle_reset = IdleDemoReset()
+# The 5a shadow engine, created on first use and only while PIXEL_SHADOW_ENGINE=on.
+_shadow = None
+_shadow_lock = threading.Lock()
+
+
+def shadow_switch_on() -> bool:
+    """Only the exact value "on" enables the shadow; unset, empty, "off" or anything else is off."""
+    return (env_value("PIXEL_SHADOW_ENGINE") or "").strip().lower() == "on"
+
+
+def shadow_runner():
+    global _shadow
+    with _shadow_lock:
+        if _shadow is None:
+            from app.services.shadow import ShadowRunner
+
+            _shadow = ShadowRunner(agent.directory, agent.sessions.pin_for, package_for)
+        return _shadow
 
 
 
@@ -86,6 +105,9 @@ async def lifespan(_: FastAPI):
             product_data.seed_if_empty()
         yield
     finally:
+        if _shadow is not None:
+            # Counts gathered since the last flush; a failure is logged, never raised.
+            _shadow.counters.flush()
         # A TestClient owns only the lifecycle state it started. Production remains armed until
         # process shutdown; a temporary test server must not throttle later direct-app tests.
         if not was_armed:
@@ -585,7 +607,7 @@ def usage_summary(day: str | None = None, user: AuthUser = Depends(require_membe
 
 
 @app.post("/api/turn", response_model=TurnResponse)
-def create_turn(request: TurnRequest, http: Request,
+def create_turn(request: TurnRequest, http: Request, background: BackgroundTasks,
                 user: AuthUser = Depends(require_auth)) -> TurnResponse:
     rate_limits.enforce("turn", http, identity=user.user_id)
     if user.kind == "member":
@@ -600,7 +622,17 @@ def create_turn(request: TurnRequest, http: Request,
     # One materialized snapshot drives both language understanding and action validation. A
     # visitor's turn can never consult the shared member demo or another visitor's records.
     visible_data = _product_data(grant).load(grant.visible_scope_ids())
-    return agent.handle_turn(request, user, visible_data)
+    if not shadow_switch_on():
+        return agent.handle_turn(request, user, visible_data)
+    # Shadow mode (5a): the new engine answers the same turn on the same records, and nothing it
+    # does reaches the visitor or the database. See app/services/shadow.py.
+    shadow = shadow_runner()
+    prepared = shadow.prepare(user, grant, request.product_id, visible_data, request.workspace_scope_id)
+    response = agent.handle_turn(request, user, visible_data)
+    if prepared is not None:
+        shadow.complete(prepared, user, request, response)
+        shadow.counters.schedule(background.add_task)
+    return response
 
 
 @app.post("/api/turn/{turn_id}/cancel", response_model=CancelTurnResponse)

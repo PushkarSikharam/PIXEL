@@ -74,6 +74,18 @@ class PendingConfirmation:
 
 
 @dataclass(frozen=True)
+class PersonFollowUp:
+    """The request the last accepted turn served (5a plan, section 4.5).
+
+    A bare "what about <person>" on the very next turn re-applies it to that person: the same request when it
+    was about a person, otherwise its subject filtered by that person.
+    """
+
+    action_key: str
+    turn: int
+
+
+@dataclass(frozen=True)
 class ConversationMemory:
     pending_clarification: PendingClarification | None = None
     pending_confirmation: PendingConfirmation | None = None
@@ -82,6 +94,8 @@ class ConversationMemory:
     last_view: str | None = None
     last_change: str | None = None  # an executed ledger entry's key
     turn: int = 0
+    # Added in 5a, optional: nothing that predates it is affected.
+    person_follow_up: PersonFollowUp | None = None
 
     def next_turn(self, turn: int) -> "ConversationMemory":
         """Advance to a new turn, expiring pending state that was not answered in time."""
@@ -94,8 +108,12 @@ class ConversationMemory:
         return replace(self, pending_clarification=clarification, pending_confirmation=confirmation, turn=turn)
 
     def discard_pending(self) -> "ConversationMemory":
-        """A refusal, scope change or cancellation clears anything waiting for an answer."""
-        return replace(self, pending_clarification=None, pending_confirmation=None)
+        """A refusal, scope change or cancellation clears anything waiting for an answer.
+
+        It also ends a person follow-up: after a refusal, "what about <person>" is a new request.
+        """
+        return replace(self, pending_clarification=None, pending_confirmation=None,
+                       person_follow_up=None)
 
     def change_scope(self) -> "ConversationMemory":
         """References made in another scope are never carried across."""

@@ -1,6 +1,6 @@
 # Milestone 3.2, Slice 4b: Response Composer, Conversation Intents and the Knowledge Boundary
 
-Status: **REVISION 4.3 MERGED WITH GREEN LINUX CI; AWAITING STAKEHOLDER SIGN-OFF. The composer is not wired into the live runtime.**
+Status: **SIGNED OFF by the stakeholder on 2026-09-21. Revision 4.3 merged with green Linux CI, and the private demo isolation required before 5a is live and accepted. The composer is not wired into the live runtime; that begins with 5a shadow mode.**
 
 - Revision 4.3 corrections merged through PR #17 (commit `266b32c`, merge `fd21af9`). Pull-request run 35565519318 and `main` push run 35565440664 are green on all three jobs: API tests (with the container build and its smoke test), web checks and browser tests.
 - Railway never completed a deployment of `fd21af9` (its GitHub record went from in progress to inactive). The next merge, `6517c8b`, which contains these changes, deployed successfully on 2026-09-21. The composer is not used by live chat, so visitors saw no difference either way.

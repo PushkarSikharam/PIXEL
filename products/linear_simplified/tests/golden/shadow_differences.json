@@ -668,8 +668,8 @@
     "case": "create-known-owner",
     "turn": 0,
     "field": "signals",
-    "kind": "behaviour",
-    "reason": "The visitor named the owner and the title but no project. Linear v4 declares defaults only for priority (Medium) and status (Todo), so the definition engine asks which project the ticket belongs to and proposes nothing yet (5c plan, section 7.2). The live (legacy) engine creates the ticket at once in a project its planner chose itself; that guess is not carried forward and leaves with the old engine in 5d."
+    "kind": "platform_wording",
+    "reason": "The same signals are reported. Only the confidence differs: the live engine derives 0.72 from its reasoning score, the platform uses fixed values (0.7 feature, 0.84 person)."
   },
   {
     "case": "create-unknown-owner",
@@ -781,7 +781,7 @@
     "turn": 0,
     "field": "speech",
     "kind": "behaviour",
-    "reason": "Linear v3 declares safe defaults for priority, status and project, so the definition engine can propose a complete create. The live compatibility path still opens or prepares the form first until full cutover."
+    "reason": "\"Start a ticket assigned to Noah\" asks for a new ticket. The definition engine drafts the create with Noah Patel as assignee and asks for the one required field the visitor did not give, the title, and proposes nothing yet (Linear v4 declares no project default, so the project is asked next). The live (legacy) engine instead opens the ticket form prefilled with Noah Patel. Before this change the definition engine opened Noah's existing ticket, LIN-137, which was a defect."
   },
   {
     "case": "create-start-assigned",
@@ -796,6 +796,13 @@
     "field": "signals",
     "kind": "platform_wording",
     "reason": "The same signals are reported. Only the confidence differs: the live engine derives 0.72 from its reasoning score, the platform uses fixed values (0.7 feature, 0.84 person)."
+  },
+  {
+    "case": "create-start-assigned",
+    "turn": 0,
+    "field": "session_summary",
+    "kind": "behaviour",
+    "reason": "The summary agrees on interests, feature and person (Noah Patel). Only the pending question differs: the definition engine is waiting for the new ticket's title, the live engine asked nothing because it opened the form instead."
   },
   {
     "case": "member-add-named",
@@ -1418,21 +1425,14 @@
     "turn": 0,
     "field": "proposed_action",
     "kind": "behaviour",
-    "reason": "Linear v3 declares safe defaults for priority, status and project, so a request to start a ticket assigned to Noah can now become a complete create proposal. The live compatibility path still opens the form first."
+    "reason": "\"Start a ticket assigned to Noah\" asks for a new ticket. The definition engine drafts the create with Noah Patel as assignee and asks for the one required field the visitor did not give, the title, and proposes nothing yet (Linear v4 declares no project default, so the project is asked next). The live (legacy) engine instead opens the ticket form prefilled with Noah Patel. Before this change the definition engine opened Noah's existing ticket, LIN-137, which was a defect."
   },
   {
     "case": "create-start-assigned",
     "turn": 0,
     "field": "validated_action",
     "kind": "behaviour",
-    "reason": "Linear v3 declares safe defaults for priority, status and project, so the definition engine can validate the complete create while the live compatibility path remains form-first until full cutover."
-  },
-  {
-    "case": "create-start-assigned",
-    "turn": 0,
-    "field": "retrieved_context",
-    "kind": "behaviour",
-    "reason": "The live compatibility path attaches documents for ticket creation copy; the definition create proposal is fully structured and attaches no retrieved documents. No spoken claim depends on retrieval."
+    "reason": "\"Start a ticket assigned to Noah\" asks for a new ticket. The definition engine drafts the create with Noah Patel as assignee and asks for the one required field the visitor did not give, the title, and proposes nothing yet (Linear v4 declares no project default, so the project is asked next). The live (legacy) engine instead opens the ticket form prefilled with Noah Patel. Before this change the definition engine opened Noah's existing ticket, LIN-137, which was a defect."
   },
   {
     "case": "update-outside-person",

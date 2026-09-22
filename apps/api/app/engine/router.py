@@ -566,7 +566,9 @@ class IntentRouter:
             return _Unmet(intent, replace(score, requirements=satisfied), reason, **details)
 
         if "unknown_person" in requires:
-            if people.visible or not people.unresolved:
+            # A known person named alongside does not make the unknown one someone else: nothing is
+            # created or assigned for a person who is not in the directory, whoever else is named.
+            if not people.unresolved:
                 return unmet("not_applicable")
             name = people.unresolved[0]
             placeholders["person"] = name.text
@@ -594,6 +596,10 @@ class IntentRouter:
         if people_needed:
             if len(people.visible) > 1:
                 return unmet("ambiguous", slot="person", candidates=self._person_refs(people.visible), target=target)
+            if people.visible and people.unresolved and spec.capability == Capability.CREATE_RECORD:
+                # "A record for A, assigned to B" with B unknown: drafting it around A alone would
+                # drop half the request. The unknown person is dealt with first.
+                return unmet("not_visible", slot="person", name=people.unresolved[0].text)
             if people.visible:
                 person = people.visible[0]
                 placeholders["person"] = person.name

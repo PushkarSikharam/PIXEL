@@ -5,9 +5,11 @@ before 5c; the backend must answer it, through the same validator, without guess
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -107,6 +109,74 @@ class BackendConversationTest(EngineCutoverFixture):
         self.assertEqual(receipt.status_code, 200, receipt.text)
         self.assertEqual(self.say("what did we just change?", turn_id=5)["speech"],
                          "The most recent change: updated LIN-142.")
+
+
+class DefinitionAuthorityConversationTest(EngineCutoverFixture):
+    """The same visitor requests under definition authority (5d plan revision 2, section 5).
+
+    Each case was a definition-engine defect that blocked the 5c cutover: a visitor would have met
+    it the moment `PIXEL_ENGINE_MODE=definition` was switched on.
+    """
+
+    def setUp(self):
+        super().setUp()
+        authority = patch.dict(os.environ, {"PIXEL_ENGINE_MODE": "definition"}, clear=False)
+        authority.start()
+        self.addCleanup(authority.stop)
+
+    say = BackendConversationTest.say
+    action = BackendConversationTest.action
+
+    def test_starting_a_ticket_for_someone_drafts_a_new_one(self):
+        for index, message in enumerate(("Start a ticket assigned to Noah", "open a new ticket for Noah",
+                                         "draft a ticket for Noah")):
+            body = self.say(message, session=f"start-{index}")
+            self.assertNotEqual(self.action(body)[0], "OPEN_DEMO_ISSUE", message)
+            self.assertNotIn("LIN-137", body["speech"], message)
+            self.assertEqual(body["speech"], "What should the title of the new ticket be?", message)
+            self.assertIsNone(body["execution"], message)
+
+    def test_opening_someones_ticket_still_opens_it(self):
+        body = self.say("open a ticket for Noah")
+        self.assertEqual(self.action(body)[0], "OPEN_DEMO_ISSUE")
+        self.assertEqual(body["speech"], "I'll open LIN-137.")
+
+    def test_an_unknown_person_beside_a_known_one_is_added_first(self):
+        for index, message in enumerate(("Open a ticket for Maya and assign to Jen",
+                                         "start a ticket for Maya assigned to Jen",
+                                         "create a ticket for Maya and assign it to Jen")):
+            body = self.say(message, session=f"jen-{index}")
+            self.assertEqual(self.action(body), ("HIGHLIGHT_ADD_MEMBER_BUTTON", {"name": "Jen"}), message)
+            self.assertNotIn("LIN-142", body["speech"], message)
+            self.assertIsNone(body["execution"], message)
+
+    def test_what_we_just_changed_is_read_from_the_ledger_not_documentation(self):
+        for index, question in enumerate(("What did we just change?", "what have we changed",
+                                          "what just happened")):
+            body = self.say(question, session=f"ledger-{index}")
+            self.assertEqual(body["speech"], "Nothing has changed in this conversation yet.", question)
+            self.assertNotIn("documentation", body["speech"])
+        self.say("Open Maya's ticket", session="ledger")
+        mutation = self.say("assign it to Noah", session="ledger", turn_id=2)
+        headers = {**self.headers, "X-Execution-Key": mutation["execution"]["key"], "X-Session-Id": "ledger"}
+        receipt = self.client.patch("/api/demo-data/issues/LIN-142",
+                                    json={"changes": {"assignee": "Noah Patel"}}, headers=headers)
+        self.assertEqual(receipt.status_code, 200, receipt.text)
+        self.assertEqual(self.say("What did we just change?", session="ledger", turn_id=3)["speech"],
+                         "The most recent change: updated LIN-142.")
+
+    def test_a_profile_statement_is_acknowledged_not_failed(self):
+        for index, message in enumerate((
+            "I'm an engineering manager with a 12 person team moving from Jira",
+            "we're a small team", "I am a product designer",
+        )):
+            body = self.say(message, session=f"profile-{index}")
+            self.assertEqual(body["speech"], "Thanks, that helps. What would you like to explore first in Pixel?", message)
+            self.assertIsNone(body["validated_action"], message)
+
+    def test_a_request_after_a_self_description_is_still_served(self):
+        body = self.say("I'm a manager, show me the projects")
+        self.assertEqual(self.action(body)[0], "OPEN_PROJECTS")
 
 
 if __name__ == "__main__":

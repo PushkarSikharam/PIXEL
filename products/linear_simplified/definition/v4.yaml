@@ -8,7 +8,9 @@
 # be an explicit, visible reference, asked for when absent. v4 therefore declares:
 #   - priority defaults to Medium and status to Todo (as in v3);
 #   - project has no default, and is always asked for when the visitor did not name one.
-# Routing, vocabulary and every other entity are unchanged from v3.
+#   - "Start a ticket assigned to Noah", "open a new ticket for Maya" and "open a ticket for Maya and
+#     assign it to Noah" are requests to create a ticket; v3 read them as opening an existing one.
+# Vocabulary and every other entity are unchanged from v3.
 
 definition:
   definition_id: linear_simplified
@@ -254,10 +256,26 @@ intents:
     requires: [unknown_person]
     response: member_missing
     match: [[create, make, add, raise, file, assign], [ticket, issue, bug]]
+  - action: highlight_add_member
+    requires: [unknown_person]
+    response: member_missing
+    match: [[start, draft], [ticket, issue, bug]]
+  - action: highlight_add_member
+    requires: [unknown_person]
+    response: member_missing
+    match: [[open], [new, fresh, assign, assigned, owner], [ticket, issue, bug]]
   - action: create_issue
     requires: [person]
     response: record_created
     match: [[create, make, add, raise, file], [ticket, issue, bug]]
+  - action: create_issue
+    requires: [person]
+    response: record_created
+    match: [[start, draft], [ticket, issue, bug]]
+  - action: create_issue
+    requires: [person]
+    response: record_created
+    match: [[open], [new, fresh, assign, assigned, owner], [ticket, issue, bug]]
   - action: open_github_setup
     match: [[github, pull request, repository, repo, webhook, branch],
             [connect, setup, set up, configure, enable, install]]

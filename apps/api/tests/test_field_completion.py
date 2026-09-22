@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from app import main  # noqa: E402
+from app import db, main  # noqa: E402
 from app.definitions.contract import FieldSpec  # noqa: E402
 from app.engine.field_completion import read_answer  # noqa: E402
 from app.engine.lookup import RecordView  # noqa: E402
@@ -80,6 +80,15 @@ class CreateCompletionTest(NewEngineFixture):
         self.assertEqual(receipt.status_code, 200, receipt.text)
         record = receipt.json()["record"]
         self.assertEqual((record["assignee"], record["project"]), ("Noah Patel", "Issue Triage Workflow"))
+
+    def test_a_drafted_create_records_the_person_it_names(self):
+        """The person is resolved before the missing field is asked, so a follow-up can use them."""
+        asked = self.say("Start a ticket assigned to Noah")
+        self.assertEqual(asked["speech"], "What should the title of the new ticket be?")
+        with db.get_connection() as connection:
+            people = {row["value"] for row in connection.execute(
+                "select value from signals where session_id = ? and type = 'person_interest'", ("new-engine",))}
+        self.assertEqual(people, {"Noah Patel"})
 
     def test_every_workspace_can_create_in_its_own_projects(self):
         """The regression v3 shipped: a defaulted project outside the workspace refused every create."""

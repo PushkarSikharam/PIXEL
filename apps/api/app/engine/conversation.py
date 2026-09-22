@@ -34,7 +34,8 @@ CAPABILITY_CUES = (
 # changes, passed in by the caller; never from a document and never from memory (5b plan, 8.4).
 LAST_CHANGE_CUES = (
     "what changed", "what did you do", "what did you change", "what have you changed",
-    "what just changed", "what did you just do",
+    "what just changed", "what did you just do", "what did we change", "what did we just change",
+    "what have we changed", "what was changed", "what did you update", "what just happened",
 )
 # "I'm Priya" and similar. Matched against normalized text, which has had apostrophes removed,
 # so the cue is "im " rather than "i'm ". Cues that ordinary sentences start with ("call me back

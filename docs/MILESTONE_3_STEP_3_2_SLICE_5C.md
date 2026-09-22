@@ -68,10 +68,43 @@ Other defects found and fixed while building this slice:
 
 Filled in from the final local run of this change; Linux CI on the pull request is the gate.
 
-- API suite: 940 tests pass (3 skipped). Product suite: 104 tests pass. Web unit tests: 44 pass; type-check clean.
+- API suite: 947 tests pass (3 skipped). Product suite: 104 tests pass. Web unit tests: 44 pass; type-check clean.
 - Browser suite (Playwright, isolated servers): 116 tests pass, including the browser golden recording.
 - Golden evidence, never regenerated: backend recording 68 reviewed differences, shadow 211,
   browser 59. Each names its kind and reason; the tests fail on an unlisted or stale difference.
+
+## Definition-engine defects found after this build (fixed)
+
+Probing every reply the legacy engine owns through both authorities (5d plan revision 2,
+section 5) found four definition-engine defects a visitor would have met as soon as definition
+authority was switched on. All four are fixed, and `DefinitionAuthorityConversationTest` in
+`apps/api/tests/test_backend_conversation.py` runs each through `/api/turn` under
+`PIXEL_ENGINE_MODE=definition`:
+
+1. "Start a ticket assigned to Noah" opened Noah's existing ticket (LIN-137). Linear v4 now routes
+   "start" or "draft" a ticket, and "open" a ticket with "new", "fresh" or an assignment, as a
+   create: the engine drafts it for Noah Patel and asks for the title. "Open a ticket for Noah"
+   still opens LIN-137. v4 was edited in place because it has never been merged or registered.
+2. "Open a ticket for Maya and assign to Jen" (Jen unknown) opened LIN-142. The router now never
+   drafts a create while a named person is unknown, whoever else is named, and v4 offers adding
+   the unknown person for every create phrasing. Nothing is drafted or dispatched.
+3. "What did we just change?" answered from product documentation. The platform last-change cues
+   now include the "we" phrasings and "what just happened"; the answer reads the ledger, before and
+   after a committed change.
+4. A profile statement ("I'm an engineering manager ... moving from Jira") got the fallback, and
+   with "Jira" in it would have opened Integrations. A message that only describes the visitor is
+   now acknowledged ("Thanks, that helps. What would you like to explore first in Pixel?") and
+   its signals are recorded; a request in the same message ("I'm a manager, show me the
+   projects") is still served, and a mutation, refusal or pending question is never replaced.
+
+The shadow comparison also showed that a create drafted around a named person did not record that
+person as a signal, so a later follow-up lost them; it is recorded now. Shadow differences were
+revised, not regenerated: the stale v3 reasons for `create-start-assigned` are rewritten, one
+difference no longer occurs and was removed, one new one (the pending title question in the
+summary) is listed with its reason, and two signal entries are reclassified as confidence-only.
+
+The browser suite and browser golden have also only proven the legacy engine; they must pass under
+definition authority before cutover (5d plan revision 2, section 2.4).
 
 ## Open before sign-off (operator actions)
 

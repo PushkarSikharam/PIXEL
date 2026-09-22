@@ -80,6 +80,7 @@ STAGE_TEMPLATES: Mapping[Stage, frozenset[str]] = {
                               "work_outside_scope", "broad_scope_refused", "unknown_person",
                               "member_missing", "fallback"}),
     Stage.ANSWER: frozenset({"greeting", "greeting_named", "identity", "capabilities", "fallback",
+                             "profile_acknowledged",
                              "guided_path", "next_step", "last_change", "nothing_changed",
                              "people_count", "anchor_count", "conversation_ended",
                              "knowledge_unavailable"}),
@@ -123,6 +124,7 @@ PLATFORM_NOTHING_OFFERED = "There's nothing I can do for you in {product} right 
 PLATFORM_CONVERSATION_TEMPLATES: Mapping[tuple[Stage, str], str] = {
     (Stage.ANSWER, "greeting"): 'Welcome to "{product}". I am "{assistant}", your demo guide. What would you like to explore?',
     (Stage.ANSWER, "greeting_named"): 'Hello {visitor}, welcome to "{product}". What would you like to explore?',
+    (Stage.ANSWER, "profile_acknowledged"): "Thanks, that helps. What would you like to explore first in {product}?",
     (Stage.ANSWER, "identity"): 'I am "{assistant}", the demo guide for "{product}".',
     (Stage.CLARIFICATION, "clarify_create"): "Which type of record would you like to create?",
     (Stage.CLARIFICATION, "clarify_all_items"): "Which records do you mean?",

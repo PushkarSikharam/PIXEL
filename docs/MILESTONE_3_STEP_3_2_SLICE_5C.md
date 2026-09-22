@@ -156,9 +156,49 @@ Port rows completed after that review, each tested under definition authority:
 
 Still open:
 
-- None of the owner decisions: all are recorded and applied (below).
-- **Not ported:** offering to add an unknown assignee during an update. The definition engine says
-  it cannot find the person and changes nothing, which is safe; the offer is a convenience.
+- None. Every owner decision is recorded and applied (below), and the behaviour matrix has no
+  unported row left.
+
+## Defects found by the first production run, and how each closed
+
+The operator ran the cutover runbook to step 5 on the live deployment: the visitor script passed
+11/11 under legacy authority, a backup was taken and verified, the product moved from v2 to v5, and
+117 turns were compared by the shadow across about 90 sessions with no `shadow_error`,
+`worker_unhealthy` or `over_budget`, and no `security` class. Ten of those turns were typed by hand
+on the live site, and replaying them through the same comparison found defects no suite had:
+
+1. **A complete request was read as the answer to an open question.** After "assign it to Noah"
+   left a "which ticket?" question open, "Show me issue assignment" became a filter for Noah. The
+   router combines a message with the earlier request only when the message is a fragment; a
+   request of three or more words that routes on its own replaces the question.
+2. **A lowercase introduction was not recognised.** "Hi there i am pushkar" fell through to the
+   fallback. A lowercase name is now accepted where it can mean nothing else: "my name is sam", a
+   greeting followed by "i'm priya", or "I'm Sam from Acme". "i am confused" is still not a name.
+3. **A question was answered by quoting an unrelated document.** "who build pixel?" was answered
+   from the integrations passage, because the shared retriever (which milestone 3.4 replaces)
+   counts "who" and "is" as matches. A passage now carries whether it really matches; only a real
+   match may be quoted, and a passage that merely supports an action reply is unchanged. Asking who
+   the assistant is, or what the product is, is answered by the platform.
+4. **Legacy proposed a change for a question.** "what is pixel capable of doing?" proposed
+   "I'll update LIN-142: status to In progress" and issued an execution key, because the legacy
+   planner reads "doing" as the in-progress status. The visitor's reply was interrupted, so nothing
+   was written, and a visitor can only reach their own private copy. The legacy planner no longer
+   proposes a record change for a question; legacy remains the rollback path until 5d.
+5. **An interrupted reply vanished silently.** Sending a new message while the assistant is
+   thinking cancels the unfinished turn by design, and the transcript showed nothing. The page now
+   notes "Reply stopped when you sent a new message." on the message it answered. The note is the
+   page's own, not speech: the browser still authors no assistant sentence, and the web test that
+   enforces that is unchanged.
+
+Two gaps from the behaviour matrix closed with them:
+
+- **An unknown person named in any request** is now offered the control that adds one, prefilled
+  with the typed name, not only in a create. The rule is generic: the definition declares exactly
+  one highlight over the people entity whose single prepared value is that entity's title. A person
+  in another workspace gets the identical reply, which `test_hidden_and_unknown_people_get_the_same_answer`
+  now checks for this phrasing too.
+- **"I'm new here"** was answered with "Which type of record would you like to create?"; a visitor
+  describing their situation is acknowledged instead.
 
 ## Owner decisions (5d plan revision 2, section 5)
 

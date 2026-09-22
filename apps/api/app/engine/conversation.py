@@ -41,12 +41,19 @@ LAST_CHANGE_CUES = (
 # "I'm Priya" and similar. Matched against normalized text, which has had apostrophes removed,
 # so the cue is "im " rather than "i'm ". Cues that ordinary sentences start with ("call me back
 # later", "this is urgent") are deliberately absent: they produced names like "Back Later".
-INTRODUCTION_CUES = ("i am ", "im ", "my name is ")
+INTRODUCTION_CUES = ("i am ", "im ", "my name is ", "call me ")
+# Cues that can only introduce a name, so the name may be typed in lowercase.
+EXPLICIT_NAME_CUES = ("my name is ", "call me ")
+# What may follow a name without being part of it ("I'm Sam from Acme").
+_AFTER_NAME = frozenset({"from", "at", "with", "and", "here"})
 
 # Words that follow an introduction cue without being a name.
 NOT_NAMES = frozenset({
     "looking", "here", "trying", "just", "not", "sure", "interested", "new", "back", "done",
     "ready", "good", "fine", "ok", "okay", "working", "wondering", "curious", "the", "a", "an",
+    "confused", "lost", "stuck", "sorry", "glad", "happy", "excited", "busy", "tired", "bored",
+    "going", "using", "evaluating", "exploring", "checking", "testing", "also", "still", "really",
+    "very", "so", "on", "in", "at", "from", "with", "your", "you", "this", "that", "it",
 })
 
 
@@ -105,7 +112,7 @@ def detect(text: NormalizedMessage, *, visitor_name: str | None = None) -> Conve
         # "Hi, I'm Priya": a greeting, then an introduction.
         opener = next((g for g in sorted(GREETINGS, key=len, reverse=True) if whole.startswith(g + " ")), None)
         if opener is not None:
-            name = _introduced_name(whole[len(opener) + 1:], text.original)
+            name = _introduced_name(whole[len(opener) + 1:], text.original, greeted=True)
     if name:
         return ConversationalTurn(Conversational.GREETING_NAMED, "greeting_named", name)
     return None
@@ -135,18 +142,28 @@ def _voice_interruption(whole: str) -> bool:
     )
 
 
-def _introduced_name(whole: str, original: str) -> str | None:
-    """A name, or nothing. Being wrong here means greeting someone by a word they did not say."""
+def _introduced_name(whole: str, original: str, *, greeted: bool = False) -> str | None:
+    """A name, or nothing. Being wrong here means greeting someone by a word they did not say.
+
+    A capitalized name is always accepted. A lowercase one only where the words can mean nothing
+    else: "my name is sam", or a greeting followed by "i am priya". A bare "i am confused" is never
+    a name.
+    """
     for cue in INTRODUCTION_CUES:
         if not whole.startswith(cue):
             continue
-        remainder = whole[len(cue):].strip(" .!,")
-        words = remainder.split()
+        words = whole[len(cue):].strip(" .!,").split()
+        if words and len(words) > 1:
+            # "I'm Sam from Acme": the name stops where the rest of the sentence starts.
+            cut = next((index for index, word in enumerate(words) if word in _AFTER_NAME), len(words))
+            words = words[:cut]
+        remainder = " ".join(words)
         if not remainder or len(words) > 2 or not remainder.replace(" ", "").isalpha():
             return None
         if any(word in NOT_NAMES for word in words):
             return None
-        if not _capitalized_in(original, words):
+        lowercase_allowed = cue in EXPLICIT_NAME_CUES or (greeted and len(words) == 1)
+        if not lowercase_allowed and not _capitalized_in(original, words):
             # People capitalize their own names. "i am ready" is not an introduction.
             return None
         return remainder.title()

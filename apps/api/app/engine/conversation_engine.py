@@ -38,11 +38,12 @@ from app.engine.conversation import (
     KNOWLEDGE_UNAVAILABLE_KEY,
     CapabilityPolicy,
     Conversational,
+    ConversationalTurn,
     OfferableActions,
     detect,
     offerable,
 )
-from app.engine.knowledge import KnowledgeLookup, KnowledgePassage, ground
+from app.engine.knowledge import KnowledgeLookup, KnowledgePassage, answerable, ground
 from app.engine.memory import ConversationMemory, PendingClarification
 from app.engine.normalizer import NormalizedMessage
 from app.engine.router import IntentRouter, TurnContext, remember_accepted
@@ -76,7 +77,10 @@ REFUSAL_REPLIES = {
 }
 
 # A visitor describing themselves ("I'm a ...", "we're an ..."), as opposed to asking for something.
-_SELF_DESCRIPTION = re.compile(r"^\s*(i am|i'm|im|we are|we're)\s+(a|an|the)\s+\w+", re.IGNORECASE)
+_SELF_DESCRIPTION = re.compile(
+    r"^\s*(i am|i'm|im|we are|we're)\s+((a|an|the)\s+\w+|"
+    # "I'm new here", "we're just exploring": a situation, not a request and not a name.
+    r"(new|here|just|only|still|currently)\b.*)", re.IGNORECASE)
 # Words that turn a self-description into a request ("I'm a manager, show me what's open").
 _REQUEST_MARKER = re.compile(
     r"\b(show|open|go to|take me|create|make|add|assign|set|change|update|move|filter|find|list|"
@@ -203,10 +207,12 @@ class ConversationEngine:
             routed = router.route(message, memory, context)
             result, next_memory = routed.result, routed.memory
 
-        conversation = (
-            self._platform_conversation(text, context, memory)
-            if continued is None and fresh and result.kind == RouteKind.CLARIFY else None
-        )
+        conversation = None
+        if continued is None and fresh and result.kind == RouteKind.CLARIFY:
+            # A question back writes nothing, so a message the platform can answer is answered.
+            conversation = self._platform_conversation(text, context, memory)
+            if conversation is None and _describes_visitor(message):
+                conversation = (TurnStage.ANSWER, composer.answer("profile_acknowledged"), (), True)
         if continued is not None:
             pass  # the unfinished create decided this turn
         elif conversation is not None:
@@ -471,7 +477,7 @@ class ConversationEngine:
             # acknowledged, and never answered as a failed request (the v2 prospect-signal decision).
             return TurnStage.ANSWER, composer.answer("profile_acknowledged"), (), True
         if self._knowledge is not None and _is_question(text):
-            grounding = ground(self._knowledge, message)
+            grounding = answerable(ground(self._knowledge, message))
             reply = composer.knowledge_answer(grounding)
             if grounding.is_grounded and reply.template_key != KNOWLEDGE_UNAVAILABLE_KEY:
                 return TurnStage.KNOWLEDGE, reply, grounding.passages, True
@@ -483,6 +489,11 @@ class ConversationEngine:
     ) -> tuple[TurnStage, Reply, tuple[KnowledgePassage, ...], bool] | None:
         """Conversation turns the platform can answer without consulting product intents."""
         conversational = detect(text, visitor_name=memory.visitor_name)
+        if conversational is None and self._asks_about(text, self._definition.identity.assistant_name):
+            conversational = ConversationalTurn(Conversational.IDENTITY, "identity")
+        if conversational is None and self._asks_about(text, self._definition.identity.product_name):
+            # "What is <product>?" is answered with what this caller can actually do in it.
+            conversational = ConversationalTurn(Conversational.CAPABILITIES, "capabilities")
         if conversational is not None:
             composer = ResponseComposer(self._definition, visitor_name=conversational.visitor_name)
             if conversational.kind == Conversational.CAPABILITIES:
@@ -564,6 +575,13 @@ class ConversationEngine:
     def _view_label(self, view: str) -> str:
         spec = self._definition.views.get(view)
         return spec.label if spec is not None else view.replace("_", " ").capitalize()
+
+    def _asks_about(self, text: NormalizedMessage, name: str) -> bool:
+        """"Who is <assistant>?", "what is <product>?", "what does <product> do?": by the name the
+        definition declares, and only when the name is the whole subject of the question."""
+        subject = re.escape(name.lower())
+        return re.fullmatch(rf"(who|what)( is| s| does)? (the )?{subject}( do| about)?\??",
+                            text.full.strip()) is not None
 
     def _view_entity(self, view: str | None) -> str | None:
         spec = self._definition.views.get(view or "")

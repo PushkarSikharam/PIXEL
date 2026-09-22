@@ -534,30 +534,30 @@
   {
     "case": "update-outside-person",
     "turn": 1,
-    "field": "proposed_action",
-    "kind": "security",
-    "reason": "Avery works outside the selected workspace. The live engine refuses by saying Avery is outside it and records Avery as a signal, which confirms the person exists. The new engine answers exactly as for someone unknown, so nothing outside the scope is disclosed."
-  },
-  {
-    "case": "update-outside-person",
-    "turn": 1,
     "field": "speech",
-    "kind": "security",
-    "reason": "Avery works outside the selected workspace. The live engine refuses by saying Avery is outside it and records Avery as a signal, which confirms the person exists. The new engine answers exactly as for someone unknown, so nothing outside the scope is disclosed."
+    "kind": "platform_wording",
+    "reason": "Both engines now open Teams and highlight where a member is added, prefilled with the name the visitor typed, and neither assigns anything. Only the sentence differs: the platform says it cannot find Avery in this workspace, which is word for word what it says for a name nobody has, then names the control."
   },
   {
     "case": "update-outside-person",
     "turn": 1,
     "field": "intent_trace",
-    "kind": "security",
-    "reason": "Avery works outside the selected workspace. The live engine refuses by saying Avery is outside it and records Avery as a signal, which confirms the person exists. The new engine answers exactly as for someone unknown, so nothing outside the scope is disclosed."
+    "kind": "coverage",
+    "reason": "The visible decision is the same add-member highlight. The live trace uses labels derived from its own action names; the definition engine reports only definition-declared labels."
   },
   {
     "case": "update-outside-person",
     "turn": 1,
     "field": "signals",
-    "kind": "platform_wording",
-    "reason": "The live engine now sees only the selected workspace (5c plan, section 3.3), so it no longer names a person from another workspace: both engines answer as for an unknown person. The disclosure is fixed; only the signal wording differs."
+    "kind": "behaviour",
+    "reason": "The live engine records Avery as a person signal for a person it cannot act on; the definition engine records no person, because none was resolved. Confidence values also differ."
+  },
+  {
+    "case": "update-outside-person",
+    "turn": 1,
+    "field": "session_summary",
+    "kind": "behaviour",
+    "reason": "The summary agrees except for the remembered person: the live engine keeps Avery as the last person, the definition engine keeps none, because Avery was never resolved in this workspace."
   },
   {
     "case": "update-unknown-person",
@@ -583,30 +583,30 @@
   {
     "case": "update-unknown-person",
     "turn": 1,
-    "field": "proposed_action",
-    "kind": "behaviour",
-    "reason": "Priya is not in the workspace. The live engine proposes the reassignment and then denies it as work outside the scope; the new engine says it cannot find Priya and proposes nothing."
-  },
-  {
-    "case": "update-unknown-person",
-    "turn": 1,
     "field": "speech",
-    "kind": "behaviour",
-    "reason": "Priya is not in the workspace. The live engine proposes the reassignment and then denies it as work outside the scope; the new engine says it cannot find Priya and proposes nothing."
+    "kind": "platform_wording",
+    "reason": "Both engines now open Teams and highlight where a member is added, prefilled with the name the visitor typed, and neither assigns anything. Only the sentence differs: the platform says it cannot find Priya in this workspace, which is word for word what it says for a name nobody has, then names the control."
   },
   {
     "case": "update-unknown-person",
     "turn": 1,
     "field": "intent_trace",
-    "kind": "behaviour",
-    "reason": "Priya is not in the workspace. The live engine proposes the reassignment and then denies it as work outside the scope; the new engine says it cannot find Priya and proposes nothing."
+    "kind": "coverage",
+    "reason": "The visible decision is the same add-member highlight. The live trace uses labels derived from its own action names; the definition engine reports only definition-declared labels."
   },
   {
     "case": "update-unknown-person",
     "turn": 1,
     "field": "signals",
-    "kind": "platform_wording",
-    "reason": "The same signals are reported. Only the confidence differs: the live engine derives 0.72 from its reasoning score, the platform uses fixed values (0.7 feature, 0.84 person)."
+    "kind": "behaviour",
+    "reason": "The live engine records Priya as a person signal for a person it cannot act on; the definition engine records no person, because none was resolved. Confidence values also differ."
+  },
+  {
+    "case": "update-unknown-person",
+    "turn": 1,
+    "field": "session_summary",
+    "kind": "behaviour",
+    "reason": "The summary agrees except for the remembered person: the live engine keeps Priya as the last person, the definition engine keeps none, because Priya was never resolved in this workspace."
   },
   {
     "case": "update-without-target",
@@ -1405,34 +1405,6 @@
     "field": "validated_action",
     "kind": "behaviour",
     "reason": "\"Start a ticket assigned to Noah\" asks for a new ticket. The definition engine drafts the create with Noah Patel as assignee and asks for the one required field the visitor did not give, the title, and proposes nothing yet (Linear v4 declares no project default, so the project is asked next). The live (legacy) engine instead opens the ticket form prefilled with Noah Patel. Before this change the definition engine opened Noah's existing ticket, LIN-137, which was a defect."
-  },
-  {
-    "case": "update-outside-person",
-    "turn": 1,
-    "field": "validated_action",
-    "kind": "behaviour",
-    "reason": "Both engines refuse to assign LIN-142 to Avery under the selected workspace. The live compatibility path may surface a validated UI guidance action, while the definition engine keeps the protected update unvalidated; no mutation key is issued for the hidden person."
-  },
-  {
-    "case": "update-outside-person",
-    "turn": 1,
-    "field": "retrieved_context",
-    "kind": "behaviour",
-    "reason": "The live compatibility path still carries issue documents for the reassignment conversation. The definition engine treats the hidden-person branch as UI guidance and attaches no documents; no spoken claim depends on retrieval."
-  },
-  {
-    "case": "update-unknown-person",
-    "turn": 1,
-    "field": "validated_action",
-    "kind": "behaviour",
-    "reason": "Both engines avoid assigning LIN-142 to Priya because Priya is not in the workspace directory. The live compatibility path can open the add-member affordance, while the definition engine keeps the protected update unvalidated."
-  },
-  {
-    "case": "update-unknown-person",
-    "turn": 1,
-    "field": "retrieved_context",
-    "kind": "behaviour",
-    "reason": "The live compatibility path still carries issue documents for the reassignment conversation. The definition engine treats the unknown-person branch as UI guidance and attaches no documents; no spoken claim depends on retrieval."
   },
   {
     "case": "create-known-owner",

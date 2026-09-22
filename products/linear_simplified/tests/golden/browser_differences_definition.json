@@ -328,9 +328,38 @@
     "turn": 1,
     "field": "reply",
     "kind": "security",
-    "reason": "The recorded reply confirmed that Avery Brooks exists in another workspace. Under definition authority a person outside the workspace reads exactly like an unknown one (5c plan, section 3.3).",
+    "reason": "The recorded reply confirmed that Avery Brooks exists in another workspace, and stayed on the ticket. The definition engine reads a person outside the workspace exactly like an unknown one (5c plan, section 3.3): it says it cannot find Avery here and offers the control that adds a member, which is word for word what an unknown name gets. Nothing is assigned.",
     "recorded": "Avery Brooks is outside Product Engineering Workspace, so I can't show or change their project work here.",
-    "current": "I can't find Avery in this workspace."
+    "current": "I can't find Avery in this workspace. I'll open Teams and highlight Add member."
+  },
+  {
+    "case": "update-outside-person",
+    "turn": 1,
+    "field": "view",
+    "kind": "security",
+    "reason": "See the reply entry for this turn: the same add-member control an unknown name gets, in the same view.",
+    "recorded": "Issue Detail",
+    "current": "Teams"
+  },
+  {
+    "case": "update-outside-person",
+    "turn": 1,
+    "field": "highlighted",
+    "kind": "security",
+    "reason": "See the reply entry for this turn: the same add-member control an unknown name gets, in the same view.",
+    "recorded": [],
+    "current": [
+      "add-team-member-button"
+    ]
+  },
+  {
+    "case": "update-outside-person",
+    "turn": 1,
+    "field": "open_issue",
+    "kind": "security",
+    "reason": "See the reply entry for this turn: the same add-member control an unknown name gets, in the same view.",
+    "recorded": "ISSUE DETAIL",
+    "current": null
   },
   {
     "case": "update-unknown-person",
@@ -362,40 +391,11 @@
   {
     "case": "update-unknown-person",
     "turn": 1,
-    "field": "highlighted",
-    "kind": "behaviour",
-    "reason": "See the reply entry for this turn: no add-member highlight, because Teams is not opened.",
-    "recorded": [
-      "add-team-member-button"
-    ],
-    "current": []
-  },
-  {
-    "case": "update-unknown-person",
-    "turn": 1,
-    "field": "open_issue",
-    "kind": "behaviour",
-    "reason": "See the reply entry for this turn: LIN-142 stays open because nothing moved to Teams.",
-    "recorded": null,
-    "current": "ISSUE DETAIL"
-  },
-  {
-    "case": "update-unknown-person",
-    "turn": 1,
     "field": "reply",
-    "kind": "behaviour",
-    "reason": "Assigning the open ticket to an unknown person: the recorded engine offered to add Priya in Teams; the definition engine says it cannot find Priya, stays on LIN-142 and changes nothing. The offer to add an unknown assignee during an update is not ported.",
+    "kind": "wording",
+    "reason": "Both engines open Teams and highlight where a member is added, prefilled with the name. Only the sentence differs: the platform says it cannot find Priya in this workspace, then names the control.",
     "recorded": "Priya is not in the team directory yet. I'll open Teams so you can add Priya before assigning LIN-142.",
-    "current": "I can't find Priya in this workspace."
-  },
-  {
-    "case": "update-unknown-person",
-    "turn": 1,
-    "field": "view",
-    "kind": "behaviour",
-    "reason": "See the reply entry for this turn: the definition engine stays on the ticket instead of opening Teams.",
-    "recorded": "Teams",
-    "current": "Issue Detail"
+    "current": "I can't find Priya in this workspace. I'll open Teams and highlight Add member."
   },
   {
     "case": "update-without-target",

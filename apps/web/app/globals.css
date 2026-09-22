@@ -1358,6 +1358,14 @@ h3 {
   line-height: 1.4;
 }
 
+/* A note the page makes about the conversation, never the assistant's words. */
+.message .message-note {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: italic;
+}
+
 .chat-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 70px;

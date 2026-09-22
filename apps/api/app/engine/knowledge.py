@@ -65,6 +65,9 @@ class KnowledgePassage:
     title: str
     source: str
     snippet: str
+    # Whether the passage really matches the question, so it may be quoted as the answer. A
+    # knowledge source that cannot tell leaves it True.
+    grounds_answer: bool = True
 
     def __post_init__(self) -> None:
         for name in ("title", "source", "snippet"):
@@ -133,3 +136,12 @@ def ground(lookup: KnowledgeLookup, question: str, *, limit: int = 2) -> Groundi
         return Grounding()
     found = lookup.search(question, limit)
     return Grounding(tuple(found[:limit]))
+
+
+def answerable(grounding: Grounding) -> Grounding:
+    """Only passages that really match the question may be quoted as its answer.
+
+    Supporting passages attached to an action reply are never spoken, so any match will do there;
+    a quoted answer needs a passage the product's knowledge source marks as a real match.
+    """
+    return Grounding(tuple(passage for passage in grounding.passages if passage.grounds_answer))

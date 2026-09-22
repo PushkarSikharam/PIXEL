@@ -7,6 +7,7 @@ export default defineConfig({
   // Core browser tests, plus each product package's own browser tests.
   testDir: ".",
   testMatch: ["tests/e2e/**/*.spec.ts", "products/*/tests/**/*.spec.ts"],
+  testIgnore: [".worktrees/**", "**/.pytest_cache/**", "tmp-*.ts", "playwright-report/**", "test-results/**"],
   timeout: 30_000,
   expect: {
     timeout: 10_000

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from dataclasses import replace
 
 from app.definitions.contract import EntitySpec, FieldSpec, ProductDefinition
 from app.definitions.safety import check_text
@@ -83,12 +84,14 @@ class ActionContractValidator:
             if refusal := self._check_value(entity, proposal.filter.field, proposal.filter.value):
                 return refusal
 
-        if proposal.fields is not None and entity is not None:
-            for name, value in proposal.fields.items():
+        fields = proposal.fields
+        if fields is not None and entity is not None:
+            fields = self._with_defaults(entity, fields) if proposal.capability == Capability.CREATE_RECORD else fields
+            for name, value in fields.items():
                 if refusal := self._check_value(entity, name, value):
                     return refusal
             if proposal.capability == Capability.CREATE_RECORD:
-                if refusal := self._check_required(entity, proposal.fields):
+                if refusal := self._check_required(entity, fields):
                     return refusal
 
         if proposal.prefill is not None and entity is not None:
@@ -96,7 +99,16 @@ class ActionContractValidator:
                 if refusal := self._check_value(entity, name, value):
                     return refusal
 
+        if fields is not proposal.fields:
+            proposal = replace(proposal, fields=fields)
         return ValidatedAction(proposal, self._definition.definition.definition_id, self._version, confirmation)
+
+    def _with_defaults(self, entity: EntitySpec, values: dict) -> dict:
+        completed = dict(values)
+        for name, spec in entity.fields.items():
+            if spec.required and name not in completed and spec.default is not None:
+                completed[name] = spec.default
+        return completed
 
     def _check_required(self, entity: EntitySpec, values: dict) -> Refusal | None:
         """Every required field of the entity must be given, unless the definition defaults it.

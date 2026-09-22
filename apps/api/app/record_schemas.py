@@ -65,3 +65,39 @@ class MemberInput(RecordInput):
     load: int = Field(ge=0, le=100)
     email: str | None = Field(default=None, max_length=254)
     projectIds: list[str] = Field(default_factory=list, max_length=100)
+
+
+# --- 5b: keyed assistant writes carry only the change an execution key bound (plan, section 7.2) ---
+
+KEYED_UPDATE_FIELDS = frozenset({"assignee", "priority", "status"})
+KEYED_CREATE_FIELDS = frozenset({"title", "priority", "assignee", "project", "status"})
+
+
+class KeyedIssueUpdate(BaseModel):
+    """The fields an update key changes, and nothing else; the server applies them to the record."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    changes: dict[str, str] = Field(min_length=1, max_length=len(KEYED_UPDATE_FIELDS))
+
+    @model_validator(mode="after")
+    def _known_fields(self) -> "KeyedIssueUpdate":
+        unknown = set(self.changes) - KEYED_UPDATE_FIELDS
+        if unknown:
+            raise ValueError(f"these fields cannot be changed by an assistant write: {sorted(unknown)}")
+        return self
+
+
+class KeyedIssueCreate(BaseModel):
+    """The fields a create key supplies; the server assigns the ID and the workspace fields."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    fields: dict[str, str] = Field(min_length=1, max_length=len(KEYED_CREATE_FIELDS))
+
+    @model_validator(mode="after")
+    def _known_fields(self) -> "KeyedIssueCreate":
+        unknown = set(self.fields) - KEYED_CREATE_FIELDS
+        if unknown:
+            raise ValueError(f"these fields cannot be set by an assistant write: {sorted(unknown)}")
+        return self

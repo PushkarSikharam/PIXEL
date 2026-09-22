@@ -16,7 +16,7 @@ PENDING_TURNS = 1
 # A question is asked again at most once after an answer that does not fit.
 MAX_REPEATS = 1
 # What a pending question waits for.
-EXPECTED_SLOTS = frozenset({"person", "record", "choice"})
+EXPECTED_SLOTS = frozenset({"person", "record", "choice", "value"})
 
 
 @dataclass(frozen=True)
@@ -37,8 +37,12 @@ class PendingClarification:
     turn: int = 0
     # How often the question was repeated after an unrelated answer.
     repeats: int = 0
+    # The one required field a create is waiting for (expected slot "value"; 5c plan, section 7).
+    field: str | None = None
 
     def __post_init__(self) -> None:
+        if (self.expected == "value") != (self.field is not None):
+            raise ValueError("a missing-value question, and only one, names its field")
         if self.fields is not None:
             object.__setattr__(self, "fields", frozen_value(self.fields))
         if self.expected not in EXPECTED_SLOTS:

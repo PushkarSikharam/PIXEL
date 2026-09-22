@@ -343,6 +343,40 @@ def migrate() -> None:
               description text
             );
 
+            -- Durable definition-engine state (5c plan, section 6.1): one row per session, holding
+            -- only safe identifiers (never message text, prompts or free-form field values). Pending
+            -- clarification/confirmation content is never durable; `pending_requires_repeat` is the
+            -- only trace a restart keeps of an unanswered question.
+            create table if not exists engine_state(
+              session_id text primary key references sessions(id) on delete cascade,
+              tenant_id text not null,
+              product_id text not null,
+              user_id text not null,
+              instance_id text,
+              instance_generation integer,
+              scope_id text not null,
+              codec_version integer not null,
+              definition_id text not null,
+              definition_version integer not null,
+              definition_checksum text not null,
+              knowledge_version integer not null,
+              last_turn integer not null,
+              revision integer not null,
+              focus_entity text,
+              focus_id text,
+              last_person_entity text,
+              last_person_id text,
+              last_view text,
+              last_change text,
+              person_follow_up_action text,
+              person_follow_up_turn integer,
+              pending_requires_repeat integer not null default 0,
+              pending_turn integer,
+              updated_at text not null
+            );
+            create index if not exists engine_state_owner
+              on engine_state(tenant_id, product_id, user_id, instance_id, instance_generation);
+
             -- Shadow engine parity counts (5a): aggregate counts only, never text, values or
             -- identifiers of sessions and visitors. Rows older than 30 days are pruned.
             create table if not exists shadow_parity_daily(
@@ -383,12 +417,45 @@ def migrate() -> None:
             },
             "action_executions": {
                 "instance_id": "text", "instance_generation": "integer",
+                # 5b: the workspace a key was issued in. Legacy rows keep null and are never
+                # claimable; the startup gate refuses to serve while one is still dispatched.
+                "scope_id": "text",
+            },
+            "messages": {
+                # 5c: the workspace a message belongs to. Legacy null rows remain for audit but
+                # are never used to rebuild definition-engine state (plan, section 6.1).
+                "scope_id": "text",
+            },
+            "signals": {
+                "scope_id": "text",
             },
         }.items():
             present = {row["name"] for row in connection.execute(f"pragma table_info({table})")}
             for column, column_type in additions.items():
                 if column not in present:
                     connection.execute(f"alter table {table} add column {column} {column_type}")
+        # 5b: retention reads through these, and every newly settled key must carry its outcome
+        # code. The triggers never rewrite existing settled legacy rows.
+        connection.executescript(
+            """
+            create index if not exists action_executions_settled
+              on action_executions(settled_at) where settled_at is not null;
+            create index if not exists action_executions_unsettled_expiry
+              on action_executions(expires_at) where state = 'dispatched';
+            create trigger if not exists action_executions_settled_code_on_insert
+              before insert on action_executions
+              when new.state in ('executed', 'failed', 'cancelled') and new.result_code is null
+            begin
+              select raise(abort, 'a settled execution requires a result code');
+            end;
+            create trigger if not exists action_executions_settled_code_on_update
+              before update on action_executions
+              when new.state in ('executed', 'failed', 'cancelled') and new.result_code is null
+            begin
+              select raise(abort, 'a settled execution requires a result code');
+            end;
+            """
+        )
         from app.services.demo_instances import create_instance_schema
         create_instance_schema(connection)
         # Definitions registered before identities existed take the ownership of their first version.

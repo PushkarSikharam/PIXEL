@@ -306,7 +306,8 @@ class ShadowCacheAndPinningTest(unittest.TestCase):
             _, warm = self.compare_once(hermetic, "gate", 1, "Show me the issues")
             self.assertIn(warm.turn_class, {COMPARED, OVER_BUDGET})
             self.assertEqual(len(hermetic.runner.cache), 1)
-            hermetic.agent.directory.definitions.revoke("linear_simplified", 2)
+            # The seed binds v3, so the warm session is pinned to it.
+            hermetic.agent.directory.definitions.revoke("linear_simplified", 3)
             request = hermetic.request("gate", 2, "Show me the cycles")
             visible = ProductDataStore().load(hermetic.grant.visible_scope_ids())
             prepared = hermetic.runner.prepare(PRINCIPAL, hermetic.grant, PRODUCT_ID, visible, DEFAULT_WORKSPACE)
@@ -508,10 +509,22 @@ class ShadowRevision2RulesTest(unittest.TestCase):
         self.assertEqual(compare(live_turn(None), executed, session_id="s1", turn_id=1)["validated_action"],
                          BEHAVIOUR)
 
-    def test_live_responses_have_no_executed_state_in_5a(self):
-        self.assertNotIn("execution", TurnResponse.model_fields)
+    def test_live_responses_carry_no_executed_state(self):
+        """5b adds the execution envelope, null by default; the status never says "executed"."""
+        self.assertIsNone(TurnResponse.model_fields["execution"].default)
         statuses = set(TurnResponse.model_fields["status"].annotation.__args__)
         self.assertEqual(statuses, {"completed", "cancelled", "stale", "denied"})
+
+    def test_a_null_execution_envelope_is_a_match(self):
+        """Adding the field must not turn every production turn into a behaviour difference."""
+        classes = compare({**live_turn(None), "execution": None}, view(None, mutation=False),
+                          session_id="s1", turn_id=1)
+        self.assertEqual(classes["execution"], MATCH)
+        envelope = {"key": "k", "session_id": "s1", "turn_id": 1, "expires_at": "x"}
+        live = {**live_turn(self.UPDATE), "execution": envelope}
+        self.assertEqual(compare(live, view(self.UPDATE), session_id="s1", turn_id=1)["execution"], LIFECYCLE)
+        self.assertEqual(compare(live, view(None, mutation=False), session_id="s1", turn_id=1)["execution"],
+                         BEHAVIOUR)
 
     def test_eviction_leaves_the_lock_pool_unchanged(self):
         store = ShadowMemoryStore(limit=100)

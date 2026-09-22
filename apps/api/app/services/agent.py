@@ -5,6 +5,7 @@ import re
 from app.auth import AuthUser
 from app.definitions.access import AccessDenied, ProductAccess, authorize_product
 from app.definitions.organizations import OrganizationDirectory
+from app.engine.execution import ExecutionLedger, ExecutionOwner, principal_owner
 from app.definitions.sessions import (
     DefinitionUnavailable,
     SessionEnded,
@@ -38,6 +39,75 @@ from app.services.reasoning_policy import ReasoningPolicy
 from app.services.retriever import ProductRetriever, RetrievedDocument
 from app.services.session_manager import SessionManager
 from app.workspace_config import get_workspace_scope, WorkspaceScope
+
+# Words that follow "I'm" without being a name ("I'm not sure", "I'm looking for...").
+_NOT_A_NAME = frozenset({
+    "a", "an", "the", "not", "sure", "just", "looking", "trying", "going", "interested", "here",
+    "fine", "good", "ok", "okay", "done", "back", "new", "from", "with", "checking", "curious",
+    "wondering", "evaluating", "testing", "on", "in", "at", "so", "very", "really", "still",
+})
+# Words that follow "member" without being the person's name ("add a member to the team").
+_MEMBER_FILLER = frozenset({"to", "in", "into", "for", "the", "workspace", "team", "directory",
+                            "named", "called", "please", "who", "that"})
+
+
+# A correction names what the visitor meant instead; the first matching subject wins.
+_CORRECTIONS = (
+    (r"\b(issue|issues|ticket|tickets|bug|bugs)\b", "OPEN_ISSUES", "Got it. I'll switch to Issues.", "Issues"),
+    (r"\b(cycle|cycles|sprint|planning)\b", "OPEN_CYCLES", "Got it. I'll switch to Cycles.", "Cycles"),
+    (r"\bgithub\b", "HIGHLIGHT_GITHUB_CARD", "Got it. I'll show GitHub instead.", "Integrations"),
+    (r"\bslack\b", "HIGHLIGHT_SLACK_CARD", "Got it. I'll show Slack instead.", "Integrations"),
+    (r"\b(project|projects)\b", "OPEN_PROJECTS", "Got it. I'll switch to Projects.", "Projects"),
+    (r"\b(team|teams|members|people)\b", "OPEN_TEAMS", "Got it. I'll switch to Teams.", "Teams"),
+)
+
+
+def _explicit_issue_id(message: str) -> str | None:
+    match = re.search(r"\b(?:LIN|PIX)-\d+\b", message, re.IGNORECASE)
+    return match.group(0).upper() if match else None
+
+
+def _asks_issue_change(text: str) -> bool:
+    """An instruction to change a ticket's owner, priority or status (not a question about how)."""
+    if re.search(r"\b(how|where|what|why|show|list)\b", text):
+        return False
+    verb = re.search(r"\b(make|set|change|mark|move|update|assign|reassign|bump|raise|lower)\b", text)
+    value = re.search(r"\b(priority|urgent|critical|high|medium|low|done|review|todo|backlog|progress)\b", text)
+    # "Assign it" with nobody named is a different question ("who should I assign it to?").
+    assignment = re.search(r"\b(assign|reassign)\b.*\bto\s+[a-z]+", text)
+    return bool(verb and (value or assignment))
+
+
+def _stated_ticket_details(message: str, text: str) -> dict[str, str]:
+    """Ticket details the visitor actually said: never a default."""
+    details: dict[str, str] = {}
+    if re.search(r"\b(urgent|critical|high)\b", text):
+        details["priority"] = "High"
+    elif re.search(r"\blow\b", text):
+        details["priority"] = "Low"
+    elif re.search(r"\bmedium\b", text):
+        details["priority"] = "Medium"
+    title = re.search(r"\b(?:about|regarding|named|called)\s+(.+)$", message, re.IGNORECASE)
+    if title and title.group(1).strip():
+        details["title"] = title.group(1).strip().rstrip(".!?").title()[:120]
+    return details
+
+
+def _member_named(name: str, members) -> str | None:
+    """The one directory name a spoken name refers to: the full name or one of its parts."""
+    wanted = name.strip().lower()
+    for member in members:
+        if wanted == member.lower() or wanted in member.lower().split():
+            return member
+    return None
+
+
+def _format_names(names: list[str]) -> str:
+    if not names:
+        return "none"
+    if len(names) == 1:
+        return names[0]
+    return f"{', '.join(names[:-1])} and {names[-1]}"
 
 
 class DemoAgent:
@@ -107,7 +177,10 @@ class DemoAgent:
                 reason=f"Denied because the session ended ({ended.reason}).",
             )
         definition_id = session_pin.definition_id
-        if not self.sessions.activate_turn(request.session_id, request.turn_id):
+        if not self.sessions.activate_turn(
+            request.session_id, request.turn_id,
+            owner=principal_owner(principal, request.product_id), scope_id=request.workspace_scope_id,
+        ):
             stale = self._stale_response(
                 request,
                 proposed_action=None,
@@ -123,6 +196,11 @@ class DemoAgent:
         )
 
         normalized_message = normalize_for_intent(request.message)
+        conversational = self._conversational_turn(
+            request, principal, workspace_scope, normalized_message, definition_id, data,
+        )
+        if conversational:
+            return conversational
         direct_clarification = self._direct_clarification(
             request,
             workspace_scope,
@@ -290,8 +368,8 @@ class DemoAgent:
             session_summary=self.sessions.session_summary(request.session_id),
         )
 
-    def cancel_turn(self, session_id: str, turn_id: int):
-        return self.sessions.cancel_turn(session_id, turn_id)
+    def cancel_turn(self, session_id: str, turn_id: int, owner: ExecutionOwner | None = None):
+        return self.sessions.cancel_turn(session_id, turn_id, owner=owner)
 
     def _direct_clarification(
         self,
@@ -305,9 +383,6 @@ class DemoAgent:
         if self._asks_vague_create_request(normalized_message):
             speech = "What should I create: a ticket, a project, a cycle, or a team member?"
             reason = "The visitor asked to create something but did not specify the object type."
-        elif self._asks_incomplete_ticket_create(normalized_message):
-            speech = "Who should own this ticket? Name a teammate in this workspace and I'll prepare the form."
-            reason = "The visitor asked to create a ticket but did not specify an assignee."
         elif self._asks_vague_assignment_request(normalized_message):
             target = f" {request.selected_issue_id}" if request.selected_issue_id else " the current ticket"
             speech = f"Who should I assign{target} to? You can name someone in this workspace."
@@ -349,6 +424,327 @@ class DemoAgent:
             signals=[],
             retrieved_context=[],
             session_summary=self.sessions.session_summary(request.session_id),
+        )
+
+    def _conversational_turn(
+        self,
+        request: TurnRequest,
+        principal: AuthUser,
+        workspace_scope: WorkspaceScope,
+        text: str,
+        definition_id: str,
+        data: dict | None,
+    ) -> TurnResponse | None:
+        """Conversation the browser used to answer by itself before 5c (plan, section 2.3).
+
+        Every visitor message now reaches this service; the browser only executes what comes back.
+        An action proposed here goes through the same validator as any other.
+        """
+        reply = self._conversational_reply(request, principal, workspace_scope, text, data)
+        if reply is None:
+            return None
+        speech, action, feature, *rest = reply
+        status = rest[0] if rest else "completed"
+        # A question back to the visitor attaches no documents, as a clarification never has.
+        evidence = rest[1] if len(rest) > 1 else True
+        validated = None
+        if action is not None:
+            validated = self.action_validator.validate(
+                definition_id, action, request.workspace_scope_id, data,
+            )
+            if validated is None:
+                # Not allowed here: the ordinary path decides and explains the refusal.
+                return None
+        if not self.sessions.is_active_turn(request.session_id, request.turn_id):
+            return self._stale_response(
+                request, proposed_action=action,
+                reason="Discarded because this is no longer the active turn.",
+            )
+        # Signals and evidence are recorded exactly as for any other turn; only the decision is new.
+        trace, signals = self.intent_extractor.extract(request.message)
+        trace, signals = self.reasoning_policy.refine(request.message, trace, signals)
+        self._refine_issue_targeting(request.message, trace, validated, workspace_scope, data)
+        if feature:
+            trace.relevant_feature = feature
+        if status == "denied":
+            trace.status = "denied"
+        if validated:
+            signals.extend(self._person_signals(request.message, workspace_scope, data))
+        retrieved = self.retriever.retrieve(definition_id, text) if status != "denied" and evidence else []
+        self.sessions.store_signals(request.session_id, request.turn_id, signals)
+        self.sessions.remember_session_context(request.session_id, signals)
+        self.sessions.store_message(request.session_id, request.turn_id, "assistant", speech)
+        self.sessions.complete_turn(request.session_id, request.turn_id)
+        return TurnResponse(
+            session_id=request.session_id,
+            turn_id=request.turn_id,
+            status=status,
+            speech=speech,
+            proposed_action=action,
+            validated_action=validated,
+            intent_trace=trace,
+            signals=signals,
+            retrieved_context=self._context_payload(retrieved),
+            session_summary=self.sessions.session_summary(request.session_id),
+        )
+
+    def _conversational_reply(
+        self,
+        request: TurnRequest,
+        principal: AuthUser,
+        workspace_scope: WorkspaceScope,
+        text: str,
+        data: dict | None,
+    ) -> tuple | None:
+        """(speech, action or None, feature or None[, status]) for a conversational turn, or None."""
+        message = request.message
+        # This engine is given only the selected workspace's records, so anyone else, in another
+        # workspace or nowhere at all, reads the same: unknown.
+        scoped = workspace_scope.allowed_team_members
+
+        # "Open a ticket for Maya and assign to Jen": the assignee decides, and must exist first.
+        if (re.search(r"\b(open|start|draft)\b", text) and re.search(r"\b(assign|assigned|owner)\b", text)
+                and re.search(r"\b(ticket|issue|bug)\b", text)):
+            match = re.search(r"\b(?:assign(?:ed)?\s+(?:it\s+|this\s+)?to|owner is|assignee is)\s+([a-zA-Z]+)",
+                              message, re.IGNORECASE)
+            if match:
+                wanted = match.group(1).capitalize()
+                known = _member_named(wanted, scoped)
+                if known is None:
+                    return (
+                        f"{wanted} is not in the team directory yet. I'll open Teams so you can add {wanted} first.",
+                        ProposedAction(type="HIGHLIGHT_ADD_MEMBER_BUTTON", payload={"name": wanted}),
+                        "Teams",
+                    )
+                # The form is prefilled only with what the visitor said; it creates nothing.
+                prefill = {"assignee": known, **_stated_ticket_details(message, text)}
+                return (
+                    f"I'll open the ticket form and prefill {known}. Review the details, then create the ticket.",
+                    ProposedAction(type="HIGHLIGHT_CREATE_TICKET_BUTTON", payload=prefill),
+                    "Issues", "completed", False,
+                )
+
+        # "Assign it to Priya" when Priya is not someone here: add her first, never guess another person.
+        target_issue = _explicit_issue_id(message) or request.selected_issue_id
+        if target_issue and re.search(r"\b(assign|reassign)\b", text) and not self._asks_incomplete_ticket_create(text):
+            match = re.search(r"\b(?:assign(?:ed)?\s+(?:it\s+|this\s+)?to|owner is|assignee is)\s+([a-zA-Z]+)",
+                              message, re.IGNORECASE)
+            if match and _member_named(match.group(1), scoped) is None:
+                wanted = match.group(1).capitalize()
+                return (
+                    f"{wanted} is not in the team directory yet. I'll open Teams so you can add {wanted} "
+                    f"before assigning {target_issue}.",
+                    ProposedAction(type="HIGHLIGHT_ADD_MEMBER_BUTTON", payload={"name": wanted}),
+                    "Teams",
+                )
+
+        # "Make it high priority" with no ticket open and none named: ask which one. In "assign it to
+        # Noah" Noah is the new owner, not the ticket, so "it" with nothing open is always asked about.
+        refers_to_open_ticket = re.search(r"\b(it|this|that)\b", text)
+        if (not target_issue and _asks_issue_change(text) and (
+                refers_to_open_ticket
+                or find_issues_by_person_in_scope(message, set(workspace_scope.allowed_project_ids),
+                                                  set(workspace_scope.allowed_issue_projects), data) == ())):
+            owners = sorted(scoped)[:2]
+            options = ", ".join(f"{name.split()[0]}'s ticket" for name in owners)
+            return (
+                f"Which ticket should I update: {options + ', or ' if options else ''}the issue currently open?",
+                None, None, "completed", False,
+            )
+
+        correction = self._correction(message, text)
+        if correction is not None:
+            return correction
+
+        if self._asks_evaluator_path(text):
+            return (
+                "Here is a clean guided path: start with sprint planning, open Maya's ticket, "
+                "assign it to Noah, create a ticket for a new teammate, then try Salesforce to prove guardrails.",
+                ProposedAction(type="OPEN_DASHBOARD"),
+                "Dashboard",
+            )
+        name = self._introduced_name(message)
+        if name:
+            return (
+                f"Nice to meet you, {name}. What would you like to explore first: "
+                "planning, tickets, projects, teams, or integrations?",
+                None, None,
+            )
+        if self._asks_capabilities(message):
+            return (
+                f"I can guide this Pixel demo through {workspace_scope.name}: planning, issues, projects, "
+                "teams, and integrations. I can open views, find tickets, update issue fields, create demo "
+                "records, and block work outside this scope.",
+                None, None,
+            )
+        if self._asks_identity(text):
+            return (
+                "I'm Edith, Pixel's live demo guide. I can walk you through planning, tickets, projects, "
+                "teams, and integrations inside this workspace.",
+                None, None,
+            )
+        if self._is_plain_greeting(text):
+            remembered = self._remembered_visitor_name(request.session_id)
+            if remembered:
+                return f"Hi {remembered}. What would you like to explore next in Pixel?", None, None
+            return "Hi there. What would you like to explore first in Pixel?", None, None
+        member = self._member_request(message, text)
+        if member is not None:
+            if member:
+                return (
+                    f"I'll open Teams so you can add {member} to this workspace.",
+                    ProposedAction(type="HIGHLIGHT_ADD_MEMBER_BUTTON", payload={"name": member}),
+                    "Teams",
+                )
+            return (
+                "Who should I add to the team directory?",
+                ProposedAction(type="HIGHLIGHT_ADD_MEMBER_BUTTON"),
+                "Teams",
+            )
+        if self._asks_incomplete_ticket_create(text):
+            return (
+                "Who should own this ticket? Name a teammate in this workspace and I'll prefill the ticket form.",
+                ProposedAction(type="HIGHLIGHT_CREATE_TICKET_BUTTON"),
+                "Issues", "completed", False,
+            )
+        if self._asks_next_step(text):
+            return self._next_step_speech(request.current_page, workspace_scope.name), None, None
+        if self._asks_what_changed(text):
+            return self._last_change_speech(request, principal), None, None
+        if self._asks_project_count(text):
+            projects = [
+                project["name"] for project in (data or {}).get("projects", [])
+                if project.get("id") in workspace_scope.allowed_project_ids
+            ]
+            return (
+                f"{workspace_scope.name} has {len(projects)} visible projects: {_format_names(projects)}. "
+                "I'll open Projects.",
+                ProposedAction(type="OPEN_PROJECTS"),
+                "Projects",
+            )
+        # "What about Noah" or "show Avery's tickets": every ticket that person owns here.
+        if re.search(r"\bwhat about\b", text) or (
+            re.search(r"\b(all|list|show)\b", text) and re.search(r"\b(tickets|issues|bugs)\b", text)
+        ):
+            issues = find_issues_by_person_in_scope(
+                message, set(workspace_scope.allowed_project_ids),
+                set(workspace_scope.allowed_issue_projects), data,
+            )
+            if issues:
+                assignee = issues[0].assignee
+                plural = "ticket" if len(issues) == 1 else "tickets"
+                return (
+                    f"I found {len(issues)} {plural} assigned to {assignee}: "
+                    f"{', '.join(issue.id for issue in issues)}. I'll show those issues.",
+                    ProposedAction(type="FILTER_ISSUES_BY_ASSIGNEE", payload={"assignee": assignee}),
+                    "Issues",
+                )
+        return None
+
+    def _correction(self, message: str, text: str) -> tuple | None:
+        # The normalizer may already have dropped the rejected clause, so the cue is read raw.
+        if not re.search(r"\b(no|not|instead|rather)\b", message.lower()):
+            return None
+        # "not cycles, show me the issues": what was rejected is dropped before choosing.
+        wanted = re.sub(r"\b(?:not|no|instead of|rather than)(?:\s+(?:not|no))*\s+(?:the\s+)?\w+", " ", text)
+        for pattern, action, speech, feature in _CORRECTIONS:
+            if re.search(pattern, wanted):
+                return speech, ProposedAction(type=action), feature
+        return None
+
+    def _asks_evaluator_path(self, text: str) -> bool:
+        return bool(
+            re.search(r"\b(evaluator|judge|reviewer|demo path|demo script|test script)\b", text)
+        )
+
+    def _introduced_name(self, message: str) -> str | None:
+        match = re.search(r"\b(?:i am|i'm|im|my name is|call me)\s+([a-z]+)", message.lower().replace("’", "'"))
+        if not match or match.group(1) in _NOT_A_NAME:
+            return None
+        return match.group(1).capitalize()
+
+    def _remembered_visitor_name(self, session_id: str) -> str | None:
+        for message in self.sessions.recent_user_messages(session_id):
+            name = self._introduced_name(message)
+            if name:
+                return name
+        return None
+
+    def _asks_identity(self, text: str) -> bool:
+        return bool(
+            re.search(r"\b(who are you|who r you|who are u|who r u|what are you|your name|who is edith)\b", text)
+            or (re.search(r"\b(hi+|hello|hey)\b", text) and re.search(r"\b(who|what)\b", text))
+        )
+
+    def _is_plain_greeting(self, text: str) -> bool:
+        return bool(re.fullmatch(r"(hi+|hello|hey)( there)?[?!. ]*", text.strip()))
+
+    def _member_request(self, message: str, text: str) -> str | None:
+        """The name of a person to add to the team directory ('' if unnamed), or None."""
+        if not re.search(r"\b(add|create|invite|new)\b", text):
+            return None
+        if not re.search(r"\b(member|teammate|person|user|employee)\b", text):
+            return None
+        if re.search(r"\b(ticket|tickets|issue|issues|bug|bugs)\b", text):
+            return None
+        for pattern in (r"\b(?:called|named)\s+", r"\b(?:member|teammate|person|user|employee)\s+"):
+            match = re.search(pattern, message, re.IGNORECASE)
+            if match is None:
+                continue
+            words = re.findall(r"[A-Za-z]+", message[match.end():])[:2]
+            if words and words[0].lower() not in _MEMBER_FILLER:
+                # A second capitalized word is the surname ("Priya Shah"); anything else is not.
+                if len(words) == 2 and words[1][0].isupper() and words[1].lower() not in _MEMBER_FILLER:
+                    return f"{words[0].capitalize()} {words[1]}"
+                return words[0].capitalize()
+        return ""
+
+    def _asks_next_step(self, text: str) -> bool:
+        return bool(re.search(
+            r"\b(what next|next step|what should i try|what should we try|where should i go|guide me|walk me through)\b",
+            text,
+        ))
+
+    def _next_step_speech(self, current_page: str | None, workspace_name: str) -> str:
+        if current_page == "dashboard":
+            return (f"A strong next move is sprint planning. Ask me to show planning, and I'll open the "
+                    f"current cycle for {workspace_name}.")
+        if current_page in {"issues", "issue_detail"}:
+            return ("Next, try a follow-up like assign it to Noah, make it high priority, or show all "
+                    "tickets for Maya.")
+        if current_page == "integrations":
+            return ("A good next step is GitHub. Ask me how GitHub works or tell me to set it up, and "
+                    "I'll show the repository workflow.")
+        if current_page == "teams":
+            return ("From here, add a team member or ask me to create a ticket for someone new. I'll "
+                    "keep the assignment inside this workspace.")
+        if current_page == "projects":
+            return ("Try creating a project or ask which projects are visible. I'll keep the roadmap "
+                    "scoped to this workspace.")
+        return ("Try asking about tickets, planning, GitHub, or creating work. I'll move the workspace "
+                "and explain what changed.")
+
+    def _asks_what_changed(self, text: str) -> bool:
+        return bool(re.search(
+            r"\b(what did we .*change|what changed|what just happened|what did you update|what did you change)\b",
+            text,
+        ))
+
+    def _last_change_speech(self, request: TurnRequest, principal: AuthUser) -> str:
+        """Only a change the ledger committed for this caller, session and workspace (5b, 8.4)."""
+        change = ExecutionLedger().last_executed(
+            principal_owner(principal, request.product_id), request.session_id,
+            request.workspace_scope_id,
+        )
+        if change is None:
+            return "Nothing has changed in this conversation yet."
+        verb = "created" if change.capability == "CREATE_RECORD" else "updated"
+        return f"The most recent change: {verb} {change.record_id or 'a record'}."
+
+    def _asks_project_count(self, text: str) -> bool:
+        return bool(
+            re.search(r"\b(how many|count|number of|what projects|which projects)\b", text)
+            and re.search(r"\b(project|projects)\b", text)
         )
 
     def _denied_reason(self, proposed_action_type: str, workspace_scope: WorkspaceScope) -> str:
@@ -749,8 +1145,15 @@ class DemoAgent:
         )
 
     def _asks_incomplete_ticket_create(self, text: str) -> bool:
+        creates = re.search(r"\b(create|make|add|raise|file)\b", text) or (
+            re.search(r"\b(open|start|draft)\b", text) and re.search(r"\b(new|fresh)\b", text)
+        )
+        # "Make Noah's ticket high priority" changes an existing ticket; it creates nothing.
+        if (re.search(r"\b(priority|urgent|critical|status|done|review|todo|backlog)\b", text)
+                and not re.search(r"\b(create|new|fresh|raise|file|add)\b", text)):
+            return False
         return bool(
-            re.search(r"\b(create|make|add|raise|file)\b", text)
+            creates
             and re.search(r"\b(ticket|tickets|issue|issues|bug|bugs)\b", text)
             and not re.search(r"\b(where|how|best way|show me how|show how)\b", text)
             and not re.search(r"\b(for|assigned to|assign to|owner is|assignee is)\b", text)

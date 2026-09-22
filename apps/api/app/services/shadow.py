@@ -37,7 +37,7 @@ import threading
 import time
 from collections import OrderedDict, deque
 from collections.abc import Callable, Mapping
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from types import MappingProxyType
 from typing import Any
@@ -46,16 +46,12 @@ from app.auth import AuthUser
 from app.db import get_connection
 from app.definitions.organizations import OrganizationDirectory
 from app.definitions.registry import DefinitionRegistry
-from app.engine.actions import RecordRef
-from app.engine.conversation import CapabilityPolicy
-from app.engine.conversation_engine import ConversationEngine
 from app.engine.definition_cache import DefinitionCache, Gated, approve
-from app.engine.knowledge import KnowledgeContext
 from app.engine.lookup import RecordView
 from app.engine.memory import ConversationMemory
 from app.engine.router import TurnContext
 from app.engine.signals import SignalHistory
-from app.engine.snapshot import LoadedRecordSource, TurnSnapshot
+from app.services.engine_assembly import PreparedTurn, assemble_engine, prepare_turn, selected_record
 from app.services.shadow_parity import (
     CIRCUIT_OPEN,
     COMPARED,
@@ -219,15 +215,8 @@ class ShadowMemoryStore:
         return hashlib.blake2b(repr(key).encode(), key=self._salt, digest_size=16).digest()
 
 
-@dataclass(frozen=True)
-class PreparedShadow:
-    """What `prepare` fixed before the live turn ran."""
-
-    definition_id: str
-    records: Mapping[str, tuple[RecordView, ...]]
-    scope_label: str
-    package: Any
-    grant: Any
+# What `prepare` fixed before the live turn ran (shared with the 5b test path).
+PreparedShadow = PreparedTurn
 
 
 @dataclass(frozen=True)
@@ -300,29 +289,11 @@ class ShadowRunner:
                          scope_id: str | None = None) -> PreparedShadow | None:
         """As `prepare`, but a failure raises; None still means the product has no shadow.
 
-        `scope_id` is the workspace the request selected. The live engine answers inside that one
-        workspace, so the shadow's records are narrowed to it as well: a shadow wider than the
-        live turn would propose changes the live turn refuses. The product's package is chosen by
-        the definition its binding names now; the comparison refuses to run if the gates later
-        approve a different definition.
+        The records are narrowed to the workspace the request selected (see `prepare_turn`); the
+        comparison refuses to run if the gates later approve a different definition.
         """
-        if scope_id is not None:
-            if not grant.may_use(scope_id):
-                return None
-            grant = replace(grant, scope_ids=frozenset({scope_id}), is_admin=False)
-        binding = self._directory.product(principal.tenant_id, product_id)
-        if binding is None:
-            return None
-        package = self._package_for(binding.definition_id)
-        if package.lookup_factory is None:
-            return None
-        source = package.lookup_factory(grant)
-        if not isinstance(source, LoadedRecordSource):
-            return None
-        records = MappingProxyType({
-            entity: tuple(views) for entity, views in source.records_from(visible_data).items()
-        })
-        return PreparedShadow(binding.definition_id, records, source.scope_label, package, grant)
+        return prepare_turn(self._directory, self._package_for, principal, grant, product_id,
+                            visible_data, scope_id)
 
     # --- after the live turn ---
 
@@ -358,11 +329,13 @@ class ShadowRunner:
                     turn_class = NOT_COMPARED if reason == "late" else MEMORY_RESET
                     return self.count_turn(principal.tenant_id, request.product_id, turn_class,
                                            reason=reason, definition=(definition_id, version))
-                engine_turn = self._engine(prepared, definition, pin).turn(
+                engine, _ = assemble_engine(prepared, definition, pin)
+                engine_turn = engine.turn(
                     request.message,
                     entry.memory if entry else ConversationMemory(),
                     entry.history if entry else SignalHistory(),
-                    TurnContext(turn=request.turn_id, selected=_selected(prepared.records, request)),
+                    TurnContext(turn=request.turn_id, selected=selected_record(
+                        prepared.records, getattr(request, "selected_issue_id", None))),
                 )
                 self.store.put(key, ShadowEntry(engine_turn.memory, engine_turn.history, request.turn_id,
                                                 self.store.now()))
@@ -424,40 +397,6 @@ class ShadowRunner:
                 return approval, started
             finally:
                 connection.rollback()
-
-    def _engine(self, prepared: PreparedShadow, definition: Any, pin: Any) -> ConversationEngine:
-        people = definition.people
-        snapshot = TurnSnapshot(
-            records=prepared.records,
-            scope_label=prepared.scope_label,
-            definition_checksum=pin.definition_checksum,
-            taken_at=time.time(),
-            people_entity=people.entity if people else None,
-            person_fields=_person_fields(people.assigned_by if people else ()),
-        )
-        package = prepared.package
-        translator = package.legacy_translator(snapshot) if package.legacy_translator else None
-        can_translate = getattr(translator, "can_translate", None)
-        policy = CapabilityPolicy(
-            # Offer only what the installed app can express; fail closed without a translator.
-            translatable=can_translate if callable(can_translate) else (lambda key: False),
-            # Record visibility is enforced by the snapshot; every declared action is otherwise
-            # available to a caller who passed the product gates.
-            permitted=lambda key: True,
-        )
-        knowledge = None
-        if package.knowledge_factory is not None:
-            knowledge = package.knowledge_factory(KnowledgeContext(
-                tenant_id=pin.tenant_id, product_id=pin.product_id, definition_id=pin.definition_id,
-                definition_version=pin.definition_version, definition_checksum=pin.definition_checksum,
-                knowledge_version=pin.knowledge_version, scope_label=prepared.scope_label or "all",
-            ))
-        return ConversationEngine(
-            definition, snapshot, policy, knowledge,
-            definition_version=pin.definition_version,
-            translate=translator.translate if translator is not None else None,
-        )
-
 
 # --- the request-path controller and the worker (section 10) ---
 
@@ -965,24 +904,3 @@ def _deserialize(payload: bytes, runner: ShadowRunner) -> tuple[Any, ShadowReque
     prepared = PreparedShadow(prepared_fields["definition_id"], records, prepared_fields["scope_label"],
                               runner.package_for(prepared_fields["definition_id"]), None)
     return principal, request, document["live"], prepared
-
-
-def _selected(records: Mapping[str, tuple[RecordView, ...]], request: Any) -> RecordRef | None:
-    """The record the visitor has open, if exactly one visible record has that ID."""
-    record_id = getattr(request, "selected_issue_id", None)
-    if not record_id:
-        return None
-    wanted = record_id.lower()
-    found = [RecordRef(entity, view.id) for entity, views in records.items() for view in views
-             if view.id.lower() == wanted]
-    return found[0] if len(found) == 1 else None
-
-
-def _person_fields(assigned_by: Any) -> dict[str, str]:
-    """`entity.field` style declarations, as entity -> field."""
-    fields: dict[str, str] = {}
-    for reference in assigned_by:
-        entity, _, field_name = str(reference).partition(".")
-        if entity and field_name:
-            fields.setdefault(entity, field_name)
-    return fields

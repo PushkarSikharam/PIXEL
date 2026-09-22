@@ -77,8 +77,10 @@ class ExecutionGuard:
                 demo_context=getattr(principal, "demo_context", None),
             )
             if pin is None or not owned or pin.product_id != product_id:
-                # Another caller's session, an unknown one, or one for a different product.
-                raise ExecutionRefused("session_not_usable", conflict=False)
+                # Another caller's session, an unknown one, one from before a private reset, or
+                # one for a different product: the same plain not-found as an unknown key (5b plan,
+                # section 8.1), so nothing about the session or the key is revealed.
+                raise ExecutionRefused("session_not_usable", conflict=False, not_found=True)
             try:
                 check_pinned_session(pin, directory)
             except (SessionEnded, DefinitionUnavailable) as ended:

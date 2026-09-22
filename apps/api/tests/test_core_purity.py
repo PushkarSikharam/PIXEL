@@ -23,6 +23,9 @@ KNOWN_PRODUCT_COUPLING = {
     "apps/api/app/services/conversation_manager.py": "3.2",
     "apps/api/app/services/intent_extractor.py": "3.2",
     "apps/api/app/services/language_normalizer.py": "3.2",
+    # Legacy authority adapter (5c plan, section 9): converts the old engine's product-specific
+    # decision into a keyed change set. Deleted with the old engine in 5d.
+    "apps/api/app/services/legacy_adapter.py": "5d",
     # Knowledge retrieval: 3.4.
     "apps/api/app/services/retriever.py": "3.4",
     # Records, scopes and the demo-data API: 3.5.

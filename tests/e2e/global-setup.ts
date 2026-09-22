@@ -5,6 +5,7 @@ import { E2E_SENTINEL_PORT } from "./ports";
 const WEB_PORT = 3100;
 
 export default async function startWebServer() {
+  await assertPortFree();
   const webRoot = resolve(process.cwd(), "apps/web");
   const nextBin = resolve(process.cwd(), "node_modules/next/dist/bin/next");
   const server = spawn(process.execPath, [nextBin, "dev", "--port", String(WEB_PORT)], {
@@ -21,6 +22,18 @@ export default async function startWebServer() {
 
   await waitForServer(server);
   return async () => stopServer(server);
+}
+
+async function assertPortFree() {
+  try {
+    await fetch(`http://127.0.0.1:${WEB_PORT}`);
+  } catch {
+    // Nothing is listening, which is what the e2e server needs.
+    return;
+  }
+  throw new Error(
+    `Port ${WEB_PORT} is already serving an app. Stop the existing dev server before running e2e.`
+  );
 }
 
 async function waitForServer(server: ChildProcess) {

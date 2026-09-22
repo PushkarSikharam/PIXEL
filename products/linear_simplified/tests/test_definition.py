@@ -147,15 +147,16 @@ class SeededOrganizationFixture(unittest.TestCase):
 class LinearDemoOrganizationTest(SeededOrganizationFixture):
     """The seed package creates the demo organization, and its chat turns run on pinned sessions."""
 
-    def test_the_seeded_product_runs_v2_for_its_team(self):
+    def test_the_seeded_product_runs_v3_for_its_team(self):
         binding = self.directory.product(TENANT_ID, PRODUCT_ID)
         self.assertEqual(
             (binding.team_id, binding.definition_id, binding.definition_version, binding.state),
-            ("planning-team", DEFINITION_ID, 2, "active"),
+            ("planning-team", DEFINITION_ID, 3, "active"),
         )
-        # v1 is published first, so v2 was classified against it and v1 is there to roll back to.
-        self.assertEqual([self.registry.get(DEFINITION_ID, version).state for version in (1, 2)],
-                         ["published", "published"])
+        # Earlier versions are published first, so each was classified against its predecessor
+        # and every earlier version is there to roll back to.
+        self.assertEqual([self.registry.get(DEFINITION_ID, version).state for version in (1, 2, 3)],
+                         ["published", "published", "published"])
         self.assertEqual(self.directory.membership(TENANT_ID, "demo-admin").role, "org_admin")
         for user_id in ("demo-product-eng", "demo-platform"):
             with self.subTest(user_id=user_id):
@@ -170,13 +171,13 @@ class LinearDemoOrganizationTest(SeededOrganizationFixture):
             ).fetchone()
         self.assertEqual(
             (row["tenant_id"], row["team_id"], row["product_id"], row["definition_id"], row["definition_version"]),
-            (TENANT_ID, "planning-team", PRODUCT_ID, DEFINITION_ID, 2),
+            (TENANT_ID, "planning-team", PRODUCT_ID, DEFINITION_ID, 3),
         )
-        self.assertEqual(row["definition_checksum"], self.registry.get(DEFINITION_ID, 2).checksum)
+        self.assertEqual(row["definition_checksum"], self.registry.get(DEFINITION_ID, 3).checksum)
 
     def test_revoking_the_version_ends_live_conversations(self):
         self.assertEqual(self.turn("live")["status"], "completed")
-        self.registry.revoke(DEFINITION_ID, 2)
+        self.registry.revoke(DEFINITION_ID, 3)
         ended = self.turn("live", turn_id=2)
         self.assertEqual(ended["status"], "denied")
         self.assertIn("definition_revoked", ended["intent_trace"]["reason"])
@@ -216,19 +217,19 @@ class MoveProductVersionTest(SeededOrganizationFixture):
 
     def test_moving_back_and_forth_keeps_open_sessions_on_their_version(self):
         code, result = self.move(1)
-        self.assertEqual((code, result["moved"], result["from_version"], result["to_version"]), (0, True, 2, 1))
+        self.assertEqual((code, result["moved"], result["from_version"], result["to_version"]), (0, True, 3, 1))
         self.assertEqual(self.turn("on-v1")["status"], "completed")
-        self.assertEqual(self.move(2)[0], 0)
-        self.assertEqual(self.turn("on-v2")["status"], "completed")
+        self.assertEqual(self.move(3)[0], 0)
+        self.assertEqual(self.turn("on-v3")["status"], "completed")
         # The session opened on v1 keeps its pin and keeps working after the move.
         self.assertEqual(self.turn("on-v1", turn_id=2)["status"], "completed")
-        self.assertEqual((self.pinned_version("on-v1"), self.pinned_version("on-v2")), (1, 2))
+        self.assertEqual((self.pinned_version("on-v1"), self.pinned_version("on-v3")), (1, 3))
         self.assertEqual(result["definition_checksum"], self.registry.get(DEFINITION_ID, 1).checksum)
 
     def test_a_version_without_a_file_is_refused_and_nothing_moves(self):
         code, result = self.move(9)
         self.assertEqual((code, result["moved"]), (1, False))
-        self.assertEqual(self.binding_version(), 2)
+        self.assertEqual(self.binding_version(), 3)
         self.assertIsNone(self.registry.get(DEFINITION_ID, 9))
 
     def test_a_breaking_version_is_refused_and_nothing_moves(self):
@@ -236,29 +237,30 @@ class MoveProductVersionTest(SeededOrganizationFixture):
             definitions = Path(root) / DEFINITION_ID / "definition"
             definitions.mkdir(parents=True)
             source_dir = REPO_ROOT / "products" / DEFINITION_ID / "definition"
-            for version in (1, 2):
+            for version in (1, 2, 3):
                 name = f"v{version}.yaml"
                 (definitions / name).write_bytes((source_dir / name).read_bytes())
-            breaking = (source_dir / "v2.yaml").read_bytes().decode("utf-8")
-            breaking = breaking.replace("  version: 2\n", "  version: 3\n", 1)
+            breaking = (source_dir / "v3.yaml").read_bytes().decode("utf-8")
+            breaking = breaking.replace("  version: 3\n", "  version: 4\n", 1)
             breaking = breaking.replace("      estimate: { type: text, max: 30 }\n", "", 1)
-            (definitions / "v3.yaml").write_bytes(breaking.encode("utf-8"))
+            (definitions / "v4.yaml").write_bytes(breaking.encode("utf-8"))
             registry = DefinitionRegistry(DefinitionSource(products_root=Path(root)))
             with patch.object(ops, "OrganizationDirectory", lambda: OrganizationDirectory(registry)):
-                code, result = self.move(3)
+                code, result = self.move(4)
         self.assertEqual((code, result["moved"]), (1, False))
         self.assertIn("issue.estimate was removed", result["reason"])
-        self.assertEqual(self.binding_version(), 2)
-        self.assertNotEqual(self.registry.get(DEFINITION_ID, 3).state, "published")
+        self.assertEqual(self.binding_version(), 3)
+        refused = self.registry.get(DEFINITION_ID, 4)
+        self.assertTrue(refused is None or refused.state != "published")
 
     def test_failed_readiness_moves_the_binding_back(self):
         problem = _Problem(TENANT_ID, PRODUCT_ID, "definition_checksum_mismatch")
         with patch.object(ops, "session_start_problems", lambda: [problem]):
             code, result = self.move(1)
-        self.assertEqual((code, result["moved"], result["to_version"]), (1, False, 2))
-        self.assertEqual(self.binding_version(), 2)
-        self.assertEqual(self.turn("still-v2")["status"], "completed")
-        self.assertEqual(self.pinned_version("still-v2"), 2)
+        self.assertEqual((code, result["moved"], result["to_version"]), (1, False, 3))
+        self.assertEqual(self.binding_version(), 3)
+        self.assertEqual(self.turn("still-v3")["status"], "completed")
+        self.assertEqual(self.pinned_version("still-v3"), 3)
 
     def test_an_unknown_product_is_refused(self):
         output = io.StringIO()

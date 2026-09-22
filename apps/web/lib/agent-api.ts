@@ -1,6 +1,6 @@
 import { productConfig } from "@/lib/product-config";
-import { authorizedFetch, RateLimitedError } from "@/lib/product-data-api";
-import type { DemoAction, DemoActionType, DemoIssue, IntentTrace } from "@/types/demo";
+import { authorizedFetch, RateLimitedError, type ExecutionEnvelope } from "@/lib/product-data-api";
+import type { DemoAction, DemoActionType, DemoIssue, IntentTrace, IssueFields } from "@/types/demo";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ??
@@ -31,6 +31,7 @@ export type AgentTurnResponse = {
     last_feature?: string | null;
     clarification_pending?: string | null;
   };
+  execution?: ExecutionEnvelope | null;
 };
 
 export async function sendAgentTurn(input: {
@@ -69,7 +70,8 @@ export async function sendAgentTurn(input: {
   const body = (await response.json()) as AgentTurnResponse;
   return {
     ...body,
-    validated_action: parseValidatedAction(body.validated_action)
+    validated_action: parseValidatedAction(body.validated_action),
+    execution: parseEnvelope(body.execution, input.sessionId, input.turnId)
   };
 }
 
@@ -100,6 +102,16 @@ function apiEndpoint(path: string): string {
   return `${apiBaseUrl}/${path}`;
 }
 
+function parseEnvelope(
+  envelope: ExecutionEnvelope | null | undefined,
+  sessionId: string,
+  turnId: number
+): ExecutionEnvelope | null {
+  if (!envelope || typeof envelope.key !== "string" || !envelope.key) return null;
+  if (envelope.session_id !== sessionId || envelope.turn_id !== turnId) return null;
+  return envelope;
+}
+
 function parseValidatedAction(action: DemoAction | null): DemoAction | null {
   if (!action || !isAllowedActionType(action.type)) {
     return null;
@@ -128,7 +140,8 @@ function parseValidatedAction(action: DemoAction | null): DemoAction | null {
   }
 
   if (action.type === "CREATE_DEMO_ISSUE") {
-    if (isDemoIssue(action.payload)) {
+    // Passed through unchanged: it is exactly the change the execution key is bound to.
+    if (isIssueFields(action.payload)) {
       return { type: action.type, payload: action.payload };
     }
     return null;
@@ -162,6 +175,18 @@ function parseValidatedAction(action: DemoAction | null): DemoAction | null {
       : { type: action.type };
   }
 
+  if (action.type === "HIGHLIGHT_CREATE_TICKET_BUTTON") {
+    const prefill = action.payload ?? {};
+    return {
+      type: action.type,
+      payload: {
+        assignee: typeof prefill.assignee === "string" ? prefill.assignee : undefined,
+        priority: isPriority(prefill.priority) ? prefill.priority : undefined,
+        title: typeof prefill.title === "string" ? prefill.title : undefined
+      }
+    };
+  }
+
   return { type: action.type };
 }
 
@@ -169,12 +194,11 @@ function isAllowedActionType(value: string): value is DemoActionType {
   return productConfig.allowedActions.includes(value as DemoActionType);
 }
 
-function isDemoIssue(value: unknown): value is DemoIssue {
+function isIssueFields(value: unknown): value is IssueFields {
   if (!value || typeof value !== "object") return false;
-  const issue = value as Partial<DemoIssue>;
+  const issue = value as Partial<IssueFields>;
   return (
-    typeof issue.id === "string"
-    && typeof issue.title === "string"
+    typeof issue.title === "string"
     && typeof issue.assignee === "string"
     && typeof issue.project === "string"
     && typeof issue.status === "string"

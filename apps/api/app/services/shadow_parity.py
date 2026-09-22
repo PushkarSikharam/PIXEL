@@ -171,9 +171,17 @@ def compare(live: Mapping[str, Any], shadow: ShadowView, *, session_id: str, tur
     classes: dict[str, str] = {
         "session_id": MATCH if live.get("session_id") == session_id else BEHAVIOUR,
         "turn_id": MATCH if live.get("turn_id") == turn_id else BEHAVIOUR,
-        # 5a live responses have no execution field; one appearing is a change to investigate.
-        "execution": MATCH if "execution" not in live else BEHAVIOUR,
     }
+    # 5b adds `execution`, null until an engine dispatches keys. Null (or absent) is a match; an
+    # envelope is lifecycle only when it is for the same mutation the shadow proposed.
+    envelope = live.get("execution")
+    if envelope is None:
+        classes["execution"] = MATCH
+    elif shadow.action_is_mutation and shadow.lifecycle_open and \
+            _same(_action(live.get("validated_action")), _action(shadow.action)):
+        classes["execution"] = LIFECYCLE
+    else:
+        classes["execution"] = BEHAVIOUR
     both_denied = live.get("status") == "denied" and shadow.status == "denied"
     classes["status"] = MATCH if live.get("status") == shadow.status else BEHAVIOUR
     for name in ("proposed_action", "validated_action"):

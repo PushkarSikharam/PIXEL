@@ -30,6 +30,12 @@ CAPABILITY_CUES = (
     "what can you do", "what do you do", "how can you help", "what can i ask",
     "what are you able to", "what can you show me", "help me", "what can this do",
 )
+# Questions about what the assistant changed. Answered only from the ledger's record of executed
+# changes, passed in by the caller; never from a document and never from memory (5b plan, 8.4).
+LAST_CHANGE_CUES = (
+    "what changed", "what did you do", "what did you change", "what have you changed",
+    "what just changed", "what did you just do",
+)
 # "I'm Priya" and similar. Matched against normalized text, which has had apostrophes removed,
 # so the cue is "im " rather than "i'm ". Cues that ordinary sentences start with ("call me back
 # later", "this is urgent") are deliberately absent: they produced names like "Back Later".
@@ -47,6 +53,7 @@ class Conversational(StrEnum):
     GREETING_NAMED = "greeting_named"
     IDENTITY = "identity"
     CAPABILITIES = "capabilities"
+    LAST_CHANGE = "last_change"
 
 
 @dataclass(frozen=True)
@@ -74,6 +81,9 @@ def detect(text: NormalizedMessage, *, visitor_name: str | None = None) -> Conve
 
     if any(contains_term(whole, cue) for cue in CAPABILITY_CUES):
         return ConversationalTurn(Conversational.CAPABILITIES, "capabilities")
+
+    if any(contains_term(whole, cue) for cue in LAST_CHANGE_CUES):
+        return ConversationalTurn(Conversational.LAST_CHANGE, "last_change")
 
     name = _introduced_name(whole, text.original)
     if name is None:

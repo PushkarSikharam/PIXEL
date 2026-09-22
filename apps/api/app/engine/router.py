@@ -507,9 +507,16 @@ class IntentRouter:
             result = RouteResult(RouteKind.CLARIFY, stage, key)
             return RoutedTurn(result, replace(memory, pending_clarification=pending))
         if failure.reason == "missing":
-            key = clarification.response if clarification else (
-                self._question_for("record", failure.intent.action) if failure.slot == "record" else None
-            )
+            key = clarification.response if clarification else None
+            if key is None and failure.slot == "person" and not leaders and (
+                self._definition.actions[failure.intent.action].capability in MUTATING_CAPABILITIES
+            ):
+                # A change request that named no person the platform recognises ("assign it to
+                # priya" in lower case) asks who is meant. Without this it falls through to
+                # "I'm not sure how to help", which is not true: the request was understood.
+                key = self._question_for(failure.slot, failure.intent.action)
+            if key is None and failure.slot == "record":
+                key = self._question_for("record", failure.intent.action)
             if key is None:
                 return None
             slot = CLARIFICATION_SLOTS.get(key, failure.slot)

@@ -312,6 +312,32 @@ class DefinitionAuthorityConversationTest(EngineCutoverFixture):
             self.assertTrue(self.say(message, session=f"product-{index}")["speech"]
                             .startswith("Here's what I can do in Pixel:"), message)
 
+    def test_a_request_that_needs_a_person_asks_instead_of_falling_back(self):
+        """Found live: "assign it to priya" (an unrecognised name) answered "I'm not sure how to help"."""
+        self.say("open Maya's ticket", session="ask")
+        asked = self.say("assign it to priya", session="ask", turn_id=2)
+        self.assertEqual(asked["speech"], "Who should LIN-142 be assigned to?")
+        self.assertIsNone(asked["execution"])
+        self.say("open Maya's ticket", session="named")
+        named = self.say("assign it to Priya", session="named", turn_id=2)
+        self.assertEqual(self.action(named), ("HIGHLIGHT_ADD_MEMBER_BUTTON", {"name": "Priya"}),
+                         "a recognised name still offers the control that adds them")
+        # With nothing open the missing record is asked for first, in both engines.
+        self.assertEqual(self.say("assign it to Priya", session="nothing-open")["speech"],
+                         "Which ticket do you mean? Open it first, or tell me which one.")
+
+    def test_a_committed_receipt_names_the_record_it_points_at(self):
+        """Found live: a created ticket's receipt said "project to PRJ-102"."""
+        self.say("create a ticket for Noah about login errors", session="made")
+        proposed = self.say("Issue Triage Workflow", session="made", turn_id=2)
+        fields = dict(proposed["validated_action"]["payload"])
+        headers = {**self.headers, "X-Execution-Key": proposed["execution"]["key"], "X-Session-Id": "made"}
+        receipt = self.client.post("/api/demo-data/issues", json={"fields": fields}, headers=headers)
+        self.assertEqual(receipt.status_code, 200, receipt.text)
+        speech = receipt.json()["speech"]
+        self.assertIn("project to Issue Triage Workflow", speech)
+        self.assertNotIn("PRJ-", speech, "an identifier is evidence, never speech")
+
     def test_a_request_after_a_self_description_is_still_served(self):
         body = self.say("I'm a manager, show me the projects")
         self.assertEqual(self.action(body)[0], "OPEN_PROJECTS")

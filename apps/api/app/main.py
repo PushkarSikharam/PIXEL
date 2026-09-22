@@ -659,6 +659,17 @@ def _refuse_legacy_idempotency(idempotency_key: str | None) -> None:
         )
 
 
+def _committed_values(changes: dict | None, record: dict | None) -> dict | None:
+    """What the record now shows for each field it changed, rather than the value sent.
+
+    A reference is stored as an identifier ("PRJ-102") and shown as a name ("Issue Triage
+    Workflow"). The receipt says what a visitor can see, and identifiers are never spoken.
+    """
+    if not changes or not record:
+        return changes
+    return {name: record.get(name, value) for name, value in changes.items()}
+
+
 def _require_record_owner(connection, user: AuthUser, product_id: str) -> None:
     """Inside the transaction: these records must still belong to this organization's product."""
     owner = legacy_record_owner(connection)
@@ -690,7 +701,8 @@ def _keyed(execution_key: str, session_id: str | None, user: AuthUser, change_se
         code=result.code,
         speech=receipt_speech(
             result.code, executed=executed, replay=result.replay, created=created,
-            record_id=result.record_id, changes=change_set.get("changes") or change_set.get("fields"),
+            record_id=result.record_id,
+            changes=_committed_values(change_set.get("changes") or change_set.get("fields"), result.record),
         ),
         record=result.record,
     )

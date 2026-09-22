@@ -335,7 +335,8 @@ class ShadowRunner:
                     entry.memory if entry else ConversationMemory(),
                     entry.history if entry else SignalHistory(),
                     TurnContext(turn=request.turn_id, selected=selected_record(
-                        prepared.records, getattr(request, "selected_issue_id", None))),
+                        prepared.records, getattr(request, "selected_issue_id", None)),
+                        view=getattr(request, "current_page", None)),
                 )
                 self.store.put(key, ShadowEntry(engine_turn.memory, engine_turn.history, request.turn_id,
                                                 self.store.now()))

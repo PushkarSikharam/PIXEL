@@ -78,7 +78,8 @@ def detect(text: NormalizedMessage, *, visitor_name: str | None = None) -> Conve
 
     if whole in GREETINGS:
         if visitor_name:
-            return ConversationalTurn(Conversational.GREETING_NAMED, "greeting_named", visitor_name)
+            # A visitor greeting again after introducing themselves in this session.
+            return ConversationalTurn(Conversational.GREETING_NAMED, "greeting_again", visitor_name)
         return ConversationalTurn(Conversational.GREETING, "greeting")
 
     if any(contains_term(whole, cue) for cue in CAPABILITY_CUES):
@@ -219,43 +220,95 @@ def offerable(
     return OfferableActions(tuple(keys), tuple(descriptions))
 
 
+# The order offers are spoken in: what changes things first, then where to look.
+_SPOKEN_ORDER = {
+    Capability.CREATE_RECORD: 0, Capability.UPDATE_RECORD: 1, Capability.OPEN_RECORD: 2,
+    Capability.FILTER_RECORDS: 3, Capability.NAVIGATE_VIEW: 4, Capability.HIGHLIGHT_CONTROL: 5,
+}
+
+
 def capability_sentence(offers: OfferableActions, definition: ProductDefinition, *, limit: int = 6) -> str:
     """Regenerate from declared operations; cached or product-written descriptions are not speech."""
-    chosen = [action_description(definition, key) for key in offers.keys[:limit]]
-    if not chosen:
-        return ""
-    if len(chosen) == 1:
-        return chosen[0]
-    return ", ".join(chosen[:-1]) + f" and {chosen[-1]}"
+    ordered = sorted(offers.keys, key=lambda key: _SPOKEN_ORDER[definition.actions[key].capability])
+    chosen: list[str] = []
+    for key in ordered:
+        description = action_description(definition, key)
+        if description not in chosen:
+            chosen.append(description)
+    return _spoken_list(chosen[:limit], "and")
+
+
+def guided_steps(offers: OfferableActions, definition: ProductDefinition) -> str:
+    """A short route through what this caller can actually do: two places to look, one thing to
+    change, one control to find, then the guardrail. Drawn from the filtered offers only, so it
+    never names a record, a person or anything the caller cannot reach."""
+    by_capability: dict[Capability, list[str]] = {}
+    for key in offers.keys:
+        spec = definition.actions[key]
+        if spec.capability == Capability.NAVIGATE_VIEW and (
+            spec.view not in definition.views or definition.views[spec.view].kind == "dashboard"
+        ):
+            continue
+        if spec.capability == Capability.HIGHLIGHT_CONTROL:
+            # The route is what the visitor does, so a control is something to find.
+            view = definition.views[spec.view]
+            step = f"find {_plain_name(view.controls[spec.control].label)} in {_plain_name(view.label)}"
+        else:
+            step = action_description(definition, key)
+        by_capability.setdefault(spec.capability, []).append(step)
+    steps = [
+        *by_capability.get(Capability.NAVIGATE_VIEW, [])[:2],
+        *by_capability.get(Capability.CREATE_RECORD, [])[:1],
+        *by_capability.get(Capability.HIGHLIGHT_CONTROL, [])[:1],
+    ]
+    steps.append(f"ask me for something outside {definition.identity.product_name} to see how I stay in scope")
+    return _spoken_list(steps, "then", serial=True)
 
 
 def action_description(definition: ProductDefinition, key: str) -> str:
-    """The operation determines the verb. Product nouns are explicitly presented as names."""
+    """The operation determines the verb; the definition's labels name the things, plainly."""
     spec = definition.actions[key]
     if spec.capability == Capability.NAVIGATE_VIEW:
-        label = 'System architecture' if spec.view == 'architecture' else definition.views[spec.view].label
-        return f'open the {_quoted_name(label)} view'
+        if spec.view == "architecture":
+            return "show the system architecture"
+        return f"open {_plain_name(definition.views[spec.view].label)}"
     if spec.capability == Capability.HIGHLIGHT_CONTROL:
         view = definition.views[spec.view]
-        return f'highlight {_quoted_name(view.controls[spec.control].label)} in the {_quoted_name(view.label)} view'
-    label = _quoted_name(definition.entities[spec.entity].label)
+        return (f"show you where {_plain_name(view.controls[spec.control].label)} is in "
+                f"{_plain_name(view.label)}")
+    entity = definition.entities[spec.entity]
+    label = _plain_name(entity.label).lower()
     if spec.capability == Capability.OPEN_RECORD:
-        return f'open a {label} record'
+        return f"open a {label}"
     if spec.capability == Capability.FILTER_RECORDS:
-        return f'filter {label} records by "{spec.by}"'
-    fields = ', '.join(f'"{field}"' for field in sorted(spec.fields))
+        return f"list {_plain_name(entity.plural).lower()} by {_field_name(spec.by)}"
     if spec.capability == Capability.CREATE_RECORD:
-        return f'create a {label} record with {fields}'
+        return f"create a {label}"
     if spec.capability == Capability.UPDATE_RECORD:
-        return f'update {fields} on a {label} record'
+        fields = [_field_name(name) for name in sorted(spec.fields)]
+        return f"change a {label}'s {_spoken_list(fields, 'or')}"
     raise ValueError(f'no platform description for {spec.capability}')
 
 
-def _quoted_name(label: str) -> str:
+def _field_name(name: str | None) -> str:
+    return (name or "").replace("_", " ")
+
+
+def _spoken_list(items: list[str], joiner: str, *, serial: bool = False) -> str:
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    if serial:
+        return f", {joiner} ".join(items)
+    return ", ".join(items[:-1]) + f" {joiner} {items[-1]}"
+
+
+def _plain_name(label: str) -> str:
+    """Product labels are spoken as plain names, and only once they pass the platform's name check."""
     if name_problems(label):
         raise ValueError('capability labels must be plain names')
-    return f'"{label}"'
-
+    return label
 
 # The reply for a question no installed knowledge source can answer. Knowledge availability is
 # asserted by the platform, so this is always platform wording, however a definition words it.

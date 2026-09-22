@@ -1,0 +1,1005 @@
+[
+  {
+    "case": "nav-sprint-planning",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The recorded reply began with product-written copy about cycles. Under definition authority product copy is never spoken (4b): the platform says only what it does, \"I'll open Cycles\". The same view opens.",
+    "recorded": "Cycles organize work into time-boxed planning periods so engineering teams can decide what to focus on, track progress, and review what shipped. I'll show you the current cycle.",
+    "current": "I'll open Cycles."
+  },
+  {
+    "case": "nav-week-by-week",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The recorded reply began with product-written copy about cycles. Under definition authority product copy is never spoken (4b): the platform says only what it does, \"I'll open Cycles\". The same view opens.",
+    "recorded": "Cycles organize work into time-boxed planning periods so engineering teams can decide what to focus on, track progress, and review what shipped. I'll show you the current cycle.",
+    "current": "I'll open Cycles."
+  },
+  {
+    "case": "nav-issues",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The recorded reply began with product-written copy about issues. Under definition authority product copy is never spoken (4b): the platform says only what it does, \"I'll open Issues\". The same view opens.",
+    "recorded": "Issues are the core work items used to track bugs, tasks, improvements, and customer-impacting work. I'll open Issues.",
+    "current": "I'll open Issues."
+  },
+  {
+    "case": "nav-roadmap",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The recorded reply began with product-written copy about projects. Under definition authority product copy is never spoken (4b): the platform says only what it does, \"I'll open Projects\". The same view opens.",
+    "recorded": "Projects group related issues into larger product or roadmap efforts. I'll open Projects.",
+    "current": "I'll open Projects."
+  },
+  {
+    "case": "nav-team-workload",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The recorded reply began with product-written copy about teams. Under definition authority product copy is never spoken (4b): the platform says only what it does, \"I'll open Teams\". The same view opens.",
+    "recorded": "Teams represent engineering groups, ownership boundaries, and capacity. I'll open Teams.",
+    "current": "I'll open Teams."
+  },
+  {
+    "case": "nav-integrations",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The recorded reply began with product-written copy about integrations. Under definition authority product copy is never spoken (4b): the platform says only what it does, \"I'll open Integrations\". The same view opens.",
+    "recorded": "Integrations connect Pixel with tools used by engineering teams. I'll open Integrations.",
+    "current": "I'll open Integrations."
+  },
+  {
+    "case": "typo-cycles",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The recorded reply began with product-written copy about cycles. Under definition authority product copy is never spoken (4b): the platform says only what it does, \"I'll open Cycles\". The same view opens. The misspelling is still read as cycles.",
+    "recorded": "Cycles organize work into time-boxed planning periods so engineering teams can decide what to focus on, track progress, and review what shipped. I'll show you the current cycle.",
+    "current": "I'll open Cycles."
+  },
+  {
+    "case": "typo-ticket",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens (\"I'll open LIN-142\"). The misspelled name and record word are still read correctly.",
+    "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
+    "current": "I'll open LIN-142."
+  },
+  {
+    "case": "correction-clause",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The recorded reply began with product-written copy about cycles. Under definition authority product copy is never spoken (4b): the platform says only what it does, \"I'll open Cycles\". The same view opens. The corrected clause still decides the view.",
+    "recorded": "Cycles organize work into time-boxed planning periods so engineering teams can decide what to focus on, track progress, and review what shipped. I'll show you the current cycle.",
+    "current": "I'll open Cycles."
+  },
+  {
+    "case": "correction-negation",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "correction-negation",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The same view opens. The recorded reply acknowledged the correction (\"Got it. I'll switch to Issues.\"); the platform says only \"I'll open Issues\". Owner decision pending (5d plan revision 2, section 5, row \"correction\").",
+    "recorded": "Got it. I'll switch to Issues.",
+    "current": "I'll open Issues."
+  },
+  {
+    "case": "person-ticket",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "person-ticket",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens (\"I'll open LIN-142\").",
+    "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
+    "current": "I'll open LIN-142."
+  },
+  {
+    "case": "person-all-tickets",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "person-all-tickets",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The same filter runs and the same count and record are named. The platform says \"for\" the person and \"filter the available records\" where the recorded reply said \"assigned to\" and \"show those issues\".",
+    "recorded": "I found 1 ticket assigned to Maya Chen: LIN-142. I'll show those issues.",
+    "current": "I found 1 ticket for Maya Chen: LIN-142. I'll filter the available records."
+  },
+  {
+    "case": "person-follow-up",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The recorded reply began with product-written copy about issues. Under definition authority product copy is never spoken (4b): the platform says only what it does, \"I'll open Issues\". The same view opens.",
+    "recorded": "Issues are the core work items used to track bugs, tasks, improvements, and customer-impacting work. I'll open Issues.",
+    "current": "I'll open Issues."
+  },
+  {
+    "case": "person-follow-up",
+    "turn": 1,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "person-follow-up",
+    "turn": 1,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The follow-up \"what about Noah\" reuses the filter for Noah Patel and names the same count and record. The platform says \"for\" the person and \"filter the available records\" where the recorded reply said \"assigned to\" and \"show those issues\".",
+    "recorded": "I found 1 ticket assigned to Noah Patel: LIN-137. I'll show those issues.",
+    "current": "I found 1 ticket for Noah Patel: LIN-137. I'll filter the available records."
+  },
+  {
+    "case": "current-ticket",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "current-ticket",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens (\"I'll open LIN-142\").",
+    "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
+    "current": "I'll open LIN-142."
+  },
+  {
+    "case": "current-ticket",
+    "turn": 1,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens (\"I'll open LIN-142\").",
+    "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
+    "current": "I'll open LIN-142."
+  },
+  {
+    "case": "assignment-workflow",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The same assignee control is highlighted in the same view. The recorded reply named LIN-142 and Maya Chen; the platform names the view and the control's definition label only (\"I'll open Issue Detail and highlight Assignee\").",
+    "recorded": "Assignment is handled from the issue detail panel. I'll open LIN-142 and highlight the assignee control for Maya Chen.",
+    "current": "I'll open Issue Detail and highlight Assignee."
+  },
+  {
+    "case": "update-reassign",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "update-reassign",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens (\"I'll open LIN-142\").",
+    "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
+    "current": "I'll open LIN-142."
+  },
+  {
+    "case": "update-reassign",
+    "turn": 1,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "update-reassign",
+    "turn": 1,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The change is committed through its execution key, as recorded. The platform words the committed receipt (\"Updated LIN-142: assignee to Noah Patel\") instead of \"Done. I updated ...\".",
+    "recorded": "Done. I updated LIN-142: assignee is now Noah Patel.",
+    "current": "Updated LIN-142: assignee to Noah Patel."
+  },
+  {
+    "case": "update-priority",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "update-priority",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens (\"I'll open LIN-142\").",
+    "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
+    "current": "I'll open LIN-142."
+  },
+  {
+    "case": "update-priority",
+    "turn": 1,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "update-priority",
+    "turn": 1,
+    "field": "reply",
+    "kind": "behaviour",
+    "reason": "The recorded reply said \"Done ... the issue details are unchanged\" after raising the priority, which was a legacy defect. The committed receipt now states the actual change (\"Updated LIN-142: priority to High\").",
+    "recorded": "Done. I updated LIN-142: the issue details are unchanged.",
+    "current": "Updated LIN-142: priority to High."
+  },
+  {
+    "case": "update-status",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "update-status",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens (\"I'll open LIN-142\").",
+    "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
+    "current": "I'll open LIN-142."
+  },
+  {
+    "case": "update-status",
+    "turn": 1,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "update-status",
+    "turn": 1,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The change is committed through its execution key, as recorded. The platform words the committed receipt (\"Updated LIN-142: status to Done\") instead of \"Done. I updated ...\".",
+    "recorded": "Done. I updated LIN-142: status is now Done.",
+    "current": "Updated LIN-142: status to Done."
+  },
+  {
+    "case": "update-outside-person",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "update-outside-person",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens (\"I'll open LIN-142\").",
+    "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
+    "current": "I'll open LIN-142."
+  },
+  {
+    "case": "update-outside-person",
+    "turn": 1,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "update-outside-person",
+    "turn": 1,
+    "field": "reply",
+    "kind": "security",
+    "reason": "The recorded reply confirmed that Avery Brooks exists in another workspace. Under definition authority a person outside the workspace reads exactly like an unknown one (5c plan, section 3.3).",
+    "recorded": "Avery Brooks is outside Product Engineering Workspace, so I can't show or change their project work here.",
+    "current": "I can't find Avery in this workspace."
+  },
+  {
+    "case": "update-unknown-person",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "update-unknown-person",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens (\"I'll open LIN-142\").",
+    "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
+    "current": "I'll open LIN-142."
+  },
+  {
+    "case": "update-unknown-person",
+    "turn": 1,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "update-unknown-person",
+    "turn": 1,
+    "field": "highlighted",
+    "kind": "behaviour",
+    "reason": "See the reply entry for this turn: no add-member highlight, because Teams is not opened.",
+    "recorded": [
+      "add-team-member-button"
+    ],
+    "current": []
+  },
+  {
+    "case": "update-unknown-person",
+    "turn": 1,
+    "field": "open_issue",
+    "kind": "behaviour",
+    "reason": "See the reply entry for this turn: LIN-142 stays open because nothing moved to Teams.",
+    "recorded": null,
+    "current": "ISSUE DETAIL"
+  },
+  {
+    "case": "update-unknown-person",
+    "turn": 1,
+    "field": "reply",
+    "kind": "behaviour",
+    "reason": "Assigning the open ticket to an unknown person: the recorded engine offered to add Priya in Teams; the definition engine says it cannot find Priya, stays on LIN-142 and changes nothing. The offer to add an unknown assignee during an update is not ported.",
+    "recorded": "Priya is not in the team directory yet. I'll open Teams so you can add Priya before assigning LIN-142.",
+    "current": "I can't find Priya in this workspace."
+  },
+  {
+    "case": "update-unknown-person",
+    "turn": 1,
+    "field": "view",
+    "kind": "behaviour",
+    "reason": "See the reply entry for this turn: the definition engine stays on the ticket instead of opening Teams.",
+    "recorded": "Teams",
+    "current": "Issue Detail"
+  },
+  {
+    "case": "update-without-target",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "update-without-target",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "With nothing open, both engines ask which record to update and change nothing. The recorded question listed Maya's and Noah's tickets; the platform asks \"Which ticket do you mean?\". Owner decision pending (5d plan revision 2, section 5, row \"update with nothing open\").",
+    "recorded": "Which ticket should I update: Maya's ticket, Noah's ticket, or the issue currently open?",
+    "current": "Which ticket do you mean?"
+  },
+  {
+    "case": "create-known-owner",
+    "turn": 0,
+    "field": "open_issue",
+    "kind": "behaviour",
+    "reason": "See the reply entry for this turn: no new ticket exists yet to open.",
+    "recorded": "ISSUE DETAIL",
+    "current": null
+  },
+  {
+    "case": "create-known-owner",
+    "turn": 0,
+    "field": "reply",
+    "kind": "behaviour",
+    "reason": "The visitor named the owner and title but no project. Linear v4 and v5 declare no project default (5c plan, section 7.2), so the definition engine asks which project; the recorded engine created PIX-143 at once in a project it chose itself.",
+    "recorded": "I created PIX-143 and assigned it to Noah Patel. I'll open the new demo ticket.",
+    "current": "Which project should the new ticket have: GitHub Integration Hardening or Issue Triage Workflow?"
+  },
+  {
+    "case": "create-known-owner",
+    "turn": 0,
+    "field": "view",
+    "kind": "behaviour",
+    "reason": "See the reply entry for this turn: nothing is created yet, so the view stays on the Dashboard.",
+    "recorded": "Issue Detail",
+    "current": "Dashboard"
+  },
+  {
+    "case": "create-unknown-owner",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The same view opens with the same add-member highlight. An unknown owner reads exactly like a person outside the workspace (\"I can't find Priya in this workspace.\"), then the platform names the highlighted control.",
+    "recorded": "Priya is not in the team directory yet. I'll open Teams so you can add Priya first.",
+    "current": "I can't find Priya in this workspace. I'll open Teams and highlight Add member."
+  },
+  {
+    "case": "create-without-owner",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "create-without-owner",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "Both engines ask who should own the ticket and highlight the create button in Issues; only the sentence differs (\"Who should own the new ticket? I'll open Issues and highlight Create ticket\").",
+    "recorded": "Who should own this ticket? Name a teammate in this workspace and I'll prefill the ticket form.",
+    "current": "Who should own the new ticket? I'll open Issues and highlight Create ticket."
+  },
+  {
+    "case": "create-workflow-question",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The same control is highlighted in the same view. The recorded reply began with product-written copy about issues, which is never spoken; the platform says \"I'll open Issues and highlight Create ticket\".",
+    "recorded": "Issues are the core work items used to track bugs, tasks, improvements, and customer-impacting work. You create tickets from the Issues view. I'll open it and highlight Create ticket.",
+    "current": "I'll open Issues and highlight Create ticket."
+  },
+  {
+    "case": "create-open-and-assign",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "create-open-and-assign",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The same view opens with the same add-member highlight, and nothing is drafted for an unknown assignee. The platform's sentence: \"I can't find Priya in this workspace. I'll open Teams and highlight Add member\".",
+    "recorded": "Priya is not in the team directory yet. I'll open Teams so you can add Priya first.",
+    "current": "I can't find Priya in this workspace. I'll open Teams and highlight Add member."
+  },
+  {
+    "case": "create-start-assigned",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "create-start-assigned",
+    "turn": 0,
+    "field": "highlighted",
+    "kind": "behaviour",
+    "reason": "See the reply entry for this turn: no create-button highlight while the draft is in conversation.",
+    "recorded": [
+      "create-ticket-button"
+    ],
+    "current": []
+  },
+  {
+    "case": "create-start-assigned",
+    "turn": 0,
+    "field": "reply",
+    "kind": "behaviour",
+    "reason": "\"Start a ticket assigned to Noah\" drafts a create for Noah Patel and asks for its title (then its project). The recorded engine opened the ticket form prefilled with Noah Patel instead.",
+    "recorded": "I'll open the ticket form and prefill Noah Patel. Review the details, then create the ticket.",
+    "current": "What should the title of the new ticket be?"
+  },
+  {
+    "case": "create-start-assigned",
+    "turn": 0,
+    "field": "view",
+    "kind": "behaviour",
+    "reason": "See the reply entry for this turn: the create is drafted in conversation, so Issues is not opened.",
+    "recorded": "Issues",
+    "current": "Dashboard"
+  },
+  {
+    "case": "member-add-named",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "member-add-named",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The same add-member control is highlighted in Teams. The platform first says it cannot find Priya Shah in this workspace, because an unknown person always reads the same as one outside it, then names the control.",
+    "recorded": "I'll open Teams so you can add Priya Shah to this workspace.",
+    "current": "I can't find Priya Shah in this workspace. I'll open Teams and highlight Add member."
+  },
+  {
+    "case": "member-add-unnamed",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "member-add-unnamed",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "Both engines ask for the new member's name and highlight Add member in Teams. The platform's question is \"What should the name of the new team member be? I'll open Teams and highlight Add member\"; the answer then prefills the form.",
+    "recorded": "Who should I add to the team directory?",
+    "current": "What should the name of the new team member be? I'll open Teams and highlight Add member."
+  },
+  {
+    "case": "clarify-vague-create",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "clarify-vague-create",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "Both engines ask what to create and change nothing. The recorded question listed ticket, project, cycle and team member; the platform asks \"Which type of record would you like to create?\".",
+    "recorded": "What should I create: a ticket, a project, a cycle, or a team member?",
+    "current": "Which type of record would you like to create?"
+  },
+  {
+    "case": "clarify-vague-assign",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "clarify-vague-assign",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "Both engines ask who to assign and change nothing. The recorded question suggested Maya and Noah by name; the platform asks \"Who should this record be assigned to?\".",
+    "recorded": "Who should I assign the current ticket to? You can say Maya, Noah, or another teammate in this workspace.",
+    "current": "Who should this record be assigned to?"
+  },
+  {
+    "case": "clarify-open-all",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "Both engines ask which records are meant and open nothing. The platform asks \"Which records do you mean?\" instead of listing issue, project and person options.",
+    "recorded": "Do you mean all issues, all projects, or all tickets for a specific person?",
+    "current": "Which records do you mean?"
+  },
+  {
+    "case": "github-explain",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "github-explain",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The same GitHub card is highlighted in Integrations. The recorded reply was product-written copy about GitHub, which is never spoken; the platform says \"I'll open Integrations and highlight GitHub\".",
+    "recorded": "GitHub keeps engineering activity connected to tickets. Pull requests, commits, branches, and reviews can appear beside the work they belong to. I'll show the GitHub integration.",
+    "current": "I'll open Integrations and highlight GitHub."
+  },
+  {
+    "case": "github-setup",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "github-setup",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The same setup panel is highlighted in Integrations. The recorded reply was product-written copy about the setup flow; the platform says \"I'll open Integrations and highlight GitHub setup\".",
+    "recorded": "I'll open the GitHub setup flow. This shows repository selection, branch mapping, PR sync, and how activity is attached to Pixel tickets.",
+    "current": "I'll open Integrations and highlight GitHub setup."
+  },
+  {
+    "case": "slack",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The same Slack card is highlighted in Integrations. The recorded reply began with product-written copy about Slack; the platform says \"I'll open Integrations and highlight Slack\".",
+    "recorded": "Slack lets teams create issues from messages and receive workflow updates where conversations happen. I'll open Integrations and highlight Slack.",
+    "current": "I'll open Integrations and highlight Slack."
+  },
+  {
+    "case": "guardrail-crm",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "Both refuse to open Salesforce and change nothing; the platform's refusal reads \"I can only help with Pixel here, so I can't do that\".",
+    "recorded": "I can only demonstrate Pixel workflows here, so I cannot open that.",
+    "current": "I can only help with Pixel here, so I can't do that."
+  },
+  {
+    "case": "guardrail-email",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "Both refuse to open an inbox and change nothing; the platform's refusal reads \"I can only help with Pixel here, so I can't do that\".",
+    "recorded": "I can only demonstrate Pixel workflows here, so I cannot open that.",
+    "current": "I can only help with Pixel here, so I can't do that."
+  },
+  {
+    "case": "guardrail-destructive",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "Both refuse and delete nothing. The recorded refusal said it could not \"open\" the request; the platform names the actual refusal (\"I can't delete or erase anything here\").",
+    "recorded": "I can only demonstrate Pixel workflows here, so I cannot open that.",
+    "current": "I can't delete or erase anything here."
+  },
+  {
+    "case": "scope-broad-request",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "scope-broad-request",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "Both refuse a request across workspaces and show nothing; the platform's refusal reads \"I can only work within this workspace. Change the scope first, then ask again\".",
+    "recorded": "I can only show work inside Product Engineering Workspace. Use the workspace switcher to change scope, then ask me again.",
+    "current": "I can only work within this workspace. Change the scope first, then ask again."
+  },
+  {
+    "case": "scope-broad-request",
+    "turn": 0,
+    "field": "turn_status",
+    "kind": "behaviour",
+    "reason": "A request across every workspace is denied, not answered (the v2 broad-scope guardrail), so the status is \"Action blocked\".",
+    "recorded": "Ready",
+    "current": "Action blocked"
+  },
+  {
+    "case": "scope-outside-person",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "scope-outside-person",
+    "turn": 0,
+    "field": "reply",
+    "kind": "security",
+    "reason": "The recorded reply confirmed that Avery Brooks exists outside Product Engineering Workspace. The definition engine reads the person exactly like an unknown one (5c plan, section 3.3).",
+    "recorded": "Avery Brooks is outside Product Engineering Workspace, so I can't show or change their project work here.",
+    "current": "I can't find Avery in this workspace. I'll open Issues."
+  },
+  {
+    "case": "scope-outside-person",
+    "turn": 0,
+    "field": "view",
+    "kind": "behaviour",
+    "reason": "After saying it cannot find the person, the definition engine opens this workspace's own Issues list; no one else's work is shown.",
+    "recorded": "Dashboard",
+    "current": "Issues"
+  },
+  {
+    "case": "scope-platform-outside-person",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "scope-platform-outside-person",
+    "turn": 0,
+    "field": "reply",
+    "kind": "security",
+    "reason": "The recorded reply confirmed that Maya Chen exists outside Platform Workspace. The definition engine reads the person exactly like an unknown one (5c plan, section 3.3).",
+    "recorded": "Maya Chen is outside Platform Workspace, so I can't show or change their project work here.",
+    "current": "I can't find Maya in this workspace. I'll open Issues."
+  },
+  {
+    "case": "scope-platform-outside-person",
+    "turn": 0,
+    "field": "view",
+    "kind": "behaviour",
+    "reason": "After saying it cannot find the person, the definition engine opens the Platform workspace's own Issues list; no one else's work is shown.",
+    "recorded": "Dashboard",
+    "current": "Issues"
+  },
+  {
+    "case": "scope-platform-own-person",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "scope-platform-own-person",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "Inside the Platform workspace the same filter runs and the same count and record are named; only the platform's sentence differs (\"I found 1 ticket for Avery Brooks: LIN-131. I'll filter the available records\").",
+    "recorded": "I found 1 ticket assigned to Avery Brooks: LIN-131. I'll show those issues.",
+    "current": "I found 1 ticket for Avery Brooks: LIN-131. I'll filter the available records."
+  },
+  {
+    "case": "greeting",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "greeting",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "Both greet and ask what to explore. The platform's 4b greeting quotes the product and assistant names. Owner decision pending (5d plan revision 2, section 5, row \"quoted names in replies\").",
+    "recorded": "Hi there. What would you like to explore first in Pixel?",
+    "current": "Welcome to \"Pixel\". I am \"Edith\", your demo guide. What would you like to explore?"
+  },
+  {
+    "case": "greeting-with-name",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "greeting-with-name",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "Both greet Priya by name and ask what to explore; the wording differs and the platform quotes the product name. Owner decision pending (5d plan revision 2, section 5, row \"quoted names in replies\").",
+    "recorded": "Nice to meet you, Priya. What would you like to explore first: planning, tickets, projects, teams, or integrations?",
+    "current": "Hello Priya, welcome to \"Pixel\". What would you like to explore?"
+  },
+  {
+    "case": "identity",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "identity",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "Both answer as Edith, the demo guide for Pixel. The platform's 4b wording quotes the names and does not list product areas. Owner decision pending (5d plan revision 2, section 5, row \"quoted names in replies\").",
+    "recorded": "I'm Edith, Pixel's live demo guide. I can walk you through planning, tickets, projects, teams, and integrations inside this workspace.",
+    "current": "I am \"Edith\", the demo guide for \"Pixel\"."
+  },
+  {
+    "case": "capabilities",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "capabilities",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The platform lists what this caller can actually do from the definition's filtered offers, and quotes entity, field and view names, where the recorded reply was product-written. Owner decision pending (5d plan revision 2, section 5, row \"quoted names in replies\").",
+    "recorded": "I can guide this Pixel demo through Product Engineering Workspace: planning, issues, projects, teams, and integrations. I can open views, find tickets, update issue fields, create demo records, and block work outside this scope.",
+    "current": "Here's what I can do in Pixel: create a \"Ticket\" record with \"assignee\", \"priority\", \"project\", \"status\", \"title\", highlight \"Add member\" in the \"Teams\" view, highlight \"Assignee\" in the \"Issue Detail\" view, highlight \"Create ticket\" in the \"Issues\" view, highlight \"Cycle progress\" in the \"Cycles\" view and highlight \"GitHub\" in the \"Integrations\" view."
+  },
+  {
+    "case": "count-team-members",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "count-team-members",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The same count (2) and view. The platform's sentence puts the workspace first (\"Product Engineering Workspace has 2 team members. I'll open Teams\").",
+    "recorded": "There are 2 team members in Product Engineering Workspace. I'll open Teams.",
+    "current": "Product Engineering Workspace has 2 team members. I'll open Teams."
+  },
+  {
+    "case": "count-projects",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "next-step",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "next-step",
+    "turn": 0,
+    "field": "reply",
+    "kind": "behaviour",
+    "reason": "The recorded reply suggested sprint planning. The definition engine suggests only what can be done from the open view, drawn from the filtered offers; on the Dashboard no offered action belongs to that view, so it points to what it can do (\"Ask what I can do in Pixel to see where to go next\").",
+    "recorded": "A strong next move is sprint planning. Ask me to show planning, and I'll open the current cycle for Product Engineering Workspace.",
+    "current": "Ask what I can do in Pixel to see where to go next."
+  },
+  {
+    "case": "what-changed",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "what-changed",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens (\"I'll open LIN-142\").",
+    "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
+    "current": "I'll open LIN-142."
+  },
+  {
+    "case": "what-changed",
+    "turn": 1,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "what-changed",
+    "turn": 1,
+    "field": "reply",
+    "kind": "behaviour",
+    "reason": "Opening LIN-142 is not a change. The recorded reply called it the most recent change; the definition engine reads only executed changes from the ledger (5b plan, section 8.4), so nothing has changed yet.",
+    "recorded": "Most recently, opened LIN-142.",
+    "current": "Nothing has changed in this conversation yet."
+  },
+  {
+    "case": "guided-path",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "guided-path",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "Both open the Dashboard. The recorded reply was a scripted path naming Maya, Noah and Salesforce; the platform draws the starting points from the filtered offers, so it never names people or products another workspace or tenant cannot see. Owner decision pending (5d plan revision 2, section 5, row \"guided path\").",
+    "recorded": "Here is a clean guided path: start with sprint planning, open Maya's ticket, assign it to Noah, create a ticket for a new teammate, then try Salesforce to prove guardrails.",
+    "current": "A good place to start in Pixel: create a \"Ticket\" record with \"assignee\", \"priority\", \"project\", \"status\", \"title\", highlight \"Add member\" in the \"Teams\" view, highlight \"Assignee\" in the \"Issue Detail\" view, highlight \"Create ticket\" in the \"Issues\" view, highlight \"Cycle progress\" in the \"Cycles\" view and highlight \"GitHub\" in the \"Integrations\" view. I'll open Dashboard."
+  },
+  {
+    "case": "architecture",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "prospect-profile",
+    "turn": 0,
+    "field": "handled_by",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
+    "recorded": "browser",
+    "current": "backend"
+  },
+  {
+    "case": "prospect-profile",
+    "turn": 0,
+    "field": "reply",
+    "kind": "behaviour",
+    "reason": "The recorded browser read \"an engineering\" as the visitor's name. The definition engine acknowledges the description instead.",
+    "recorded": "Nice to meet you, An Engineering. What would you like to explore first: planning, tickets, projects, teams, or integrations?",
+    "current": "Thanks, that helps. What would you like to explore first in Pixel?"
+  },
+  {
+    "case": "unknown-person-tickets",
+    "turn": 0,
+    "field": "reply",
+    "kind": "wording",
+    "reason": "The same Issues view opens for an unknown person. The recorded reply began with product-written copy about issues; the platform says \"I can't find Zed in this workspace. I'll open Issues\".",
+    "recorded": "Issues are the core work items used to track bugs, tasks, improvements, and customer-impacting work. I could not find a ticket for Zed, so I'll show the Issues list.",
+    "current": "I can't find Zed in this workspace. I'll open Issues."
+  }
+]

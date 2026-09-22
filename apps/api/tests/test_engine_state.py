@@ -66,6 +66,16 @@ class CommitAndLoadTest(EngineStateFixture):
             loaded = self.store.load(connection, self.owner, "s1", "scope-1", PIN)
         self.assertIsNone(loaded)
 
+    def test_only_a_short_plain_visitor_name_is_kept(self):
+        for turn, (given, kept) in enumerate((("Priya", "Priya"), ("x" * 61, None), ("Pri\x00ya", None)), 1):
+            with db.get_connection() as connection:
+                connection.execute("begin immediate")
+                self.store.commit(connection, self.owner, "s1", turn, "scope-1", PIN,
+                                  ConversationMemory(turn=turn, visitor_name=given), expected_revision=turn - 1)
+            with db.get_connection() as connection:
+                loaded = self.store.load(connection, self.owner, "s1", "scope-1", PIN)
+            self.assertEqual(loaded.memory.visitor_name, kept, repr(given))
+
     def test_committed_identifiers_are_loaded_back(self):
         memory = ConversationMemory(
             focus=RecordRef("issue", "LIN-142"), last_person=RecordRef("member", "Maya Chen"),

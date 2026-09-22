@@ -174,6 +174,81 @@ class DefinitionAuthorityConversationTest(EngineCutoverFixture):
             self.assertEqual(body["speech"], "Thanks, that helps. What would you like to explore first in Pixel?", message)
             self.assertIsNone(body["validated_action"], message)
 
+    def test_conversation_never_takes_over_a_request(self):
+        """Routing comes first: a conversational phrase inside a request does not answer it."""
+        for index, message in enumerate((
+            "help me create a ticket for Noah about login errors",
+            "create a ticket for Noah about the next step for onboarding",
+            "create a ticket for Noah about voice listening dropping words",
+        )):
+            body = self.say(message, session=f"request-{index}")
+            self.assertTrue(body["speech"].startswith("Which project should the new ticket have"), message)
+        refused = self.say("help me delete all issues", session="refusal")
+        self.assertEqual(refused["speech"], "I can't delete or erase anything here.")
+        self.assertEqual(self.say("delete the tickets, what can you do?", session="refusal-2")["status"], "denied")
+
+    def test_a_conversational_question_beats_only_a_question_back(self):
+        """A record word ("doing") may match an update; with nothing to act on, the question is answered."""
+        capable = self.say("are you capable of doing")
+        self.assertTrue(capable["speech"].startswith("Here's what I can do in Pixel:"), capable["speech"])
+        self.assertEqual(self.say("assign it", session="still-asks")["speech"], "Who should this record be assigned to?")
+
+    def test_navigation_interrupts_an_unfinished_create_but_a_title_does_not(self):
+        self.say("Start a ticket assigned to Noah", session="nav")
+        moved = self.say("show me the cycles", session="nav", turn_id=2)
+        self.assertEqual(self.action(moved)[0], "OPEN_CYCLES")
+        self.say("Start a ticket assigned to Noah", session="title")
+        titled = self.say("Investigate customer onboarding issue", session="title", turn_id=2)
+        self.assertTrue(titled["speech"].startswith("Which project should the new ticket have"), titled["speech"])
+        self.say("Create a ticket for Noah about login errors", session="project")
+        home = self.say("open the dashboard", session="project", turn_id=2)
+        self.assertEqual(self.action(home)[0], "OPEN_DASHBOARD")
+
+    def test_platform_answers_never_name_another_workspaces_people(self):
+        for index, message in enumerate(("run the evaluator demo", "what can you do", "what next")):
+            speech = self.say(message, scope=PLATFORM, session=f"names-{index}")["speech"]
+            for name in ("Maya", "Noah", "Salesforce"):
+                self.assertNotIn(name, speech, message)
+
+    def test_counts_filters_and_controls_are_named_from_the_definition(self):
+        self.assertEqual(self.say("how many team members are there", scope=PLATFORM, session="c1")["speech"],
+                         "Platform Workspace has 2 team members. I'll open Teams.")
+        self.assertEqual(self.say("show all tickets for Avery", scope=PLATFORM, session="c2")["speech"],
+                         "I found 1 ticket for Avery Brooks: LIN-131. I'll filter the available records.")
+        self.assertEqual(self.say("how do i assign this issue", session="c3")["speech"],
+                         "I'll open Issue Detail and highlight Assignee.")
+        missing = self.say("create a ticket for Priya about login errors", session="c4")
+        self.assertEqual(missing["speech"],
+                         "I can't find Priya in this workspace. I'll open Teams and highlight Add member.")
+
+    def test_a_later_greeting_uses_the_name_the_visitor_gave(self):
+        self.assertTrue(self.say("HI there i am Pushkar!", session="named")["speech"].startswith("Hello Pushkar"))
+        self.assertTrue(self.say("Hi", session="named", turn_id=2)["speech"].startswith("Hello Pushkar"))
+        self.assertNotIn("Pushkar", self.say("Hi", session="someone-else")["speech"])
+
+    def test_the_next_step_is_drawn_from_the_open_view(self):
+        self.assertEqual(self.say("what should I try next", page="teams")["speech"],
+                         'From Teams, you could highlight "Add member" in the "Teams" view.')
+        self.assertEqual(self.say("what next", session="home", page="dashboard")["speech"],
+                         "Ask what I can do in Pixel to see where to go next.")
+        # A page the definition does not declare is never trusted.
+        self.assertEqual(self.say("what next", session="bogus", page="billing")["speech"],
+                         "Ask what I can do in Pixel to see where to go next.")
+
+    def test_adding_a_member_without_a_name_asks_for_it_and_prefills_the_answer(self):
+        asked = self.say("Add a new team member", session="member")
+        self.assertEqual(asked["speech"],
+                         "What should the name of the new team member be? I'll open Teams and highlight Add member.")
+        answered = self.say("Priya Shah", session="member", turn_id=2)
+        self.assertEqual(self.action(answered), ("HIGHLIGHT_ADD_MEMBER_BUTTON", {"name": "Priya Shah"}))
+        self.assertIsNone(answered["execution"], "a prepared form writes nothing")
+
+    def test_opening_an_unavailable_persons_ticket_says_so_identically(self):
+        elsewhere = self.say("open Maya's ticket", scope=PLATFORM, session="maya")["speech"]
+        nobody = self.say("open Zed's ticket", scope=PLATFORM, session="zed")["speech"]
+        self.assertEqual(elsewhere, "I can't find Maya in this workspace. I'll open Issues.")
+        self.assertEqual(elsewhere.replace("Maya", "Zed"), nobody)
+
     def test_a_request_after_a_self_description_is_still_served(self):
         body = self.say("I'm a manager, show me the projects")
         self.assertEqual(self.action(body)[0], "OPEN_PROJECTS")

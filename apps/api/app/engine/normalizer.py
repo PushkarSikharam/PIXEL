@@ -42,6 +42,11 @@ class NormalizedMessage:
     focused: str
 
     @property
+    def corrected(self) -> bool:
+        """The visitor corrected themselves ("not cycles, show me the issues"; "actually, cycles")."""
+        return self.focused != self.full
+
+    @property
     def words(self) -> tuple[str, ...]:
         """Every word of the message, spelling fixed. Used where context must not be lost."""
         return tuple(self.full.split())

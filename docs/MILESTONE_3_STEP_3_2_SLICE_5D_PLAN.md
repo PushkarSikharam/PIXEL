@@ -96,8 +96,9 @@ The rehearsal is the final proof that 5c's safety net works. Only after it passe
 
 Before any removal, the complete browser suite (`tests/e2e/**`) and the browser golden
 (`products/linear_simplified/tests/browser-golden.spec.ts`) pass with the isolated test API under
-**definition authority**. Today only `keyed-writes.spec.ts` runs the definition engine; the others
-run the legacy default, so a green browser suite does not yet prove the engine 5d keeps.
+**definition authority**. CI runs the whole browser suite twice, once per authority; under
+definition authority the browser golden is compared with its own reviewed list
+(`golden/browser_differences_definition.json`).
 
 - The browser golden under definition authority is compared with `browser_decisions.json`; every
   difference is listed in a reviewed file for this authority, and none is regenerated to pass.
@@ -184,7 +185,7 @@ when the manifest is produced.
 | execution ledger, receipts, `engine_state` and its retention, provider budgets, rate limits, speech | platform contracts |
 | `services/turn_telemetry.py` and `ops cutover-report` | the only per-turn health evidence; the authority dimension becomes a constant, and the command is renamed to a turn report |
 | `services/model_gateway.py`, strict parser, provenance, confirmation boundary, `PIXEL_MODEL_GATEWAY` | the generic model path (5c section 8) |
-| installed product registry and every published definition, with v4 bound | product definitions |
+| installed product registry and every published definition, with v5 bound | product definitions |
 | `shadow_parity_daily` table (dormant) and all reviewed-difference files | audit evidence |
 
 ### 4.4 Allowlist (`KNOWN_PRODUCT_COUPLING`) changes

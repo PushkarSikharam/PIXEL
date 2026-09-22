@@ -118,6 +118,13 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Run browser tests
         run: npm run test:e2e
+      # The cutover gate (5d plan, section 2.4): the same suite and the browser golden, strictly
+      # compared with their own reviewed list, with the definition engine as the authority.
+      - name: Run browser tests under definition authority
+        if: success() || failure()
+        env:
+          PIXEL_ENGINE_MODE: definition
+        run: npm run test:e2e
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v5

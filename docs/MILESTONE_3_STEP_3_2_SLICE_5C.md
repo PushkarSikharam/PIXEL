@@ -17,7 +17,7 @@ PR #21; a follow-up change closed the findings of the review of that pull reques
 | Shared engine assembly | `apps/api/app/services/engine_assembly.py` |
 | Durable engine state, in-process pending cache, workspace-scoped signal history, retention | `apps/api/app/services/engine_state.py` |
 | Required-field completion for creates | `apps/api/app/engine/field_completion.py`, `apps/api/app/engine/conversation_engine.py` |
-| Linear v4 (priority and status defaults; project always asked) | `products/linear_simplified/definition/v4.yaml` |
+| Linear v4 (priority and status defaults; project always asked) and v5 (routing additions) | `products/linear_simplified/definition/v4.yaml`, `v5.yaml` |
 | Legacy authority adapter: keyed legacy mutations, honest proposal wording | `apps/api/app/services/legacy_adapter.py` |
 | Legacy engine sees only the selected workspace | `apps/api/app/main.py` (`create_turn`) |
 | Backend answers everything the browser used to answer itself | `apps/api/app/services/agent.py` (`_conversational_turn`) |
@@ -68,8 +68,10 @@ Other defects found and fixed while building this slice:
 
 Filled in from the final local run of this change; Linux CI on the pull request is the gate.
 
-- API suite: 947 tests pass (3 skipped). Product suite: 104 tests pass. Web unit tests: 44 pass; type-check clean.
-- Browser suite (Playwright, isolated servers): 116 tests pass, including the browser golden recording.
+- API suite: 964 tests pass (3 skipped), including the cutover visitor script run in-process under both authorities. Product suite: 104 tests pass. Web unit tests: 44 pass; type-check clean.
+- Browser suite (Playwright, isolated servers): 116 tests pass under legacy authority and 116 under
+  `PIXEL_ENGINE_MODE=definition`, each including the browser golden checked strictly against its
+  own reviewed list.
 - Golden evidence, never regenerated: backend recording 68 reviewed differences, shadow 211,
   browser 59. Each names its kind and reason; the tests fail on an unlisted or stale difference.
 
@@ -103,41 +105,89 @@ revised, not regenerated: the stale v3 reasons for `create-start-assigned` are r
 difference no longer occurs and was removed, one new one (the pending title question in the
 summary) is listed with its reason, and two signal entries are reclassified as confidence-only.
 
-### Browser suite under definition authority: fails
+### Browser suite under definition authority
 
-The full browser suite was run locally with `PIXEL_ENGINE_MODE=definition` (the section 2.4 gate of
-the 5d plan). It **fails**: 24 tests failed, 38 passed, and 54 did not run because the run stopped
-at the failure limit. This, not the API suite, is the cutover gate, and it is not met. The failures
-fall into three groups:
+A first local run with `PIXEL_ENGINE_MODE=definition` failed (24 failed, 38 passed, 54 not run).
+The change that followed made the browser pass by breaking platform rules, and was reviewed as not
+mergeable. Its findings, and how each is now closed:
 
-- **Wording** (the *port* rows of the 5d behaviour matrix): tests expect the legacy sentences, for
-  example "Jen is not in the team directory yet" where the definition engine says "I'll highlight
-  the requested control in Teams."
-- **Owner decisions** (the *decide* rows): for example, a create without an owner expects the
-  Issues view with the create button highlighted; the definition engine asks without highlighting.
-- **Behaviour gaps**: opening Maya's issue does not highlight its assignee control; a create never
-  reaches the new issue, because the definition engine asks for the project and the browser flow
-  does not complete that exchange; the first browser golden case (`nav-sprint-planning`) differs.
+1. **Linear demo content in the platform core.** The composer spoke a scripted guided path naming
+   Maya, Noah and Salesforce to every product and workspace, and the engine hard-coded tickets,
+   issues, members, projects, Teams and the assignee control. All of it is removed. Counts, the
+   person filter, owner questions and control names are now read from the definition (the opened
+   view's entity and its labels, the field a filter uses, the control's declared label); the guided
+   path is drawn from the caller's filtered offers. The core-purity and platform-wording tests pass.
+2. **Conversation answered before routing.** "Help me create a ticket for Noah ...", a title
+   mentioning "the next step" or "voice", and "delete the contact, what can you do?" were answered
+   as conversation. Routing is first again; conversation is answered when routing falls back, or
+   when routing only produced a question back (which writes nothing), so "are you capable of doing"
+   is answered while a refusal or a request never is.
+3. **Replies that could crash.** New templates needed `{control}` and `{view}` values that some
+   paths (including a replaced model sentence) never supply. Every lifecycle rendering now has a
+   safe control description, and the found-records answer needs no view.
+4. **A published definition edited in place.** v4 had been merged, and edits to it would make every
+   v4 turn fail its checksum in any environment that registered it (reproduced locally: the API
+   starts, then every v4 turn raises `DefinitionError`). v4 is back to its merged bytes, and the
+   additions are **Linear v5**, which the seed now binds. v5 also routes "open the dashboard",
+   which no version did.
+5. **Navigation could not leave an unfinished create.** "Show me the cycles" became the ticket's
+   title. Navigation phrased as navigation now interrupts a free-text question; a title that names a
+   product area ("Investigate customer onboarding issue") is still read as the title.
+6. **Weakened golden evidence.** The legacy browser golden had stopped checking stale and
+   mismatched entries and ignored every reply difference; 52 entries shared three boilerplate
+   reasons, and wording changes were labelled as security. The spec is back to its strict form and
+   the legacy list to its reviewed version. Definition authority has its own equally strict list,
+   `golden/browser_differences_definition.json`: 111 entries, each with a case-specific reason
+   (49 wording, 59 behaviour, 3 security). Open owner decisions are named as pending, not accepted.
+   Two e2e assertions that accepted either engine's sentence are exact again.
 
-Every failing test must pass, or be changed with a recorded owner decision, before definition
-authority is switched on in production.
+Port rows completed after that review, each tested under definition authority:
 
-The browser suite and browser golden had also only proven the legacy engine; they must pass under
-definition authority before cutover (5d plan revision 2, section 2.4).
+- A later greeting uses the name the visitor introduced themselves with in this session. The name
+  is kept only in that session's engine state (an additive `engine_state.visitor_name` column),
+  only when short and plain, and is removed with the state's normal retention.
+- "What should I try next?" suggests what can be done from the open view, drawn from the filtered
+  offers; a view the definition does not declare is never trusted, and the Dashboard gets the
+  generic answer.
+- "Add a new team member" with no name asks for it, and the answer prefills the add-member form.
+  The rule is generic: a control whose only prepared value is a new record's title asks for it.
+- In another workspace, "open Maya's ticket" now says the name was not found before opening the
+  Issues list, identically for an unknown name.
 
-## Open before sign-off (operator actions)
+Still open:
 
-These cannot be produced by code, and none has evidence yet:
+- **Owner decisions** (5d plan revision 2, section 5): quoted names in replies; the guided path;
+  the correction wording; the "which ticket" wording. The browser golden list names each as pending.
+- **Not ported:** offering to add an unknown assignee during an update. The definition engine says
+  it cannot find the person and changes nothing, which is safe; the offer is a convenience.
 
-1. Confirm on Railway that `PIXEL_ENGINE_MODE` is unset or `legacy`, and check `/health` reports
-   `"authority": "legacy"`.
-2. Section 2.2: a shadow report of at least 100 compared turns across 20 fresh sessions, with the
-   workflow matrix, zero `shadow_error` and `worker_unhealthy`, and every difference decided.
-3. Section 2.4: an encrypted database backup, one verified restore, and the prior artifact ready.
-4. Section 11.2: deploy inertly, then publish and bind v4 for new sessions with
-   `python -m app.ops move-product-version --tenant <tenant> --product <product> --version 4`.
-5. Section 11.3: switch to `definition`, run the visitor script, and review the first 100 turns and
-   at least 60 minutes of `python -m app.ops cutover-report`, against the section 11.4 triggers.
+## Open before sign-off (operator runbook)
+
+5c is built and tested; it is **not signed off** until these steps have evidence. They change the
+production service, so the operator runs them. Every command below exists and is tested. `ops`
+commands run in the API service shell (`PYTHONPATH=apps/api python -m app.ops ...`); the visitor
+script runs from any machine with the repository.
+
+1. **Confirm the starting point.** `python scripts/visitor_check.py --api <api-url>
+   --expect-authority legacy` must print 11/11 checks passed. Its first check is that `/health`
+   reports `"authority": "legacy"`.
+2. **Back up and prove the restore** (plan, section 11.2, step 1). `ops backup` must print
+   `"restorable": true`. Encrypt the copy with your own key and store it off the Railway volume;
+   record its `sha256`. Keep the currently deployed build ready to redeploy.
+3. **Deploy this build inertly** (section 11.2). Leave `PIXEL_ENGINE_MODE` unset or `legacy`. Rerun
+   step 1. Then bind v5 for new sessions: `ops move-product-version --tenant pixel-dev --product
+   linear-demo --version 5` must print `"moved": true`.
+4. **Shadow evidence** (section 2.2). Set `PIXEL_SHADOW_ENGINE=on`, let at least 100 turns across 20
+   fresh sessions arrive (the visitor script adds labelled synthetic ones), then `ops shadow-report
+   --days 7`: zero `shadow_error` and `worker_unhealthy`, every difference class already reviewed.
+5. **Archive the legacy baseline** (5d plan, section 2.5): `ops cutover-report --days 30`, attached here.
+6. **Cut over** (section 11.3). Set `PIXEL_ENGINE_MODE=definition`, redeploy, then run
+   `python scripts/visitor_check.py --api <api-url> --expect-authority definition` (add `--voice`
+   to include playback, which calls Azure): 11/11 (12/12 with voice).
+7. **Watch** the first 100 accepted turns and at least 60 minutes of `ops cutover-report --days 1`
+   against the section 11.4 triggers. On any trigger, set `PIXEL_ENGINE_MODE=legacy` and redeploy.
+
+Sign-off also needs green Linux CI on the pull request, including both browser runs.
 
 ## Deliberate limits
 

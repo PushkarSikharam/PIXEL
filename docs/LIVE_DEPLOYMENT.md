@@ -138,11 +138,13 @@ never used as a voice unless that setting lists it. When Azure cannot answer (fo
 free tier's monthly allowance is used up), the page falls back to the browser's own voice, which
 costs nothing. The Azure resource is on the free (F0) tier.
 
-### Backups: not in place
+### Backups: manual only
 
-The SQLite database on the volume has no backups. Before any real pilot we need scheduled,
-encrypted snapshots, a retention policy, copies outside this Railway volume, one documented
-restore test, and monitoring of disk use and backup failures.
+`python -m app.ops backup` takes a consistent online copy of the SQLite database and proves it
+restores (integrity check, and the application starting against a scratch copy);
+`python -m app.ops verify-backup --path FILE` rechecks any copy. Neither encrypts or schedules.
+Before any real pilot we still need scheduled, encrypted snapshots, a retention policy, copies
+outside this Railway volume, and monitoring of disk use and backup failures.
 
 ## Vercel web service
 

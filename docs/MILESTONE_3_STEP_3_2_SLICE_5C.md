@@ -103,7 +103,26 @@ revised, not regenerated: the stale v3 reasons for `create-start-assigned` are r
 difference no longer occurs and was removed, one new one (the pending title question in the
 summary) is listed with its reason, and two signal entries are reclassified as confidence-only.
 
-The browser suite and browser golden have also only proven the legacy engine; they must pass under
+### Browser suite under definition authority: fails
+
+The full browser suite was run locally with `PIXEL_ENGINE_MODE=definition` (the section 2.4 gate of
+the 5d plan). It **fails**: 24 tests failed, 38 passed, and 54 did not run because the run stopped
+at the failure limit. This, not the API suite, is the cutover gate, and it is not met. The failures
+fall into three groups:
+
+- **Wording** (the *port* rows of the 5d behaviour matrix): tests expect the legacy sentences, for
+  example "Jen is not in the team directory yet" where the definition engine says "I'll highlight
+  the requested control in Teams."
+- **Owner decisions** (the *decide* rows): for example, a create without an owner expects the
+  Issues view with the create button highlighted; the definition engine asks without highlighting.
+- **Behaviour gaps**: opening Maya's issue does not highlight its assignee control; a create never
+  reaches the new issue, because the definition engine asks for the project and the browser flow
+  does not complete that exchange; the first browser golden case (`nav-sprint-planning`) differs.
+
+Every failing test must pass, or be changed with a recorded owner decision, before definition
+authority is switched on in production.
+
+The browser suite and browser golden had also only proven the legacy engine; they must pass under
 definition authority before cutover (5d plan revision 2, section 2.4).
 
 ## Open before sign-off (operator actions)

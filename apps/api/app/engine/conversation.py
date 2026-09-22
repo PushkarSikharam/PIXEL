@@ -29,6 +29,7 @@ IDENTITY_CUES = (
 CAPABILITY_CUES = (
     "what can you do", "what do you do", "how can you help", "what can i ask",
     "what are you able to", "what can you show me", "help me", "what can this do",
+    "are you capable", "capable of doing",
 )
 # Questions about what the assistant changed. Answered only from the ledger's record of executed
 # changes, passed in by the caller; never from a document and never from memory (5b plan, 8.4).
@@ -55,6 +56,9 @@ class Conversational(StrEnum):
     IDENTITY = "identity"
     CAPABILITIES = "capabilities"
     LAST_CHANGE = "last_change"
+    GUIDED_PATH = "guided_path"
+    NEXT_STEP = "next_step"
+    VOICE_INTERRUPTION = "voice_interruption"
 
 
 @dataclass(frozen=True)
@@ -77,14 +81,23 @@ def detect(text: NormalizedMessage, *, visitor_name: str | None = None) -> Conve
             return ConversationalTurn(Conversational.GREETING_NAMED, "greeting_named", visitor_name)
         return ConversationalTurn(Conversational.GREETING, "greeting")
 
-    if any(contains_term(whole, cue) for cue in IDENTITY_CUES):
-        return ConversationalTurn(Conversational.IDENTITY, "identity")
-
     if any(contains_term(whole, cue) for cue in CAPABILITY_CUES):
         return ConversationalTurn(Conversational.CAPABILITIES, "capabilities")
 
+    if any(contains_term(whole, cue) for cue in IDENTITY_CUES):
+        return ConversationalTurn(Conversational.IDENTITY, "identity")
+
     if any(contains_term(whole, cue) for cue in LAST_CHANGE_CUES):
         return ConversationalTurn(Conversational.LAST_CHANGE, "last_change")
+
+    if _guided_path(whole):
+        return ConversationalTurn(Conversational.GUIDED_PATH, "guided_path")
+
+    if _next_step(whole):
+        return ConversationalTurn(Conversational.NEXT_STEP, "next_step")
+
+    if _voice_interruption(whole):
+        return ConversationalTurn(Conversational.VOICE_INTERRUPTION, "voice_interruption")
 
     name = _introduced_name(whole, text.original)
     if name is None:
@@ -95,6 +108,30 @@ def detect(text: NormalizedMessage, *, visitor_name: str | None = None) -> Conve
     if name:
         return ConversationalTurn(Conversational.GREETING_NAMED, "greeting_named", name)
     return None
+
+
+def _guided_path(whole: str) -> bool:
+    return any(contains_term(whole, cue) for cue in (
+        "run the evaluator demo", "evaluator demo", "guided demo", "demo path", "demo script",
+        "test script",
+    ))
+
+
+def _next_step(whole: str) -> bool:
+    return any(contains_term(whole, cue) for cue in (
+        "what should i try next", "what should we try next", "next step", "what next",
+        "where should i start",
+    ))
+
+
+def _voice_interruption(whole: str) -> bool:
+    return (
+        "voice" in whole
+        and any(contains_term(whole, cue) for cue in (
+            "interrupt", "interruption", "stop speaking", "stopping", "listening",
+            "listen while", "live voice",
+        ))
+    )
 
 
 def _introduced_name(whole: str, original: str) -> str | None:

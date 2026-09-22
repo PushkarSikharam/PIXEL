@@ -19,8 +19,9 @@ SUBJECT_CUES = frozenset({"about"})
 COMMON_WORDS = frozenset({
     "a", "about", "all", "an", "and", "any", "are", "at", "can", "could", "demo", "do", "does",
     "every", "for", "from", "hello", "help", "hey", "hi", "how", "i", "im", "in", "is", "it",
-    "me", "my", "new", "of", "on", "open", "or", "please", "show", "some", "that", "the", "this",
-    "to", "us", "we", "what", "when", "where", "who", "why", "with", "you", "your",
+    "employee", "employees", "member", "members", "me", "my", "new", "of", "on", "open", "or",
+    "person", "people", "please", "show", "some", "teammate", "teammates", "that", "the", "this",
+    "to", "user", "users", "us", "we", "what", "when", "where", "who", "why", "with", "you", "your",
     # Contractions, compared without their apostrophe.
     "dont", "doesnt", "id", "ill", "im", "isnt", "its", "ive", "lets", "thats", "theyre", "were",
     "whats", "youre",

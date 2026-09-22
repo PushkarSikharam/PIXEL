@@ -87,9 +87,9 @@ _REQUEST_MARKER = re.compile(
 MISSING_FIELD_KEY = "missing_field"
 # Words that set an unfinished create aside instead of answering its question.
 _SET_ASIDE = re.compile(r"^\s*(cancel|stop|never ?mind|forget it|leave it|skip it|no thanks)\b", re.IGNORECASE)
-# While a free-text field is being asked for, only these requests replace the unfinished create;
-# anything else is the answer (a title may well mention a product area).
-_REPLACING = frozenset({Capability.NAVIGATE_VIEW, Capability.CREATE_RECORD, Capability.UPDATE_RECORD})
+# While a free-text field is being asked for, only mutating requests replace the unfinished create;
+# anything else is the answer (a title may well mention a product area such as "issue").
+_REPLACING = frozenset({Capability.CREATE_RECORD, Capability.UPDATE_RECORD})
 
 
 
@@ -182,6 +182,7 @@ class ConversationEngine:
         # Whether this turn began a create that now waits for a missing field. The person the
         # visitor named for it is already resolved, so it is recorded like any accepted request.
         drafted = False
+        conversational = None
 
         continued = self._continue_create(message, memory, context, composer)
         if continued is not None:
@@ -192,11 +193,22 @@ class ConversationEngine:
             pending = memory.pending_clarification
             if pending is not None and pending.field is not None:
                 memory = replace(memory, pending_clarification=None)
-            routed = router.route(message, memory, context)
-            result, next_memory = routed.result, routed.memory
+            if memory.pending_clarification is None and memory.pending_confirmation is None:
+                conversational = self._platform_conversation(text, context)
+            else:
+                conversational = None
+            if conversational is not None:
+                result = RouteResult(RouteKind.ANSWER, RouteStage.FALLBACK, conversational[1].template_key)
+                next_memory = memory
+                stage, reply, passages, evidence = conversational
+            else:
+                routed = router.route(message, memory, context)
+                result, next_memory = routed.result, routed.memory
 
         if continued is not None:
             pass  # the unfinished create decided this turn
+        elif conversational is not None:
+            pass  # a platform conversation answer decided this turn
         elif (result.kind == RouteKind.PROPOSE and result.proposal is not None
                 and result.proposal.capability not in MUTATING_CAPABILITIES and _describes_visitor(message)):
             # "I'm a manager moving from another tool" may name a word a view matches, but it
@@ -358,6 +370,27 @@ class ConversationEngine:
             # The request went ahead without the person it named; say so first, in platform words.
             missing = composer.refused("unknown_person", scope=SCOPE_NAME, **dict(result.placeholders))
             reply = Reply(f"{missing.speech} {reply.speech}", reply.stage, reply.template_key)
+        elif result.response_key == "member_missing":
+            missing = composer.refused("member_missing", scope=SCOPE_NAME, **dict(result.placeholders))
+            reply = Reply(f"{missing.speech} {reply.speech}", reply.stage, reply.template_key)
+        elif result.response_key == "clarify_owner":
+            question = composer.clarification("clarify_owner", label="ticket")
+            reply = Reply(f"{question.speech} {reply.speech}", reply.stage, reply.template_key)
+        elif result.response_key == "people_count":
+            reply = composer.answer(
+                "people_count", scope=self._snapshot.scope_label or SCOPE_NAME,
+                count=str(self._snapshot.count("member")),
+                label="team members", view=self._view_label(action.view or "teams"),
+            )
+        elif result.response_key == "anchor_count":
+            records = self._record_names("project")
+            reply = composer.answer(
+                "anchor_count", scope=self._snapshot.scope_label or SCOPE_NAME,
+                count=str(self._snapshot.count("project")),
+                label="projects", records=records, view=self._view_label(action.view or "projects"),
+            )
+        elif action.capability == Capability.FILTER_RECORDS and action.filter is not None:
+            reply = self._filter_reply(composer, action, reply)
         return stage, reply
 
     def _after_fallback(
@@ -365,15 +398,9 @@ class ConversationEngine:
     ) -> tuple[TurnStage, Reply, tuple[KnowledgePassage, ...], bool]:
         """The platform stages after routing fell back; the last value says whether evidence is
         retrieved for the reply."""
-        conversational = detect(text)
-        if conversational is not None:
-            composer = ResponseComposer(self._definition, visitor_name=conversational.visitor_name)
-            if conversational.kind == Conversational.CAPABILITIES:
-                offers = offerable(self._definition, self._snapshot, self._policy)
-                return TurnStage.ANSWER, composer.capabilities(offers), (), True
-            if conversational.kind == Conversational.LAST_CHANGE:
-                return TurnStage.ANSWER, self._last_change(composer, context.last_change), (), False
-            return TurnStage.ANSWER, composer.answer(conversational.template_key), (), True
+        conversation = self._platform_conversation(text, context)
+        if conversation is not None:
+            return conversation
         composer = ResponseComposer(self._definition)
         if _describes_visitor(message):
             # "I'm a manager moving from another tool": context, recorded as signals. It is
@@ -386,6 +413,21 @@ class ConversationEngine:
                 return TurnStage.KNOWLEDGE, reply, grounding.passages, True
             return TurnStage.UNGROUNDED, reply, (), True
         return TurnStage.FALLBACK, composer.answer("fallback"), (), True
+
+    def _platform_conversation(
+        self, text: NormalizedMessage, context: TurnContext,
+    ) -> tuple[TurnStage, Reply, tuple[KnowledgePassage, ...], bool] | None:
+        """Conversation turns the platform can answer without consulting product intents."""
+        conversational = detect(text)
+        if conversational is not None:
+            composer = ResponseComposer(self._definition, visitor_name=conversational.visitor_name)
+            if conversational.kind == Conversational.CAPABILITIES:
+                offers = offerable(self._definition, self._snapshot, self._policy)
+                return TurnStage.ANSWER, composer.capabilities(offers), (), True
+            if conversational.kind == Conversational.LAST_CHANGE:
+                return TurnStage.ANSWER, self._last_change(composer, context.last_change), (), False
+            return TurnStage.ANSWER, composer.answer(conversational.template_key), (), True
+        return None
 
     @staticmethod
     def _last_change(composer: ResponseComposer, change: Any) -> Reply:
@@ -402,6 +444,8 @@ class ConversationEngine:
         values: dict[str, str] = {}
         if action.view is not None:
             values["view"] = self._view_label(action.view)
+        if action.control is not None:
+            values["control"] = self._control_label(action.view, action.control)
         if action.fields:
             # People are named, never spoken as identifiers.
             entity = self._definition.actions[action.action_key].entity
@@ -456,6 +500,38 @@ class ConversationEngine:
     def _view_label(self, view: str) -> str:
         spec = self._definition.views.get(view)
         return spec.label if spec is not None else view.replace("_", " ").capitalize()
+
+    def _control_label(self, view: str | None, control: str) -> str:
+        if control == "assignment_control":
+            return "the assignee control"
+        if view is not None and (spec := self._definition.views.get(view)) is not None:
+            if (control_spec := spec.controls.get(control)) is not None:
+                return control_spec.label
+        return control.replace("_", " ")
+
+    def _filter_reply(self, composer: ResponseComposer, action: GenericAction, fallback: Reply) -> Reply:
+        spec = self._definition.actions[action.action_key]
+        if spec.entity != "issue" or action.filter.field != "assignee":
+            return fallback
+        person = self._snapshot.get("member", str(action.filter.value))
+        if person is None:
+            return fallback
+        records = [
+            record.id for record in self._snapshot.records.get("issue", ())
+            if record.fields.get("assignee") == action.filter.value
+        ]
+        label = "ticket" if len(records) == 1 else "tickets"
+        listed = ", ".join(records) if records else "none"
+        speech = f"I found {len(records)} {label} assigned to {person.title}: {listed}. I'll open Issues."
+        return Reply(speech, fallback.stage, fallback.template_key)
+
+    def _record_names(self, entity: str) -> str:
+        names = [record.title or record.id for record in self._snapshot.records.get(entity, ())]
+        if not names:
+            return "none"
+        if len(names) == 1:
+            return names[0]
+        return f"{', '.join(names[:-1])} and {names[-1]}"
 
     def _translated(self, validated: ValidatedAction | None) -> tuple[Any | None, str | None]:
         if validated is None or self._translate is None:

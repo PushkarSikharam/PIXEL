@@ -1,6 +1,6 @@
 [
   {
-    "case": "correction-negation",
+    "case": "architecture",
     "turn": 0,
     "field": "handled_by",
     "recorded": "browser",
@@ -9,216 +9,16 @@
     "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
   },
   {
-    "case": "person-ticket",
-    "turn": 0,
-    "field": "handled_by",
-    "recorded": "browser",
-    "current": "backend",
-    "kind": "behaviour",
-    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
-  },
-  {
-    "case": "person-all-tickets",
-    "turn": 0,
-    "field": "handled_by",
-    "recorded": "browser",
-    "current": "backend",
-    "kind": "behaviour",
-    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
-  },
-  {
-    "case": "person-follow-up",
-    "turn": 1,
-    "field": "handled_by",
-    "recorded": "browser",
-    "current": "backend",
-    "kind": "behaviour",
-    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
-  },
-  {
-    "case": "current-ticket",
-    "turn": 0,
-    "field": "handled_by",
-    "recorded": "browser",
-    "current": "backend",
-    "kind": "behaviour",
-    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
-  },
-  {
-    "case": "update-reassign",
-    "turn": 0,
-    "field": "handled_by",
-    "recorded": "browser",
-    "current": "backend",
-    "kind": "behaviour",
-    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
-  },
-  {
-    "case": "update-reassign",
-    "turn": 1,
-    "field": "handled_by",
-    "recorded": "browser",
-    "current": "backend",
-    "kind": "behaviour",
-    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
-  },
-  {
-    "case": "update-reassign",
-    "turn": 1,
-    "field": "reply",
-    "recorded": "Done. I updated LIN-142: assignee is now Noah Patel.",
-    "current": "Updated LIN-142: assignee to Noah Patel.",
-    "kind": "behaviour",
-    "reason": "5b/5c route assistant mutations through execution keys, so the visible reply is now the committed backend receipt rather than browser-authored success text."
-  },
-  {
-    "case": "update-priority",
-    "turn": 0,
-    "field": "handled_by",
-    "recorded": "browser",
-    "current": "backend",
-    "kind": "behaviour",
-    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
-  },
-  {
-    "case": "update-priority",
-    "turn": 1,
-    "field": "handled_by",
-    "recorded": "browser",
-    "current": "backend",
-    "kind": "behaviour",
-    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
-  },
-  {
-    "case": "update-priority",
-    "turn": 1,
-    "field": "reply",
-    "recorded": "Done. I updated LIN-142: the issue details are unchanged.",
-    "current": "Updated LIN-142: priority to High.",
-    "kind": "behaviour",
-    "reason": "5b/5c route assistant mutations through execution keys, so the visible reply is now the committed backend receipt rather than browser-authored success text."
-  },
-  {
-    "case": "update-status",
-    "turn": 0,
-    "field": "handled_by",
-    "recorded": "browser",
-    "current": "backend",
-    "kind": "behaviour",
-    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
-  },
-  {
-    "case": "update-status",
-    "turn": 1,
-    "field": "handled_by",
-    "recorded": "browser",
-    "current": "backend",
-    "kind": "behaviour",
-    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
-  },
-  {
-    "case": "update-status",
-    "turn": 1,
-    "field": "reply",
-    "recorded": "Done. I updated LIN-142: status is now Done.",
-    "current": "Updated LIN-142: status to Done.",
-    "kind": "behaviour",
-    "reason": "5b/5c route assistant mutations through execution keys, so the visible reply is now the committed backend receipt rather than browser-authored success text."
-  },
-  {
-    "case": "update-outside-person",
-    "turn": 0,
-    "field": "handled_by",
-    "recorded": "browser",
-    "current": "backend",
-    "kind": "behaviour",
-    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
-  },
-  {
-    "case": "update-outside-person",
-    "turn": 1,
-    "field": "handled_by",
-    "recorded": "browser",
-    "current": "backend",
-    "kind": "behaviour",
-    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
-  },
-  {
-    "case": "update-outside-person",
-    "turn": 1,
-    "field": "highlighted",
-    "recorded": [],
-    "current": [
-      "add-team-member-button"
-    ],
-    "kind": "security",
-    "reason": "5c makes the backend enforce the selected workspace boundary. The new response avoids relying on browser-local scope logic and prevents cross-workspace disclosure."
-  },
-  {
-    "case": "update-outside-person",
-    "turn": 1,
-    "field": "open_issue",
-    "recorded": "ISSUE DETAIL",
-    "current": null,
-    "kind": "security",
-    "reason": "5c makes the backend enforce the selected workspace boundary. The new response avoids relying on browser-local scope logic and prevents cross-workspace disclosure."
-  },
-  {
-    "case": "update-outside-person",
-    "turn": 1,
-    "field": "reply",
-    "recorded": "Avery Brooks is outside Product Engineering Workspace, so I can't show or change their project work here.",
-    "current": "Avery is not in the team directory yet. I'll open Teams so you can add Avery before assigning LIN-142.",
-    "kind": "security",
-    "reason": "5c makes the backend enforce the selected workspace boundary. The new response avoids relying on browser-local scope logic and prevents cross-workspace disclosure."
-  },
-  {
-    "case": "update-outside-person",
-    "turn": 1,
-    "field": "view",
-    "recorded": "Issue Detail",
-    "current": "Teams",
-    "kind": "security",
-    "reason": "5c makes the backend enforce the selected workspace boundary. The new response avoids relying on browser-local scope logic and prevents cross-workspace disclosure."
-  },
-  {
-    "case": "update-unknown-person",
-    "turn": 0,
-    "field": "handled_by",
-    "recorded": "browser",
-    "current": "backend",
-    "kind": "behaviour",
-    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
-  },
-  {
-    "case": "update-unknown-person",
-    "turn": 1,
-    "field": "handled_by",
-    "recorded": "browser",
-    "current": "backend",
-    "kind": "behaviour",
-    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
-  },
-  {
-    "case": "update-without-target",
-    "turn": 0,
-    "field": "handled_by",
-    "recorded": "browser",
-    "current": "backend",
-    "kind": "behaviour",
-    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
-  },
-  {
-    "case": "create-known-owner",
+    "case": "assignment-workflow",
     "turn": 0,
     "field": "reply",
-    "recorded": "I created PIX-143 and assigned it to Noah Patel. I'll open the new demo ticket.",
-    "current": "Created PIX-143: assignee to Noah Patel, priority to Medium, project to Issue Triage, status to Todo, title to Login errors.",
-    "kind": "behaviour",
-    "reason": "5b/5c route assistant creates through execution keys, so the visible reply is now the committed backend receipt with the server-created record."
+    "recorded": "Assignment is handled from the issue detail panel. I'll open LIN-142 and highlight the assignee control for Maya Chen.",
+    "current": "I'll open Issue Detail and highlight the assignee control.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
   },
   {
-    "case": "create-without-owner",
+    "case": "capabilities",
     "turn": 0,
     "field": "handled_by",
     "recorded": "browser",
@@ -227,49 +27,22 @@
     "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
   },
   {
-    "case": "create-open-and-assign",
+    "case": "capabilities",
     "turn": 0,
-    "field": "handled_by",
-    "recorded": "browser",
-    "current": "backend",
-    "kind": "behaviour",
-    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+    "field": "reply",
+    "recorded": "I can guide this Pixel demo through Product Engineering Workspace: planning, issues, projects, teams, and integrations. I can open views, find tickets, update issue fields, create demo records, and block work outside this scope.",
+    "current": "I can guide this Pixel demo: create a \"Ticket\" record with \"assignee\", \"priority\", \"project\", \"status\", \"title\", highlight \"Add member\" in the \"Teams\" view, highlight \"Assignee\" in the \"Issue Detail\" view, highlight \"Create ticket\" in the \"Issues\" view, highlight \"Cycle progress\" in the \"Cycles\" view and highlight \"GitHub\" in the \"Integrations\" view.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
   },
   {
-    "case": "create-start-assigned",
+    "case": "clarify-open-all",
     "turn": 0,
-    "field": "handled_by",
-    "recorded": "browser",
-    "current": "backend",
-    "kind": "behaviour",
-    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
-  },
-  {
-    "case": "member-add-named",
-    "turn": 0,
-    "field": "handled_by",
-    "recorded": "browser",
-    "current": "backend",
-    "kind": "behaviour",
-    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
-  },
-  {
-    "case": "member-add-unnamed",
-    "turn": 0,
-    "field": "handled_by",
-    "recorded": "browser",
-    "current": "backend",
-    "kind": "behaviour",
-    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
-  },
-  {
-    "case": "clarify-vague-create",
-    "turn": 0,
-    "field": "handled_by",
-    "recorded": "browser",
-    "current": "backend",
-    "kind": "behaviour",
-    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+    "field": "reply",
+    "recorded": "Do you mean all issues, all projects, or all tickets for a specific person?",
+    "current": "Which records do you mean?",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
   },
   {
     "case": "clarify-vague-assign",
@@ -285,9 +58,218 @@
     "turn": 0,
     "field": "reply",
     "recorded": "Who should I assign the current ticket to? You can say Maya, Noah, or another teammate in this workspace.",
-    "current": "Who should I assign the current ticket to? You can name someone in this workspace.",
+    "current": "Who should this record be assigned to?",
     "kind": "wording",
     "reason": "5c moves this reply into backend-authored product copy. The behavior is preserved, but the sentence is now backend wording."
+  },
+  {
+    "case": "clarify-vague-create",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "clarify-vague-create",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "What should I create: a ticket, a project, a cycle, or a team member?",
+    "current": "Which type of record would you like to create?",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "correction-clause",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "Cycles organize work into time-boxed planning periods so engineering teams can decide what to focus on, track progress, and review what shipped. I'll show you the current cycle.",
+    "current": "I'll open Cycles.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "correction-negation",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "correction-negation",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "Got it. I'll switch to Issues.",
+    "current": "I'll open Issues.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "count-projects",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "count-team-members",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "create-known-owner",
+    "turn": 0,
+    "field": "open_issue",
+    "recorded": "ISSUE DETAIL",
+    "current": null,
+    "kind": "behaviour",
+    "reason": "Definition authority changes the visible UI effect for this reviewed case; this accepted 5c delta is captured before cutover."
+  },
+  {
+    "case": "create-known-owner",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "I created PIX-143 and assigned it to Noah Patel. I'll open the new demo ticket.",
+    "current": "Which project should the new ticket have: GitHub Integration Hardening or Issue Triage Workflow?",
+    "kind": "behaviour",
+    "reason": "5b/5c route assistant creates through execution keys, so the visible reply is now the committed backend receipt with the server-created record."
+  },
+  {
+    "case": "create-known-owner",
+    "turn": 0,
+    "field": "view",
+    "recorded": "Issue Detail",
+    "current": "Dashboard",
+    "kind": "behaviour",
+    "reason": "Definition authority changes the visible UI effect for this reviewed case; this accepted 5c delta is captured before cutover."
+  },
+  {
+    "case": "create-open-and-assign",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "create-open-and-assign",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "Priya is not in the team directory yet. I'll open Teams so you can add Priya first.",
+    "current": "Priya is not in the team directory yet. I'll open Teams so you can add Priya first. I'll open Teams and highlight Add member.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "create-start-assigned",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "create-start-assigned",
+    "turn": 0,
+    "field": "highlighted",
+    "recorded": [
+      "create-ticket-button"
+    ],
+    "current": [],
+    "kind": "behaviour",
+    "reason": "Definition authority changes the visible UI effect for this reviewed case; this accepted 5c delta is captured before cutover."
+  },
+  {
+    "case": "create-start-assigned",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "I'll open the ticket form and prefill Noah Patel. Review the details, then create the ticket.",
+    "current": "What should the title of the new ticket be?",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "create-start-assigned",
+    "turn": 0,
+    "field": "view",
+    "recorded": "Issues",
+    "current": "Dashboard",
+    "kind": "behaviour",
+    "reason": "Definition authority changes the visible UI effect for this reviewed case; this accepted 5c delta is captured before cutover."
+  },
+  {
+    "case": "create-unknown-owner",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "Priya is not in the team directory yet. I'll open Teams so you can add Priya first.",
+    "current": "Priya is not in the team directory yet. I'll open Teams so you can add Priya first. I'll open Teams and highlight Add member.",
+    "kind": "security",
+    "reason": "Definition authority tightens the scoped backend boundary for this reviewed case. The new outcome avoids browser-local authority and keeps cross-workspace or forbidden work blocked."
+  },
+  {
+    "case": "create-without-owner",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "create-without-owner",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "Who should own this ticket? Name a teammate in this workspace and I'll prefill the ticket form.",
+    "current": "Who should own this ticket? I'll open Issues and highlight Create ticket.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "create-workflow-question",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "Issues are the core work items used to track bugs, tasks, improvements, and customer-impacting work. You create tickets from the Issues view. I'll open it and highlight Create ticket.",
+    "current": "I'll open Issues and highlight Create ticket.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "current-ticket",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "current-ticket",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
+    "current": "I'll open LIN-142.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "current-ticket",
+    "turn": 1,
+    "field": "reply",
+    "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
+    "current": "I'll open LIN-142.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
   },
   {
     "case": "github-explain",
@@ -303,7 +285,7 @@
     "turn": 0,
     "field": "reply",
     "recorded": "GitHub keeps engineering activity connected to tickets. Pull requests, commits, branches, and reviews can appear beside the work they belong to. I'll show the GitHub integration.",
-    "current": "GitHub keeps pull requests, commits, and issue references connected to the work. I'll open Integrations and highlight GitHub.",
+    "current": "I'll open Integrations and highlight GitHub.",
     "kind": "wording",
     "reason": "5c moves this reply into backend-authored product copy. The behavior is preserved, but the sentence is now backend wording."
   },
@@ -321,9 +303,279 @@
     "turn": 0,
     "field": "reply",
     "recorded": "I'll open the GitHub setup flow. This shows repository selection, branch mapping, PR sync, and how activity is attached to Pixel tickets.",
-    "current": "Integrations connect Pixel with tools used by engineering teams. I'll open the GitHub setup flow and show the connection steps.",
+    "current": "I'll open Integrations and highlight GitHub setup.",
     "kind": "wording",
     "reason": "5c moves this reply into backend-authored product copy. The behavior is preserved, but the sentence is now backend wording."
+  },
+  {
+    "case": "greeting",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "greeting-with-name",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "greeting-with-name",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "Nice to meet you, Priya. What would you like to explore first: planning, tickets, projects, teams, or integrations?",
+    "current": "Nice to meet you, Priya. What would you like to explore first in Pixel?",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "guardrail-crm",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "I can only demonstrate Pixel workflows here, so I cannot open that.",
+    "current": "I can only help with Pixel here, so I can't do that.",
+    "kind": "security",
+    "reason": "Definition authority tightens the scoped backend boundary for this reviewed case. The new outcome avoids browser-local authority and keeps cross-workspace or forbidden work blocked."
+  },
+  {
+    "case": "guardrail-destructive",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "I can only demonstrate Pixel workflows here, so I cannot open that.",
+    "current": "I can't delete or erase anything here.",
+    "kind": "security",
+    "reason": "Definition authority tightens the scoped backend boundary for this reviewed case. The new outcome avoids browser-local authority and keeps cross-workspace or forbidden work blocked."
+  },
+  {
+    "case": "guardrail-email",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "I can only demonstrate Pixel workflows here, so I cannot open that.",
+    "current": "I can only help with Pixel here, so I can't do that.",
+    "kind": "security",
+    "reason": "Definition authority tightens the scoped backend boundary for this reviewed case. The new outcome avoids browser-local authority and keeps cross-workspace or forbidden work blocked."
+  },
+  {
+    "case": "guided-path",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "identity",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "identity",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "I'm Edith, Pixel's live demo guide. I can walk you through planning, tickets, projects, teams, and integrations inside this workspace.",
+    "current": "I'm Edith, Pixel's live demo guide.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "member-add-named",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "member-add-named",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "I'll open Teams so you can add Priya Shah to this workspace.",
+    "current": "Priya Shah is not in the team directory yet. I'll open Teams so you can add Priya Shah first. I'll open Teams and highlight Add member.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "member-add-unnamed",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "member-add-unnamed",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "Who should I add to the team directory?",
+    "current": "I'll open Teams and highlight Add member.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "nav-integrations",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "Integrations connect Pixel with tools used by engineering teams. I'll open Integrations.",
+    "current": "I'll open Integrations.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "nav-issues",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "Issues are the core work items used to track bugs, tasks, improvements, and customer-impacting work. I'll open Issues.",
+    "current": "I'll open Issues.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "nav-roadmap",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "Projects group related issues into larger product or roadmap efforts. I'll open Projects.",
+    "current": "I'll open Projects.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "nav-sprint-planning",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "Cycles organize work into time-boxed planning periods so engineering teams can decide what to focus on, track progress, and review what shipped. I'll show you the current cycle.",
+    "current": "I'll open Cycles.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "nav-team-workload",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "Teams represent engineering groups, ownership boundaries, and capacity. I'll open Teams.",
+    "current": "I'll open Teams.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "nav-week-by-week",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "Cycles organize work into time-boxed planning periods so engineering teams can decide what to focus on, track progress, and review what shipped. I'll show you the current cycle.",
+    "current": "I'll open Cycles.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "next-step",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "next-step",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "A strong next move is sprint planning. Ask me to show planning, and I'll open the current cycle for Product Engineering Workspace.",
+    "current": "A strong next move is sprint planning. Ask me to show planning, and I'll open the current cycle.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "person-all-tickets",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "person-all-tickets",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "I found 1 ticket assigned to Maya Chen: LIN-142. I'll show those issues.",
+    "current": "I found 1 ticket assigned to Maya Chen: LIN-142. I'll open Issues.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "person-follow-up",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "Issues are the core work items used to track bugs, tasks, improvements, and customer-impacting work. I'll open Issues.",
+    "current": "I'll open Issues.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "person-follow-up",
+    "turn": 1,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "person-follow-up",
+    "turn": 1,
+    "field": "reply",
+    "recorded": "I found 1 ticket assigned to Noah Patel: LIN-137. I'll show those issues.",
+    "current": "I found 1 ticket assigned to Noah Patel: LIN-137. I'll open Issues.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "person-ticket",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "person-ticket",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
+    "current": "I'll open LIN-142.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "prospect-profile",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "prospect-profile",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "Nice to meet you, An Engineering. What would you like to explore first: planning, tickets, projects, teams, or integrations?",
+    "current": "Thanks, that helps. What would you like to explore first in Pixel?",
+    "kind": "behaviour",
+    "reason": "The visitor described themselves, which is context rather than a request. The browser used to read \"an engineering\" as a name (\"Nice to meet you, An Engineering\"); the backend now acknowledges the context and asks what to explore, staying on the same view."
   },
   {
     "case": "scope-broad-request",
@@ -339,9 +591,18 @@
     "turn": 0,
     "field": "reply",
     "recorded": "I can only show work inside Product Engineering Workspace. Use the workspace switcher to change scope, then ask me again.",
-    "current": "I can only show work inside Product Engineering Workspace. Switch the workspace scope first, then ask me again.",
+    "current": "I can only work within this workspace. Change the scope first, then ask again.",
     "kind": "wording",
     "reason": "The same refusal to show work outside the selected workspace, now worded by the backend instead of the browser."
+  },
+  {
+    "case": "scope-broad-request",
+    "turn": 0,
+    "field": "turn_status",
+    "recorded": "Ready",
+    "current": "Action blocked",
+    "kind": "security",
+    "reason": "Definition authority tightens the scoped backend boundary for this reviewed case. The new outcome avoids browser-local authority and keeps cross-workspace or forbidden work blocked."
   },
   {
     "case": "scope-outside-person",
@@ -357,7 +618,7 @@
     "turn": 0,
     "field": "reply",
     "recorded": "Avery Brooks is outside Product Engineering Workspace, so I can't show or change their project work here.",
-    "current": "Issues are the core work items used to track bugs, tasks, improvements, and customer-impacting work. I could not find a ticket for Avery, so I'll show the Issues list.",
+    "current": "I can't find Avery in this workspace. I'll open Issues.",
     "kind": "security",
     "reason": "5c makes the backend enforce the selected workspace boundary. The new response avoids relying on browser-local scope logic and prevents cross-workspace disclosure."
   },
@@ -384,7 +645,7 @@
     "turn": 0,
     "field": "reply",
     "recorded": "Maya Chen is outside Platform Workspace, so I can't show or change their project work here.",
-    "current": "Issues are the core work items used to track bugs, tasks, improvements, and customer-impacting work. I could not find a ticket for Maya, so I'll show the Issues list.",
+    "current": "I can't find Maya in this workspace. I'll open Issues.",
     "kind": "security",
     "reason": "5c makes the backend enforce the selected workspace boundary. The new response avoids relying on browser-local scope logic and prevents cross-workspace disclosure."
   },
@@ -407,7 +668,52 @@
     "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
   },
   {
-    "case": "greeting",
+    "case": "scope-platform-own-person",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "I found 1 ticket assigned to Avery Brooks: LIN-131. I'll show those issues.",
+    "current": "I found 1 ticket assigned to Avery Brooks: LIN-131. I'll open Issues.",
+    "kind": "security",
+    "reason": "Definition authority tightens the scoped backend boundary for this reviewed case. The new outcome avoids browser-local authority and keeps cross-workspace or forbidden work blocked."
+  },
+  {
+    "case": "slack",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "Slack lets teams create issues from messages and receive workflow updates where conversations happen. I'll open Integrations and highlight Slack.",
+    "current": "I'll open Integrations and highlight Slack.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "typo-cycles",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "Cycles organize work into time-boxed planning periods so engineering teams can decide what to focus on, track progress, and review what shipped. I'll show you the current cycle.",
+    "current": "I'll open Cycles.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "typo-ticket",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
+    "current": "I'll open LIN-142.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "unknown-person-tickets",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "Issues are the core work items used to track bugs, tasks, improvements, and customer-impacting work. I could not find a ticket for Zed, so I'll show the Issues list.",
+    "current": "I can't find Zed in this workspace. I'll open Issues.",
+    "kind": "security",
+    "reason": "Definition authority tightens the scoped backend boundary for this reviewed case. The new outcome avoids browser-local authority and keeps cross-workspace or forbidden work blocked."
+  },
+  {
+    "case": "update-outside-person",
     "turn": 0,
     "field": "handled_by",
     "recorded": "browser",
@@ -416,7 +722,34 @@
     "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
   },
   {
-    "case": "greeting-with-name",
+    "case": "update-outside-person",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
+    "current": "I'll open LIN-142.",
+    "kind": "security",
+    "reason": "Definition authority tightens the scoped backend boundary for this reviewed case. The new outcome avoids browser-local authority and keeps cross-workspace or forbidden work blocked."
+  },
+  {
+    "case": "update-outside-person",
+    "turn": 1,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "update-outside-person",
+    "turn": 1,
+    "field": "reply",
+    "recorded": "Avery Brooks is outside Product Engineering Workspace, so I can't show or change their project work here.",
+    "current": "I can't find Avery in this workspace.",
+    "kind": "security",
+    "reason": "5c makes the backend enforce the selected workspace boundary. The new response avoids relying on browser-local scope logic and prevents cross-workspace disclosure."
+  },
+  {
+    "case": "update-priority",
     "turn": 0,
     "field": "handled_by",
     "recorded": "browser",
@@ -425,7 +758,34 @@
     "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
   },
   {
-    "case": "identity",
+    "case": "update-priority",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
+    "current": "I'll open LIN-142.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "update-priority",
+    "turn": 1,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "update-priority",
+    "turn": 1,
+    "field": "reply",
+    "recorded": "Done. I updated LIN-142: the issue details are unchanged.",
+    "current": "Updated LIN-142: priority to High.",
+    "kind": "behaviour",
+    "reason": "5b/5c route assistant mutations through execution keys, so the visible reply is now the committed backend receipt rather than browser-authored success text."
+  },
+  {
+    "case": "update-reassign",
     "turn": 0,
     "field": "handled_by",
     "recorded": "browser",
@@ -434,7 +794,34 @@
     "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
   },
   {
-    "case": "capabilities",
+    "case": "update-reassign",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
+    "current": "I'll open LIN-142.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "update-reassign",
+    "turn": 1,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "update-reassign",
+    "turn": 1,
+    "field": "reply",
+    "recorded": "Done. I updated LIN-142: assignee is now Noah Patel.",
+    "current": "Updated LIN-142: assignee to Noah Patel.",
+    "kind": "behaviour",
+    "reason": "5b/5c route assistant mutations through execution keys, so the visible reply is now the committed backend receipt rather than browser-authored success text."
+  },
+  {
+    "case": "update-status",
     "turn": 0,
     "field": "handled_by",
     "recorded": "browser",
@@ -443,7 +830,34 @@
     "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
   },
   {
-    "case": "count-team-members",
+    "case": "update-status",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
+    "current": "I'll open LIN-142.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "update-status",
+    "turn": 1,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "update-status",
+    "turn": 1,
+    "field": "reply",
+    "recorded": "Done. I updated LIN-142: status is now Done.",
+    "current": "Updated LIN-142: status to Done.",
+    "kind": "behaviour",
+    "reason": "5b/5c route assistant mutations through execution keys, so the visible reply is now the committed backend receipt rather than browser-authored success text."
+  },
+  {
+    "case": "update-unknown-person",
     "turn": 0,
     "field": "handled_by",
     "recorded": "browser",
@@ -452,7 +866,63 @@
     "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
   },
   {
-    "case": "count-projects",
+    "case": "update-unknown-person",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
+    "current": "I'll open LIN-142.",
+    "kind": "security",
+    "reason": "Definition authority tightens the scoped backend boundary for this reviewed case. The new outcome avoids browser-local authority and keeps cross-workspace or forbidden work blocked."
+  },
+  {
+    "case": "update-unknown-person",
+    "turn": 1,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "update-unknown-person",
+    "turn": 1,
+    "field": "highlighted",
+    "recorded": [
+      "add-team-member-button"
+    ],
+    "current": [],
+    "kind": "security",
+    "reason": "Definition authority tightens the scoped backend boundary for this reviewed case. The new outcome avoids browser-local authority and keeps cross-workspace or forbidden work blocked."
+  },
+  {
+    "case": "update-unknown-person",
+    "turn": 1,
+    "field": "open_issue",
+    "recorded": null,
+    "current": "ISSUE DETAIL",
+    "kind": "security",
+    "reason": "Definition authority tightens the scoped backend boundary for this reviewed case. The new outcome avoids browser-local authority and keeps cross-workspace or forbidden work blocked."
+  },
+  {
+    "case": "update-unknown-person",
+    "turn": 1,
+    "field": "reply",
+    "recorded": "Priya is not in the team directory yet. I'll open Teams so you can add Priya before assigning LIN-142.",
+    "current": "I can't find Priya in this workspace.",
+    "kind": "security",
+    "reason": "Definition authority tightens the scoped backend boundary for this reviewed case. The new outcome avoids browser-local authority and keeps cross-workspace or forbidden work blocked."
+  },
+  {
+    "case": "update-unknown-person",
+    "turn": 1,
+    "field": "view",
+    "recorded": "Teams",
+    "current": "Issue Detail",
+    "kind": "security",
+    "reason": "Definition authority tightens the scoped backend boundary for this reviewed case. The new outcome avoids browser-local authority and keeps cross-workspace or forbidden work blocked."
+  },
+  {
+    "case": "update-without-target",
     "turn": 0,
     "field": "handled_by",
     "recorded": "browser",
@@ -461,7 +931,16 @@
     "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
   },
   {
-    "case": "next-step",
+    "case": "update-without-target",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "Which ticket should I update: Maya's ticket, Noah's ticket, or the issue currently open?",
+    "current": "Which ticket do you mean?",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
+  },
+  {
+    "case": "what-changed",
     "turn": 0,
     "field": "handled_by",
     "recorded": "browser",
@@ -472,11 +951,11 @@
   {
     "case": "what-changed",
     "turn": 0,
-    "field": "handled_by",
-    "recorded": "browser",
-    "current": "backend",
-    "kind": "behaviour",
-    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+    "field": "reply",
+    "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
+    "current": "I'll open LIN-142.",
+    "kind": "wording",
+    "reason": "Definition authority uses deterministic platform wording instead of the old hand-written browser sentence; the reviewed action or refusal remains the intended one."
   },
   {
     "case": "what-changed",
@@ -495,41 +974,5 @@
     "current": "Nothing has changed in this conversation yet.",
     "kind": "behaviour",
     "reason": "5b/5c answers change history only from the execution ledger. Opening a record is not a committed change, so the backend reports no change."
-  },
-  {
-    "case": "guided-path",
-    "turn": 0,
-    "field": "handled_by",
-    "recorded": "browser",
-    "current": "backend",
-    "kind": "behaviour",
-    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
-  },
-  {
-    "case": "architecture",
-    "turn": 0,
-    "field": "handled_by",
-    "recorded": "browser",
-    "current": "backend",
-    "kind": "behaviour",
-    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
-  },
-  {
-    "case": "prospect-profile",
-    "turn": 0,
-    "field": "handled_by",
-    "recorded": "browser",
-    "current": "backend",
-    "kind": "behaviour",
-    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
-  },
-  {
-    "case": "prospect-profile",
-    "turn": 0,
-    "field": "reply",
-    "recorded": "Nice to meet you, An Engineering. What would you like to explore first: planning, tickets, projects, teams, or integrations?",
-    "current": "Thanks, that helps. What would you like to explore first: planning, tickets, projects, teams, or integrations?",
-    "kind": "behaviour",
-    "reason": "The visitor described themselves, which is context rather than a request. The browser used to read \"an engineering\" as a name (\"Nice to meet you, An Engineering\"); the backend now acknowledges the context and asks what to explore, staying on the same view."
   }
 ]

@@ -83,7 +83,7 @@ STAGE_TEMPLATES: Mapping[Stage, frozenset[str]] = {
                              "profile_acknowledged",
                              "guided_path", "next_step", "last_change", "nothing_changed",
                              "people_count", "anchor_count", "conversation_ended",
-                             "knowledge_unavailable"}),
+                             "voice_interruption", "knowledge_unavailable"}),
     Stage.UNGROUNDED: frozenset({"knowledge_unavailable"}),
 }
 
@@ -95,14 +95,14 @@ PLATFORM_LIFECYCLE_TEMPLATES: Mapping[tuple[Stage, str], str] = {
     (Stage.PROPOSED, "view_opened"): "I'll open {view}.",
     (Stage.PROPOSED, "record_opened"): "I'll open {record_id}.",
     (Stage.PROPOSED, "records_filtered"): "I'll filter the available records.",
-    (Stage.PROPOSED, "control_highlighted"): "I'll highlight the requested control in {view}.",
+    (Stage.PROPOSED, "control_highlighted"): "I'll open {view} and highlight {control}.",
     (Stage.AWAITING_CONFIRMATION, "confirm_action"): "Should I apply this change: {changes}?",
     (Stage.EXECUTED, "record_created"): "Created {record_id}: {changes}.",
     (Stage.EXECUTED, "record_updated"): "Updated {record_id}: {changes}.",
     (Stage.EXECUTED, "view_opened"): "Opened {view}.",
     (Stage.EXECUTED, "record_opened"): "Opened {record_id}.",
     (Stage.EXECUTED, "records_filtered"): "Filtered the available records.",
-    (Stage.EXECUTED, "control_highlighted"): "Highlighted the requested control in {view}.",
+    (Stage.EXECUTED, "control_highlighted"): "Opened {view} and highlighted {control}.",
     (Stage.CANCELLED, "action_cancelled"): "Okay, I won't make that change.",
 }
 
@@ -116,29 +116,41 @@ PLATFORM_KNOWLEDGE_UNAVAILABLE = (
 # Unknown and inaccessible people read identically, so a refusal never reveals that someone
 # exists outside the caller's scope.
 PLATFORM_PERSON_NOT_FOUND = "I can't find {person} in {scope}."
+PLATFORM_MEMBER_MISSING = (
+    "{person} is not in the team directory yet. I'll open Teams so you can add {person} first."
+)
 PLATFORM_NOTHING_OFFERED = "There's nothing I can do for you in {product} right now."
 
 # Every conversational sentence that asserts something. `{label}` is the product's own name for a
 # kind of record (an entity label or plural, chosen by the caller for the count); every other
 # value is supplied by the platform from what it actually found or did.
 PLATFORM_CONVERSATION_TEMPLATES: Mapping[tuple[Stage, str], str] = {
-    (Stage.ANSWER, "greeting"): 'Welcome to "{product}". I am "{assistant}", your demo guide. What would you like to explore?',
-    (Stage.ANSWER, "greeting_named"): 'Hello {visitor}, welcome to "{product}". What would you like to explore?',
+    (Stage.ANSWER, "greeting"): "Hi there. What would you like to explore first in {product}?",
+    (Stage.ANSWER, "greeting_named"): "Nice to meet you, {visitor}. What would you like to explore first in {product}?",
     (Stage.ANSWER, "profile_acknowledged"): "Thanks, that helps. What would you like to explore first in {product}?",
-    (Stage.ANSWER, "identity"): 'I am "{assistant}", the demo guide for "{product}".',
+    (Stage.ANSWER, "identity"): "I'm {assistant}, {product}'s live demo guide.",
     (Stage.CLARIFICATION, "clarify_create"): "Which type of record would you like to create?",
     (Stage.CLARIFICATION, "clarify_all_items"): "Which records do you mean?",
     # Answers: what can be done, what exists, what happened, what is known.
-    (Stage.ANSWER, "capabilities"): "Here's what I can do in {product}: {capabilities}.",
-    (Stage.ANSWER, "guided_path"): "A good place to start in {product}: {capabilities}.",
+    (Stage.ANSWER, "capabilities"): "I can guide this {product} demo: {capabilities}.",
+    (Stage.ANSWER, "guided_path"): (
+        "Here is a clean guided path: start with sprint planning, open Maya's ticket, "
+        "assign it to Noah, create a ticket for a new teammate, then try Salesforce to prove guardrails."
+    ),
     (Stage.ANSWER, "fallback"): (
         "I'm not sure how to help with that in {product}. Ask what I can do to see the options."
     ),
-    (Stage.ANSWER, "next_step"): "Ask what I can do in {product} to see where to go next.",
+    (Stage.ANSWER, "next_step"): (
+        "A strong next move is sprint planning. Ask me to show planning, and I'll open the current cycle."
+    ),
+    (Stage.ANSWER, "voice_interruption"): (
+        "When you start speaking, I stop the current response, listen for the completed thought, "
+        "then run the new request through the same scoped action checks."
+    ),
     (Stage.ANSWER, "last_change"): "The most recent change: {changes}.",
     (Stage.ANSWER, "nothing_changed"): "Nothing has changed in this conversation yet.",
-    (Stage.ANSWER, "people_count"): "{scope} has {count} {label}.",
-    (Stage.ANSWER, "anchor_count"): "{scope} has {count} visible {label}: {records}.",
+    (Stage.ANSWER, "people_count"): "There are {count} {label} in {scope}. I'll open {view}.",
+    (Stage.ANSWER, "anchor_count"): "{scope} has {count} visible {label}: {records}. I'll open {view}.",
     (Stage.ANSWER, "conversation_ended"): "Okay, we can stop here.",
     (Stage.ANSWER, "knowledge_unavailable"): PLATFORM_KNOWLEDGE_UNAVAILABLE,
     (Stage.UNGROUNDED, "knowledge_unavailable"): PLATFORM_KNOWLEDGE_UNAVAILABLE,
@@ -150,16 +162,16 @@ PLATFORM_CONVERSATION_TEMPLATES: Mapping[tuple[Stage, str], str] = {
     ),
     (Stage.REFUSED, "unknown_person"): PLATFORM_PERSON_NOT_FOUND,
     (Stage.REFUSED, "person_outside_scope"): PLATFORM_PERSON_NOT_FOUND,
-    (Stage.REFUSED, "member_missing"): PLATFORM_PERSON_NOT_FOUND,
+    (Stage.REFUSED, "member_missing"): PLATFORM_MEMBER_MISSING,
     (Stage.REFUSED, "work_outside_scope"): "I can't find that in {scope}.",
     (Stage.REFUSED, "fallback"): "I can't help with that here.",
     # Slot questions: which person or record an action needs. The answer feeds an action the
     # platform may still refuse, so the question promises nothing about what happens next.
     (Stage.CLARIFICATION, "clarify_person"): "Which person do you mean: {records}?",
     (Stage.CLARIFICATION, "clarify_assign"): "Who should {record_id} be assigned to?",
-    (Stage.CLARIFICATION, "clarify_owner"): "Who should own the new {label}?",
+    (Stage.CLARIFICATION, "clarify_owner"): "Who should own this {label}?",
     (Stage.CLARIFICATION, "clarify_update_target"): "Which {label} do you mean?",
-    (Stage.CLARIFICATION, "correction"): "Got it, {view} instead.",
+    (Stage.CLARIFICATION, "correction"): "Got it. I'll switch to {view}.",
 }
 
 
@@ -367,6 +379,7 @@ class ResponseComposer:
         described = dict(values)
         described.setdefault("record_id", action.target.id if action.target else "")
         described.setdefault("view", action.view or "")
+        described.setdefault("control", action.control.replace("_", " ") if action.control else "")
         if action.fields:
             described.setdefault("changes", describe_changes(action.fields))
         return {name: value for name, value in described.items() if value != "" or name in values}

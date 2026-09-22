@@ -39,6 +39,7 @@ vocabulary:
     cicle: cycle
     cicles: cycles
     git hub: github
+    hii: hi
     issus: issues
     jiraa: jira
     planing: planning
@@ -49,6 +50,7 @@ vocabulary:
     tiket: ticket
     tikit: ticket
     tkt: ticket
+    u: you
   negatable_terms: [cycle, cycles, sprint, planning, issue, issues, ticket, tickets, project,
                     projects, team, teams, integration, integrations, github]
   correction_markers: [actually, instead, rather, i mean, sorry, scratch that]
@@ -249,9 +251,16 @@ intents:
     response: guided_path
     match: [[evaluator, judge, reviewer, demo path, demo script, test script]]
   - action: highlight_create_issue
+    exact: [where to create tickets for the users, where to create tickets, how to create tickets,
+            how do i create a ticket]
+  - action: highlight_create_issue
     match: [[where, how, best way, show me how, show how],
             [create, make, add, raise, file],
             [ticket, issue, bug]]
+  - action: highlight_create_issue
+    response: clarify_owner
+    match: [[create, make, add, raise, file], [ticket, issue, bug]]
+    exclude: [for, to, assign, assigned, owner]
   - action: highlight_add_member
     requires: [unknown_person]
     response: member_missing
@@ -280,6 +289,8 @@ intents:
     match: [[github, pull request, repository, repo, webhook, branch],
             [connect, setup, set up, configure, enable, install]]
   - action: highlight_github
+    exact: [back to github integrations]
+  - action: highlight_github
     match: [[github, pull request, pull requests, pr, prs, commit, commits, repository,
              repositories, repo, repos, branch, branches, webhook],
             [how, work, works, explain, what is, what are, use, used, help, helps]]
@@ -289,7 +300,19 @@ intents:
   - action: highlight_slack
     match: [[slack]]
   - action: highlight_assignment
+    exact: [how do i assign this issue, how do i assign this ticket, how do i assign that ticket,
+            how do i assign the current issue, how do i assign the current ticket]
+  - action: highlight_assignment
+    requires: [person]
+    match: [[how do i assign, how to assign, show assignment], [ticket, issue, bug]]
+  - action: highlight_assignment
     match: [[how do i assign, how to assign, show assignment, issue assignment, assignment workflow]]
+  - action: open_teams
+    response: people_count
+    match: [[how many, count, number of], [team, teams, people, members]]
+  - action: open_projects
+    response: anchor_count
+    match: [[how many, count, number of, which projects, what projects], [project, projects]]
   - action: issues_by_assignee
     requires: [person]
     response: records_filtered
@@ -314,6 +337,7 @@ intents:
     match: [[add, create, invite, new], [member, teammate, person, user, employee]]
   - action: highlight_add_member
     match: [[add, create, invite, new], [member, teammate, person, user, employee]]
+    exclude: [ticket, tickets, issue, issues, bug, bugs]
   - action: open_cycles
     response: view_opened
     match: [[cycle, cycles, sprint, planning, time-boxed, week by week, each week, next batch of work]]

@@ -193,8 +193,8 @@ class SnapshotSourceTest(ProductRecordFixture):
         self.assertEqual(snapshot.people("Sam Rivera", 3).matches, ())
 
     def test_the_snapshot_records_the_scope_it_was_bound_to(self):
-        self.assertEqual(self.snapshot(PRODUCT_ENG).scope_label, PRODUCT_ENG)
-        self.assertEqual(self.snapshot().scope_label, "all-workspaces")
+        self.assertEqual(self.snapshot(PRODUCT_ENG).scope_label, "Product Engineering Workspace")
+        self.assertEqual(self.snapshot().scope_label, "all workspaces")
 
     def test_the_product_reads_inside_the_snapshots_transaction(self):
         """One moment for every entity, and the caller's transaction is required."""

@@ -340,8 +340,8 @@
     "field": "reply",
     "recorded": "I can only show work inside Product Engineering Workspace. Use the workspace switcher to change scope, then ask me again.",
     "current": "I can only show work inside Product Engineering Workspace. Switch the workspace scope first, then ask me again.",
-    "kind": "security",
-    "reason": "5c makes the backend enforce the selected workspace boundary. The new response avoids relying on browser-local scope logic and prevents cross-workspace disclosure."
+    "kind": "wording",
+    "reason": "The same refusal to show work outside the selected workspace, now worded by the backend instead of the browser."
   },
   {
     "case": "scope-outside-person",
@@ -528,17 +528,8 @@
     "turn": 0,
     "field": "reply",
     "recorded": "Nice to meet you, An Engineering. What would you like to explore first: planning, tickets, projects, teams, or integrations?",
-    "current": "Integrations connect Pixel with tools used by engineering teams. I'll open Teams.",
+    "current": "Thanks, that helps. What would you like to explore first: planning, tickets, projects, teams, or integrations?",
     "kind": "behaviour",
-    "reason": "5c sends this formerly browser-local interpretation through the backend router. The backend currently treats the profile statement as a product navigation signal."
-  },
-  {
-    "case": "prospect-profile",
-    "turn": 0,
-    "field": "view",
-    "recorded": "Dashboard",
-    "current": "Teams",
-    "kind": "behaviour",
-    "reason": "5c sends this formerly browser-local interpretation through the backend router. The backend currently treats the profile statement as a product navigation signal."
+    "reason": "The visitor described themselves, which is context rather than a request. The browser used to read \"an engineering\" as a name (\"Nice to meet you, An Engineering\"); the backend now acknowledges the context and asks what to explore, staying on the same view."
   }
 ]

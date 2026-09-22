@@ -108,6 +108,17 @@ class EngineCutoverTest(EngineCutoverFixture):
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json(), {"status": "unhealthy", "reason": "invalid_engine_mode"})
 
+    def test_the_authority_is_fixed_when_the_application_starts_and_reported(self):
+        """5c plan, section 3.1: read once at startup, never per turn; readiness reports it."""
+        with patch.dict(os.environ, {**HERMETIC, "PIXEL_ENGINE_MODE": "definition"}, clear=False):
+            with TestClient(main.app) as started:
+                self.assertEqual(started.get("/health").json()["authority"], "definition")
+                with patch.dict(os.environ, {"PIXEL_ENGINE_MODE": "legacy"}, clear=False):
+                    self.assertEqual(started.get("/health").json()["authority"], "definition")
+                    self.assertIsNot(main.turn_engine(), main.live_turn)
+                    self.assertEqual(started.get("/health").json()["shadow"], "off",
+                                     "the shadow never runs while definition is authoritative")
+
     def test_invalid_engine_mode_blocks_turn_traffic(self):
         env = {**HERMETIC, "PIXEL_ENGINE_MODE": "definiton"}
         with patch.dict(os.environ, env, clear=False):
@@ -174,6 +185,57 @@ class LegacyMutationTest(EngineCutoverFixture):
         )
         self.assertEqual(receipt.status_code, 409, receipt.text)
         self.assertEqual(receipt.json()["code"], "superseded")
+
+class RollbackTest(EngineCutoverFixture):
+    """5c plan, section 11.1 step 3 and exit criterion 10: switching authority on one session and one
+    database needs no operator data change, and keyed mutations work in both directions."""
+
+    def mode(self, value: str):
+        return patch.dict(os.environ, {**HERMETIC, "PIXEL_ENGINE_MODE": value}, clear=False)
+
+    def write(self, turn: dict, target: str, changes: dict):
+        headers = {**self.headers, "X-Execution-Key": turn["execution"]["key"], "X-Session-Id": "rollback"}
+        return self.client.patch(f"/api/demo-data/issues/{target}", json={"changes": changes}, headers=headers)
+
+    def messages(self) -> int:
+        with db.get_connection() as connection:
+            return connection.execute("select count(*) from messages where session_id = 'rollback'").fetchone()[0]
+
+    def test_legacy_definition_legacy_definition_on_one_session(self):
+        with self.mode("legacy"):
+            first = self.turn("Show me the issues", session="rollback", turn_id=1)
+        self.assertEqual(first.status_code, 200, first.text)
+        self.assertEqual(first.json()["validated_action"]["type"], "OPEN_ISSUES")
+
+        with self.mode("definition"):
+            update = self.turn("assign LIN-142 to Noah", session="rollback", turn_id=2).json()
+        self.assertIsNotNone(update["execution"])
+        self.assertEqual(self.write(update, "LIN-142", {"assignee": "Noah Patel"}).status_code, 200)
+
+        with self.mode("legacy"):
+            navigation = self.turn("Show me the cycles", session="rollback", turn_id=3).json()
+            priority = self.turn("make LIN-142 high priority", session="rollback", turn_id=4).json()
+        self.assertEqual(navigation["validated_action"]["type"], "OPEN_CYCLES")
+        self.assertIsNotNone(priority["execution"], "rollback keeps keyed writes; no keyless path returns")
+        self.assertEqual(self.write(priority, "LIN-142", {"priority": "High"}).status_code, 200)
+
+        with self.mode("definition"):
+            changed = self.turn("What changed?", session="rollback", turn_id=5).json()
+        self.assertEqual(changed["speech"], "The most recent change: updated LIN-142.")
+        # Both authorities keep the compatibility projection: every turn's messages are stored.
+        self.assertEqual(self.messages(), 10)
+
+    def test_a_pending_definition_question_is_expired_by_rollback(self):
+        with self.mode("definition"):
+            asked = self.turn("Create a ticket for Noah about login errors", session="rollback", turn_id=1).json()
+        self.assertTrue(asked["speech"].startswith("Which project"), asked["speech"])
+        with self.mode("legacy"):
+            answer = self.turn("Issue Triage Workflow", session="rollback", turn_id=2).json()
+        self.assertIsNone(answer["execution"], "the old engine never inherits the new engine's question")
+        with self.mode("definition"):
+            later = self.turn("Issue Triage Workflow", session="rollback", turn_id=3).json()
+        self.assertIsNone(later["execution"], "and the question is not revived after switching back")
+
 
 class ChangeSetTest(unittest.TestCase):
     """Unit coverage for the adapter's dict shape, independent of the turn service."""

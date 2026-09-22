@@ -21,8 +21,9 @@ import threading
 import time
 from collections import OrderedDict
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
+from app.db import get_connection
 from app.engine.actions import RecordRef
 from app.engine.execution import ExecutionOwner
 from app.engine.memory import ConversationMemory, PersonFollowUp
@@ -30,6 +31,10 @@ from app.engine.signals import EngineSignal, SignalHistory
 
 CODEC_VERSION = 1
 HISTORY_LIMIT = 50
+# State outlives no session, and no idle row outlives 30 days (5c plan, section 6.3).
+RETENTION_SECONDS = 30 * 24 * 60 * 60
+PRUNE_BATCH = 500
+PRUNE_BATCHES = 20
 
 
 @dataclass(frozen=True)
@@ -138,6 +143,33 @@ class EngineStateStore:
         if cursor.rowcount == 0:
             return None
         return new_revision
+
+    def prune(self, now: datetime | None = None, *, batch: int = PRUNE_BATCH, batches: int = PRUNE_BATCHES) -> int:
+        """Remove state whose session has expired or ended, or that has not changed in 30 days.
+
+        Bounded: at most `batch * batches` rows per call (5c plan, section 6.3). Returns the count.
+        """
+        moment = now or datetime.now(UTC)
+        stale_before = (moment - timedelta(seconds=RETENTION_SECONDS)).isoformat()
+        deleted = 0
+        with get_connection() as connection:
+            for _ in range(batches):
+                cursor = connection.execute(
+                    """
+                    delete from engine_state where session_id in (
+                      select e.session_id from engine_state e join sessions s on s.id = e.session_id
+                      where s.ended_at is not null
+                         or (s.expires_at is not null and s.expires_at < ?)
+                         or e.updated_at < ?
+                      limit ?
+                    )
+                    """,
+                    (moment.isoformat(), stale_before, batch),
+                )
+                deleted += cursor.rowcount
+                if cursor.rowcount < batch:
+                    break
+        return deleted
 
     def invalidate_sessions(self, connection: sqlite3.Connection, session_ids: list[str]) -> None:
         """Drop durable state for these sessions (private reset, generation change)."""

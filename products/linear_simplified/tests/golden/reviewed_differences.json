@@ -778,5 +778,38 @@
     "current": "Nothing has changed in this conversation yet.",
     "kind": "wording",
     "reason": "Only a change the execution ledger committed is a change (5b plan, section 8.4). The browser reported opening a ticket as a change and the recorded backend gave a generic reply; nothing was changed in this conversation, and the answer now says so."
+  },
+  {
+    "case": "prospect-profile",
+    "turn": 0,
+    "field": "proposed_action",
+    "recorded": {
+      "type": "OPEN_TEAMS",
+      "payload": {}
+    },
+    "current": null,
+    "kind": "behaviour",
+    "reason": "A visitor describing themselves (\"I am an engineering manager ... moving from Jira\") gave context, not a request. The recorded backend read it as a navigation to Teams with a sentence about integrations; the browser read \"an engineering\" as a name. The backend now acknowledges it and asks what to explore, and still records the role and current tool as signals."
+  },
+  {
+    "case": "prospect-profile",
+    "turn": 0,
+    "field": "speech",
+    "recorded": "Integrations connect Pixel with tools used by engineering teams. I'll open Teams.",
+    "current": "Thanks, that helps. What would you like to explore first: planning, tickets, projects, teams, or integrations?",
+    "kind": "wording",
+    "reason": "A visitor describing themselves (\"I am an engineering manager ... moving from Jira\") gave context, not a request. The recorded backend read it as a navigation to Teams with a sentence about integrations; the browser read \"an engineering\" as a name. The backend now acknowledges it and asks what to explore, and still records the role and current tool as signals."
+  },
+  {
+    "case": "prospect-profile",
+    "turn": 0,
+    "field": "validated_action",
+    "recorded": {
+      "type": "OPEN_TEAMS",
+      "payload": {}
+    },
+    "current": null,
+    "kind": "behaviour",
+    "reason": "A visitor describing themselves (\"I am an engineering manager ... moving from Jira\") gave context, not a request. The recorded backend read it as a navigation to Teams with a sentence about integrations; the browser read \"an engineering\" as a name. The backend now acknowledges it and asks what to explore, and still records the role and current tool as signals."
   }
 ]

@@ -458,6 +458,8 @@ def migrate() -> None:
         )
         from app.services.demo_instances import create_instance_schema
         create_instance_schema(connection)
+        from app.services.turn_telemetry import create_schema as create_telemetry_schema
+        create_telemetry_schema(connection)
         # Definitions registered before identities existed take the ownership of their first version.
         connection.execute(
             """

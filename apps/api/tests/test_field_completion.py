@@ -63,20 +63,37 @@ class CreateCompletionTest(NewEngineFixture):
     def visible_project_names(self, scope: str = SCOPE) -> list[str]:
         return [project["name"] for project in main.product_data.load(frozenset({scope}))["projects"]]
 
-    def test_v3_applies_its_defaults_and_dispatches_the_complete_create(self):
-        proposed = self.say(CREATE)
+    def test_the_current_version_defaults_priority_and_status_and_asks_for_the_project(self):
+        asked = self.say(CREATE)
+        self.assertIsNone(asked["execution"], "nothing is dispatched while the project is missing")
+        self.assertIsNone(asked["validated_action"])
+        self.assertTrue(asked["speech"].startswith("Which project should the new ticket have:"), asked["speech"])
+        for name in self.visible_project_names():
+            self.assertIn(name, asked["speech"])
+
+        proposed = self.say("Issue Triage Workflow")
         self.assertEqual(proposed["validated_action"]["type"], "CREATE_DEMO_ISSUE")
         self.assertIsNotNone(proposed["execution"])
         fields = proposed["validated_action"]["payload"]
-        self.assertEqual(
-            (fields["priority"], fields["status"], fields["project"]),
-            ("Medium", "Todo", "PRJ-101"),
-            "declared defaults only",
-        )
+        self.assertEqual((fields["priority"], fields["status"]), ("Medium", "Todo"), "declared defaults only")
         receipt = self.write(proposed)
         self.assertEqual(receipt.status_code, 200, receipt.text)
         record = receipt.json()["record"]
-        self.assertEqual((record["assignee"], record["project"]), ("Noah Patel", "GitHub Integration Hardening"))
+        self.assertEqual((record["assignee"], record["project"]), ("Noah Patel", "Issue Triage Workflow"))
+
+    def test_every_workspace_can_create_in_its_own_projects(self):
+        """The regression v3 shipped: a defaulted project outside the workspace refused every create."""
+        say = lambda message: self.client.post("/api/turn", headers=self.headers, json={  # noqa: E731
+            "session_id": "platform", "turn_id": next(turns), "product_id": PRODUCT, "message": message,
+            "workspace_scope_id": "workspace-platform",
+        }).json()
+        turns = iter(range(1, 10))
+        asked = say("Create a ticket for Avery about flaky deploys")
+        self.assertTrue(asked["speech"].startswith("Which project should the new ticket have:"), asked["speech"])
+        platform_project = self.visible_project_names("workspace-platform")[-1]
+        proposed = say(platform_project)
+        self.assertEqual(proposed["validated_action"]["type"], "CREATE_DEMO_ISSUE")
+        self.assertIsNotNone(proposed["execution"])
 
     def test_v2_asks_for_every_undefaulted_field_in_definition_order(self):
         main.agent.directory.move_product_version(TENANT, PRODUCT, 2)

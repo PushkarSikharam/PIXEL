@@ -138,6 +138,15 @@ class ConversationEngine:
         self._translate = translate
         self._signals = SignalExtractor(definition)
 
+    @property
+    def definition(self) -> ProductDefinition:
+        return self._definition
+
+    @property
+    def snapshot(self) -> TurnSnapshot:
+        """The one snapshot this engine validates against; model evidence must use the same one."""
+        return self._snapshot
+
     def turn(
         self,
         message: str,

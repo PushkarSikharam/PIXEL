@@ -563,6 +563,19 @@ class DemoAgent:
                 ProposedAction(type="OPEN_DASHBOARD"),
                 "Dashboard",
             )
+        # "I'm an engineering manager moving from Jira": context about the visitor, not a request.
+        # It is acknowledged (and recorded as signals below), never read as navigation.
+        about_visitor = re.match(r"^\s*(i am|i'm|im|we are|we're)\s+(a|an)\s+\w+", message.lower().replace("’", "'"))
+        asks_something = re.search(
+            r"\b(show|open|create|assign|make|set|list|find|filter|go|take|add|update|mark|how|what|where)\b", text)
+        if about_visitor and not asks_something:
+            if re.search(r"\b(lost|confused|stuck|unsure)\b", text):
+                return self._next_step_speech(request.current_page, workspace_scope.name), None, None
+            return (
+                "Thanks, that helps. What would you like to explore first: planning, tickets, projects, "
+                "teams, or integrations?",
+                None, None,
+            )
         name = self._introduced_name(message)
         if name:
             return (

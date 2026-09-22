@@ -93,6 +93,14 @@ def shadow_report(days: int) -> int:
     return 0
 
 
+def cutover_report(days: int) -> int:
+    """Counts per authority over the last days (5c plan, section 10); metadata only."""
+    from app.services import turn_telemetry
+
+    print(json.dumps({"days": days, **turn_telemetry.report(days)}, indent=2))
+    return 0
+
+
 def execution_preflight() -> int:
     report = ExecutionLedger.preflight()
     print(json.dumps({"ready": not report["legacy_dispatched"], **report}, indent=2))
@@ -116,12 +124,16 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("execution-preflight")
     report = commands.add_parser("shadow-report")
     report.add_argument("--days", type=int, default=7)
+    cutover = commands.add_parser("cutover-report")
+    cutover.add_argument("--days", type=int, default=1)
     arguments = parser.parse_args(argv)
     migrate()
     if arguments.command == "move-product-version":
         return move_product_version(arguments.tenant, arguments.product, arguments.version)
     if arguments.command == "shadow-report":
         return shadow_report(arguments.days)
+    if arguments.command == "cutover-report":
+        return cutover_report(arguments.days)
     if arguments.command == "execution-preflight":
         return execution_preflight()
     return {"check-readiness": check_readiness, "reset-demo-data": reset_demo_data}[arguments.command]()

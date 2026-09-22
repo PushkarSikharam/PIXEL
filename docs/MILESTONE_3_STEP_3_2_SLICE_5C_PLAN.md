@@ -1,6 +1,8 @@
 # Milestone 3.2, Slice 5c: Authoritative Cutover — Implementation Plan
 
-Status: **architecture-reviewed plan, awaiting owner approval. No 5c runtime code has changed.**
+Status: **implemented, not signed off.** The code landed in PR #21 (2026-09-22) and a follow-up
+change that closed the review findings; the build, its evidence and the open production gates are
+in `docs/MILESTONE_3_STEP_3_2_SLICE_5C.md`. Definition authority is not enabled in production.
 Date: 2026-09-21. Parent plan: `docs/MILESTONE_3_STEP_3_2_PLAN.md` revision 4.3. Prerequisites:
 slice 5b merged and signed off, the 5a production evidence gate closed, and every gate in section 2
 of this plan satisfied.

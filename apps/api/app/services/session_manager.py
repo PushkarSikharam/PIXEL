@@ -224,8 +224,8 @@ class SessionManager:
                 ExecutionLedger().cancel_turn(connection, session_owner, session_id, turn_id)
             return cursor.rowcount == 1
 
-    def complete_turn(self, session_id: str, turn_id: int) -> None:
-        with get_connection() as connection:
+    def complete_turn(self, session_id: str, turn_id: int, *, connection=None) -> None:
+        with use_connection(connection) as connection:
             connection.execute(
                 """
                 update sessions
@@ -236,8 +236,8 @@ class SessionManager:
             )
 
     def store_message(self, session_id: str, turn_id: int, role: str, content: str,
-                       scope_id: str | None = None) -> None:
-        with get_connection() as connection:
+                       scope_id: str | None = None, *, connection=None) -> None:
+        with use_connection(connection) as connection:
             connection.execute(
                 """
                 insert into messages(id, session_id, turn_id, role, content, created_at, scope_id)
@@ -257,11 +257,11 @@ class SessionManager:
         return [row["content"] for row in rows]
 
     def store_signals(self, session_id: str, turn_id: int, signals: list[Signal],
-                       scope_id: str | None = None) -> None:
+                       scope_id: str | None = None, *, connection=None) -> None:
         if not signals:
             return
 
-        with get_connection() as connection:
+        with use_connection(connection) as connection:
             for signal in signals:
                 connection.execute(
                     """
@@ -285,8 +285,10 @@ class SessionManager:
         session_id: str,
         signals: list[Signal],
         clarification_pending: str | None = None,
+        *,
+        connection=None,
     ) -> None:
-        with get_connection() as connection:
+        with use_connection(connection) as connection:
             row = connection.execute(
                 """
                 select goals, pain_points, features_interested_in

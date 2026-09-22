@@ -218,24 +218,30 @@ class ExecutionLedger:
         """
         with get_connection() as connection:
             connection.execute("begin immediate")
-            row = connection.execute(
-                """
-                select s.active_turn_id, o.scope_id, o.user_id, o.customer_id, o.product_id,
-                       o.instance_id, o.instance_generation
-                from sessions s join conversation_owners o on o.session_id = s.id
-                where s.id = ?
-                """,
-                (session_id,),
-            ).fetchone()
-            if row is None or (
-                row["customer_id"], row["product_id"], row["user_id"],
-                row["instance_id"], row["instance_generation"],
-            ) != owner.values():
-                return None
-            if row["active_turn_id"] != turn_id or row["scope_id"] != scope_id:
+            if not self.turn_is_current(connection, owner, session_id=session_id, turn_id=turn_id,
+                                        scope_id=scope_id):
                 return None
             return self.dispatch(validated, owner, session_id=session_id, turn_id=turn_id,
                                  scope_id=scope_id, change_set=change_set, connection=connection)
+
+    @staticmethod
+    def turn_is_current(connection, owner: ExecutionOwner, *, session_id: str, turn_id: int,
+                        scope_id: str) -> bool:
+        """Inside the caller's transaction: the session is this owner's, this turn is its active turn,
+        and the session's recorded workspace is this one."""
+        row = connection.execute(
+            """
+            select s.active_turn_id, o.scope_id, o.user_id, o.customer_id, o.product_id,
+                   o.instance_id, o.instance_generation
+            from sessions s join conversation_owners o on o.session_id = s.id
+            where s.id = ?
+            """,
+            (session_id,),
+        ).fetchone()
+        return row is not None and (
+            row["customer_id"], row["product_id"], row["user_id"],
+            row["instance_id"], row["instance_generation"],
+        ) == owner.values() and row["active_turn_id"] == turn_id and row["scope_id"] == scope_id
 
     def dispatch_if_current(
         self, validated: ValidatedAction, owner: ExecutionOwner, *, session_id: str, turn_id: int,

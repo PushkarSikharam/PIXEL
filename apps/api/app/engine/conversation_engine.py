@@ -30,7 +30,7 @@ import re
 from typing import Any
 
 from app.definitions.contract import EntitySpec, ProductDefinition
-from app.definitions.vocabulary import Capability
+from app.definitions.vocabulary import MUTATING_CAPABILITIES, Capability
 from app.engine.actions import GenericAction
 from app.engine.composer import Reply, ResponseComposer, describe_changes
 from app.engine.field_completion import first_missing, question_values, read_answer
@@ -74,6 +74,15 @@ REFUSAL_REPLIES = {
     "reference_not_found": "work_outside_scope",
 }
 
+# A visitor describing themselves ("I'm a ...", "we're an ..."), as opposed to asking for something.
+_SELF_DESCRIPTION = re.compile(r"^\s*(i am|i'm|im|we are|we're)\s+(a|an|the)\s+\w+", re.IGNORECASE)
+# Words that turn a self-description into a request ("I'm a manager, show me what's open").
+_REQUEST_MARKER = re.compile(
+    r"\b(show|open|go to|take me|create|make|add|assign|set|change|update|move|filter|find|list|"
+    r"explain|tell me|help me|can you|could you|would you|please|want to|would like|i'd like|let me|how|"
+    r"what|why|where|which|who)\b|\?",
+    re.IGNORECASE,
+)
 # The response key of a question for one missing required field (5c plan, section 7.1).
 MISSING_FIELD_KEY = "missing_field"
 # Words that set an unfinished create aside instead of answering its question.
@@ -81,6 +90,12 @@ _SET_ASIDE = re.compile(r"^\s*(cancel|stop|never ?mind|forget it|leave it|skip i
 # While a free-text field is being asked for, only these requests replace the unfinished create;
 # anything else is the answer (a title may well mention a product area).
 _REPLACING = frozenset({Capability.NAVIGATE_VIEW, Capability.CREATE_RECORD, Capability.UPDATE_RECORD})
+
+
+
+def _describes_visitor(message: str) -> bool:
+    """Whether the whole message is the visitor describing themselves, with no request in it."""
+    return bool(_SELF_DESCRIPTION.match(message)) and not _REQUEST_MARKER.search(message)
 
 
 class TurnStage(StrEnum):
@@ -138,6 +153,15 @@ class ConversationEngine:
         self._translate = translate
         self._signals = SignalExtractor(definition)
 
+    @property
+    def definition(self) -> ProductDefinition:
+        return self._definition
+
+    @property
+    def snapshot(self) -> TurnSnapshot:
+        """The one snapshot this engine validates against; model evidence must use the same one."""
+        return self._snapshot
+
     def turn(
         self,
         message: str,
@@ -155,6 +179,9 @@ class ConversationEngine:
         # Whether documents are retrieved as evidence for this reply (never spoken). A refusal, a
         # question back to the visitor and a request for someone unavailable get none, as today.
         evidence = True
+        # Whether this turn began a create that now waits for a missing field. The person the
+        # visitor named for it is already resolved, so it is recorded like any accepted request.
+        drafted = False
 
         continued = self._continue_create(message, memory, context, composer)
         if continued is not None:
@@ -170,6 +197,13 @@ class ConversationEngine:
 
         if continued is not None:
             pass  # the unfinished create decided this turn
+        elif (result.kind == RouteKind.PROPOSE and result.proposal is not None
+                and result.proposal.capability not in MUTATING_CAPABILITIES and _describes_visitor(message)):
+            # "I'm a manager moving from another tool" may name a word a view matches, but it
+            # asks for nothing; opening that view would answer a request nobody made. A mutation, a
+            # refusal, a question back or a confirmation is never replaced this way.
+            next_memory = memory
+            stage, reply, passages, evidence = self._after_fallback(text, message, context)
         elif result.kind in (RouteKind.PROPOSE, RouteKind.CONFIRM):
             assert result.proposal is not None
             checked = ActionContractValidator(
@@ -181,7 +215,7 @@ class ConversationEngine:
                 _, next_memory, stage, reply, validated, refusal = self._propose_create(
                     composer, next_memory, result.proposal, context,
                 )
-                evidence = False
+                drafted, evidence = stage == TurnStage.CLARIFICATION, False
             elif isinstance(checked, Refusal):
                 refusal = checked
                 next_memory = next_memory.discard_pending()
@@ -215,7 +249,7 @@ class ConversationEngine:
 
         translated, missing = self._translated(validated)
         person_name = None
-        if validated is not None and result.person is not None:
+        if (validated is not None or drafted) and result.person is not None:
             record = self._snapshot.get(result.person.entity, result.person.id)
             person_name = record.title if record is not None else None
         feature = self._signals.feature(text, self._subject(validated))
@@ -341,6 +375,10 @@ class ConversationEngine:
                 return TurnStage.ANSWER, self._last_change(composer, context.last_change), (), False
             return TurnStage.ANSWER, composer.answer(conversational.template_key), (), True
         composer = ResponseComposer(self._definition)
+        if _describes_visitor(message):
+            # "I'm a manager moving from another tool": context, recorded as signals. It is
+            # acknowledged, and never answered as a failed request (the v2 prospect-signal decision).
+            return TurnStage.ANSWER, composer.answer("profile_acknowledged"), (), True
         if self._knowledge is not None and _is_question(text):
             grounding = ground(self._knowledge, message)
             reply = composer.knowledge_answer(grounding)

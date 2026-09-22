@@ -26,6 +26,10 @@ from app.services.agent import DemoAgent
 from app.services.product_data_store import ProductDataStore
 
 DEFINITION_ID = "linear_simplified"
+# The version the demo seed binds for new sessions.
+SEEDED_VERSION = __import__("json").loads(
+    (Path(__file__).resolve().parents[3] / "products" / DEFINITION_ID / "seed" / "demo_organization.json")
+    .read_text(encoding="utf-8"))["product"]["definition_version"]
 ADMIN = AuthUser(kind="member", user_id="demo-admin", tenant_id="pixel-dev", role="org_admin")
 PLANNER = AuthUser(kind="member", user_id="demo-product-eng", tenant_id="pixel-dev", role="team_member",
                    team_id="planning-team")
@@ -88,7 +92,7 @@ class TurnIsolationTest(ProductAccessFixture):
         pin = self.agent.sessions.pin_for("s1")
         self.assertEqual(
             (pin.tenant_id, pin.team_id, pin.product_id, pin.definition_id, pin.definition_version),
-            ("pixel-dev", "planning-team", "linear-demo", DEFINITION_ID, 3),
+            ("pixel-dev", "planning-team", "linear-demo", DEFINITION_ID, SEEDED_VERSION),
         )
 
     def test_same_organization_different_teams(self):

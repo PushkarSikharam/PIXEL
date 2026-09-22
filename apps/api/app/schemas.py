@@ -156,6 +156,8 @@ class TurnResponse(BaseModel):
     # refused or discarded before it could change the conversation is not context the 5a shadow
     # lost (5b plan, section 10.2).
     _engine_entered: bool = PrivateAttr(default=True)
+    # What the optional model gateway did on this turn, for telemetry only (never serialized).
+    _model_outcome: str | None = PrivateAttr(default=None)
 
 
 class CancelTurnResponse(BaseModel):

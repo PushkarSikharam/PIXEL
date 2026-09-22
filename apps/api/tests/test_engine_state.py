@@ -5,6 +5,7 @@ service that wires them in (`test_turn_execution.py` covers restart continuity e
 """
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 import os
 from pathlib import Path
 import sys
@@ -195,6 +196,44 @@ class IsolationTest(EngineStateFixture):
         with db.get_connection() as connection:
             loaded = self.store.load(connection, owner, "s1", "scope-1", PIN)
         self.assertIsNone(loaded)
+
+
+class RetentionTest(EngineStateFixture):
+    """5c plan, section 6.3: state never outlives its session, and nothing idle is kept forever."""
+
+    def commit_for(self, session_id: str, owner: ExecutionOwner) -> None:
+        self.make_session(session_id, owner)
+        with db.get_connection() as connection:
+            connection.execute("begin immediate")
+            self.store.commit(connection, owner, session_id, 1, "scope-1", PIN, ConversationMemory(turn=1),
+                              expected_revision=0)
+
+    def remaining(self) -> list[str]:
+        with db.get_connection() as connection:
+            return sorted(row["session_id"] for row in connection.execute("select session_id from engine_state"))
+
+    def test_ended_expired_and_idle_state_is_pruned_and_live_state_kept(self):
+        owner = ExecutionOwner("tenant-a", "product-a", "user-a")
+        for session_id in ("live", "ended", "expired", "idle"):
+            self.commit_for(session_id, owner)
+        now = datetime.now(UTC)
+        with db.get_connection() as connection:
+            connection.execute("update sessions set expires_at = ? where id = 'live'", ((now + timedelta(days=1)).isoformat(),))
+            connection.execute("update sessions set ended_at = ? where id = 'ended'", (now.isoformat(),))
+            connection.execute("update sessions set expires_at = ? where id = 'expired'", ((now - timedelta(minutes=1)).isoformat(),))
+            connection.execute("update engine_state set updated_at = ? where session_id = 'idle'",
+                               ((now - timedelta(days=31)).isoformat(),))
+        self.assertEqual(self.store.prune(now), 3)
+        self.assertEqual(self.remaining(), ["live"])
+
+    def test_pruning_is_bounded(self):
+        owner = ExecutionOwner("tenant-a", "product-a", "user-a")
+        for index in range(5):
+            self.commit_for(f"s{index}", owner)
+        with db.get_connection() as connection:
+            connection.execute("update sessions set ended_at = 'x'")
+        self.assertEqual(self.store.prune(batch=2, batches=2), 4, "at most batch * batches per call")
+        self.assertEqual(len(self.remaining()), 1)
 
 
 class SignalHistoryRebuildTest(EngineStateFixture):

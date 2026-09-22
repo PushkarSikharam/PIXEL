@@ -109,13 +109,30 @@ class EnvelopeTest(NewEngineFixture):
         self.assertEqual((refused.json()["outcome"], refused.json()["code"]), ("refused", "superseded"))
         self.assertEqual(self.say("What changed?")["speech"], "Nothing has changed in this conversation yet.")
 
-    def test_a_turn_that_loses_the_dispatch_race_does_not_advance_memory(self):
+    def test_a_turn_that_loses_the_race_writes_nothing(self):
+        """5c plan, section 5, step 10: no message, memory, signal or key from a lost turn."""
         self.say("Open Maya's ticket")
-        self.assertEqual(self._durable_last_turn(), 1)
-        with patch.object(self.turns._ledger, "dispatch_if_active", return_value=None):
+        before = self._written()
+        with patch.object(type(self.turns._ledger), "turn_is_current", return_value=False):
             stale = self.say("assign it to Noah")
         self.assertEqual(stale["status"], "stale")
+        self.assertIsNone(stale["execution"])
+        self.assertEqual(self._written(), before)
         self.assertEqual(self._durable_last_turn(), 1)
+
+    def test_a_turn_whose_memory_revision_moved_writes_nothing(self):
+        self.say("Open Maya's ticket")
+        before = self._written()
+        with patch.object(self.turns._state, "commit", return_value=None):
+            stale = self.say("assign it to Noah")
+        self.assertEqual(stale["status"], "stale")
+        self.assertIsNone(stale["execution"])
+        self.assertEqual(self._written(), before, "the key and the messages roll back with the memory")
+
+    def _written(self) -> tuple[int, int, int]:
+        with db.get_connection() as connection:
+            return tuple(connection.execute(f"select count(*) from {table}").fetchone()[0]
+                         for table in ("messages", "signals", "action_executions"))
 
     def _durable_last_turn(self, session: str = "new-engine") -> int:
         with db.get_connection() as connection:

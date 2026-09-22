@@ -30,7 +30,7 @@ class DeploymentReadinessTest(unittest.TestCase):
             with self.subTest(path):
                 response = self.client.get(path)
                 self.assertEqual(response.status_code, 200)
-                self.assertEqual(response.json(), {"status": "ok"})
+                self.assertEqual(response.json(), {"status": "ok", "authority": "legacy", "shadow": "off"})
 
     def test_health_fails_when_storage_is_unavailable(self) -> None:
         def unavailable():

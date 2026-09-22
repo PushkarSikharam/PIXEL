@@ -14,16 +14,19 @@ One turn, in the plan's normative order:
    revision, so a restart safely forgets an unanswered question rather than guessing at it;
 4. run the pure engine on the caller's records in that workspace, with the owner- and
    workspace-bound ledger view for "what changed?";
-5. dispatch a key only for a mutation that may be executed now, and only while this turn is still
-   the session's active turn in this workspace (one transaction);
-6. persist the safe subset of memory, the message/signal compatibility projection, and complete the
-   turn; answer, with the execution envelope for a dispatched mutation.
+5. finalize in one transaction (5c section 5, step 9): re-check that this is still the owner's
+   active turn in this workspace and that the engine state is still at the loaded revision; then
+   write the safe memory, the key for one dispatchable mutation, the messages, the signals and the
+   compatibility projection, and complete the turn. If either check fails nothing is written and
+   the turn is answered `stale`;
+6. answer, with the execution envelope for a dispatched mutation.
 
 A mutation that awaits confirmation carries no key and no executable action. A superseded turn is
 answered `stale`, and nothing it proposed can be executed or remembered.
 """
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 
@@ -33,8 +36,12 @@ from app.definitions.organizations import OrganizationDirectory
 from app.definitions.sessions import DefinitionUnavailable, SessionEnded, check_pinned_session, pin_new_session
 from app.engine.conversation_engine import EngineTurn, TurnStage
 from app.engine.execution import ExecutionLedger, principal_owner
-from app.engine.memory import ConversationMemory
-from app.engine.router import TurnContext
+from app.engine.composer import ResponseComposer
+from app.engine.memory import ConversationMemory, PendingConfirmation
+from app.engine.model_turn import AwaitingConfirmation, Proposed, consider
+from app.engine.prompt import PromptBuilder
+from app.engine.provenance import TurnEvidence
+from app.engine.router import IntentRouter, TurnContext
 from app.engine.signals import SignalHistory
 from app.schemas import (
     ExecutionEnvelope,
@@ -49,10 +56,25 @@ from app.schemas import (
 )
 from app.services.engine_assembly import assemble_engine, prepare_turn, selected_record
 from app.services.engine_state import EnginePin, EngineStateStore, PendingStateCache, rebuild_signal_history
+from app.services.model_gateway import ModelGateway
 from app.services.session_manager import SessionManager
 
 # Stages whose validated mutation may be executed on this turn; awaiting confirmation is not one.
 EXECUTABLE_STAGES = frozenset({TurnStage.PROPOSED, TurnStage.WOULD_EXECUTE})
+# Every engine stage's public status (5c plan, section 9). A stage missing here fails the turn
+# loudly instead of being guessed; `completed` never means that a change was committed.
+STAGE_STATUS: dict[TurnStage, str] = {
+    TurnStage.PROPOSED: "completed",
+    TurnStage.AWAITING_CONFIRMATION: "completed",
+    TurnStage.WOULD_EXECUTE: "completed",
+    TurnStage.REFUSED: "denied",
+    TurnStage.CLARIFICATION: "completed",
+    TurnStage.ANSWER: "completed",
+    TurnStage.KNOWLEDGE: "completed",
+    TurnStage.UNGROUNDED: "completed",
+    TurnStage.CANCELLED: "completed",
+    TurnStage.FALLBACK: "completed",
+}
 
 
 class NewEngineTurns:
@@ -60,7 +82,7 @@ class NewEngineTurns:
 
     def __init__(self, sessions: SessionManager, directory: OrganizationDirectory, package_for,
                  state: EngineStateStore | None = None, pending: PendingStateCache | None = None,
-                 ledger: ExecutionLedger | None = None) -> None:
+                 ledger: ExecutionLedger | None = None, gateway: ModelGateway | None = None) -> None:
         self._sessions = sessions
         self._directory = directory
         self._package_for = package_for
@@ -68,6 +90,8 @@ class NewEngineTurns:
         # Full-fidelity memory for this process only; never a second durable copy (5c section 6.2).
         self._pending = pending or PendingStateCache()
         self._ledger = ledger or ExecutionLedger()
+        # Off unless a deployment switches it on and supplies a transport (5c plan, section 8).
+        self._gateway = gateway or ModelGateway()
 
     def __call__(self, request: TurnRequest, principal: Any, visible_data: dict, grant: Any) -> TurnResponse:
         try:
@@ -128,58 +152,120 @@ class NewEngineTurns:
                 last_change=self._ledger.last_executed(owner, request.session_id, scope_id),
             ),
         )
+        model_outcome = None
+        if turn.stage == TurnStage.FALLBACK and self._gateway.enabled():
+            turn, model_outcome = self._consult_model(turn, engine, translator, request, principal, session_pin)
 
-        envelope = None
         executable = turn.stage in EXECUTABLE_STAGES and turn.validated is not None and turn.legacy_action is not None
+        change_set = None
         if executable and turn.validated.is_mutation:
             try:
                 change_set = translator.change_set(turn.validated)
             except LookupError:
                 # No keyed form for this mutation: nothing executes, and nothing is guessed.
-                self._finalize(owner, request, scope_id, engine_pin, turn, base_revision)
-                return _response(request, turn, envelope=None, executable=False)
-            dispatched = self._ledger.dispatch_if_active(
-                turn.validated, owner, session_id=request.session_id, turn_id=request.turn_id,
-                scope_id=scope_id, change_set=change_set,
-            )
-            if dispatched is None:
-                return _stale(request)
+                executable = False
+        won, dispatched = self._finalize(owner, request, scope_id, engine_pin, turn, base_revision, change_set)
+        if not won:
+            return _stale(request)
+        envelope = None
+        if dispatched is not None:
             envelope = ExecutionEnvelope(
                 key=dispatched.execution_key, session_id=request.session_id, turn_id=request.turn_id,
                 expires_at=datetime.fromtimestamp(dispatched.expires_at, UTC).isoformat(),
             )
-        self._finalize(owner, request, scope_id, engine_pin, turn, base_revision)
-        return _response(request, turn, envelope=envelope, executable=executable)
+        response = _response(request, turn, envelope=envelope, executable=executable)
+        response._model_outcome = model_outcome
+        return response
+
+    def _consult_model(self, turn: EngineTurn, engine, translator, request: TurnRequest, principal: Any,
+                       session_pin) -> tuple[EngineTurn, str]:
+        """One gateway attempt for a turn routing could not handle (5c plan, section 8).
+
+        The reply passes the unchanged 4a chain. A non-mutating action is proposed; a mutation only
+        ever awaits confirmation (the "yes" is resolved deterministically, with no provider call,
+        against the next turn's fresh snapshot). The model never supplies speech, and any other
+        outcome keeps the deterministic fallback.
+        """
+        definition, snapshot = engine.definition, engine.snapshot
+        prompt = PromptBuilder(definition).build(snapshot, request.message)
+        result = self._gateway.attempt(prompt.text, owner=session_pin.context, user_id=principal.user_id,
+                                       session_id=request.session_id)
+        if result.outcome != "reply":
+            return turn, result.outcome
+        message = IntentRouter(definition, snapshot).normalizer.normalize(request.message)
+        outcome = consider(result.raw or "", definition=definition, snapshot=snapshot,
+                           evidence=TurnEvidence(message=message, snapshot=snapshot))
+        if not isinstance(outcome, (Proposed, AwaitingConfirmation)):
+            return turn, "refused" if type(outcome).__name__ == "Refused" else "answered"
+        try:
+            legacy = translator.translate(outcome.validated)
+        except LookupError:
+            return turn, "untranslatable"
+        composer = ResponseComposer(definition)
+        action = outcome.validated.action
+        if isinstance(outcome, Proposed):
+            return replace(turn, stage=TurnStage.PROPOSED, validated=outcome.validated, legacy_action=legacy,
+                           reply=composer.proposed(action)), "proposed"
+        pending = PendingConfirmation(action, outcome.reason, request.turn_id)
+        return replace(turn, stage=TurnStage.AWAITING_CONFIRMATION, validated=outcome.validated,
+                       legacy_action=legacy, reply=composer.awaiting_confirmation(action),
+                       memory=replace(turn.memory, pending_confirmation=pending)), "awaiting_confirmation"
 
     def _finalize(self, owner, request: TurnRequest, scope_id: str, engine_pin: EnginePin,
-                  turn: EngineTurn, base_revision: int) -> None:
-        """Persist the safe memory subset and the message/signal compatibility projection.
+                  turn: EngineTurn, base_revision: int, change_set):
+        """Finalize the turn in one transaction (5c plan, section 5, steps 9 and 10).
 
-        Never overwrites newer state: `commit` only applies where the loaded revision still matches
-        and `last_turn < turn_id` (plan, section 6.3). A lost race here simply keeps the newer row;
-        this turn's own reply was already decided and is still returned to the caller.
+        Inside one `begin immediate`: this must still be the owner's active turn in this workspace,
+        and the engine state must still be at the revision the turn loaded; then the safe memory,
+        the execution key (for one dispatchable mutation), the messages, the signals and the
+        compatibility projection are written, and the turn is completed. If either check fails,
+        nothing from this turn is written and it is answered `stale`.
+
+        Returns (won, dispatched key or None).
         """
-        with get_connection() as connection:
-            connection.execute("begin immediate")
-            new_revision = self._state.commit(
-                connection, owner, request.session_id, request.turn_id, scope_id, engine_pin,
-                turn.memory, expected_revision=base_revision,
-            )
-        if new_revision is not None:
-            self._pending.put(owner, request.session_id, revision=new_revision,
-                              memory=turn.memory, history=turn.history)
         signals = [Signal(type=signal.type, value=signal.value, confidence=signal.confidence)
                    for signal in turn.signals]
-        self._sessions.store_message(request.session_id, request.turn_id, "user", request.message, scope_id)
-        self._sessions.store_message(request.session_id, request.turn_id, "assistant", turn.reply.speech, scope_id)
-        self._sessions.store_signals(request.session_id, request.turn_id, signals, scope_id)
-        self._sessions.remember_session_context(request.session_id, signals)
-        self._sessions.complete_turn(request.session_id, request.turn_id)
+        session_id, turn_id = request.session_id, request.turn_id
+        try:
+            with get_connection() as connection:
+                connection.execute("begin immediate")
+                if not self._ledger.turn_is_current(connection, owner, session_id=session_id,
+                                                    turn_id=turn_id, scope_id=scope_id):
+                    raise _LostRace
+                new_revision = self._state.commit(
+                    connection, owner, session_id, turn_id, scope_id, engine_pin, turn.memory,
+                    expected_revision=base_revision,
+                )
+                if new_revision is None:
+                    raise _LostRace
+                dispatched = None
+                if change_set is not None:
+                    dispatched = self._ledger.dispatch(
+                        turn.validated, owner, session_id=session_id, turn_id=turn_id, scope_id=scope_id,
+                        change_set=change_set, connection=connection,
+                    )
+                self._sessions.store_message(session_id, turn_id, "user", request.message, scope_id,
+                                             connection=connection)
+                self._sessions.store_message(session_id, turn_id, "assistant", turn.reply.speech, scope_id,
+                                             connection=connection)
+                self._sessions.store_signals(session_id, turn_id, signals, scope_id, connection=connection)
+                self._sessions.remember_session_context(session_id, signals, connection=connection)
+                self._sessions.complete_turn(session_id, turn_id, connection=connection)
+        except _LostRace:
+            # Leaving the block without committing rolls every write of this turn back.
+            return False, None
+        # The in-process cache follows the committed revision only (5c plan, section 6.2).
+        self._pending.put(owner, session_id, revision=new_revision, memory=turn.memory, history=turn.history)
+        return True, dispatched
+
+
+class _LostRace(Exception):
+    """A newer turn, or a newer engine state, won; this turn writes nothing."""
 
 
 def _response(request: TurnRequest, turn: EngineTurn, *, envelope: ExecutionEnvelope | None,
               executable: bool) -> TurnResponse:
-    refused = turn.stage == TurnStage.REFUSED
+    status = STAGE_STATUS[turn.stage]
     legacy = turn.legacy_action
     proposed = ProposedAction(type=legacy.type, payload=dict(legacy.payload)) if legacy is not None else None
     # Only an action that may run now is handed to the client; a mutation also needs its key.
@@ -191,7 +277,7 @@ def _response(request: TurnRequest, turn: EngineTurn, *, envelope: ExecutionEnve
     return TurnResponse(
         session_id=request.session_id,
         turn_id=request.turn_id,
-        status="denied" if refused else "completed",
+        status=status,
         speech=turn.reply.speech,
         proposed_action=proposed,
         validated_action=validated,
@@ -201,7 +287,7 @@ def _response(request: TurnRequest, turn: EngineTurn, *, envelope: ExecutionEnve
             relevant_feature=turn.feature.capitalize() if turn.feature else None,
             current_intent=str(turn.stage), reason=f"New engine: {turn.stage}.",
             confidence=1.0 if turn.validated is not None else 0.5,
-            status="denied" if refused else "active",
+            status="denied" if status == "denied" else "active",
         ),
         signals=[Signal(type=signal.type, value=signal.value, confidence=signal.confidence)
                  for signal in turn.signals],

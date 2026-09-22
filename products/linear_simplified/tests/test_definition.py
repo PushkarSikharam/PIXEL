@@ -29,6 +29,10 @@ from app.main import app  # noqa: E402
 from app.services import env as env_module  # noqa: E402
 
 DEFINITION_ID = "linear_simplified"
+# The version the demo seed binds (the product's current version) and the next, unpublished one.
+SEED = REPO_ROOT / "products" / DEFINITION_ID / "seed" / "demo_organization.json"
+CURRENT = json.loads(SEED.read_text(encoding="utf-8"))["product"]["definition_version"]
+NEXT = CURRENT + 1
 # The seeded development organization and its product running this definition.
 TENANT_ID, PRODUCT_ID = "pixel-dev", "linear-demo"
 
@@ -116,6 +120,21 @@ class LinearDefinitionV2Test(LinearDefinitionTest):
         self.assertEqual(sorted(map(tuple, add_member)), [(), ("unknown_person",), ("unknown_person",)])
 
 
+class CurrentDefinitionTest(unittest.TestCase):
+    """5c plan, section 7.2: the version new sessions pin."""
+
+    def test_a_new_tickets_project_is_asked_for_never_defaulted(self):
+        issue = load_definition(DEFAULT_SOURCE, DEFINITION_ID, CURRENT).definition.entities["issue"]
+        self.assertIsNone(issue.fields["project"].default)
+        self.assertEqual((issue.fields["priority"].default, issue.fields["status"].default), ("Medium", "Todo"))
+
+    def test_every_published_file_is_byte_stable(self):
+        for version in range(1, CURRENT + 1):
+            with self.subTest(version=version):
+                raw = DEFAULT_SOURCE.definition_path(DEFINITION_ID, version).read_bytes()
+                self.assertNotIn(b"\r\n", raw, "definitions are LF on every checkout")
+
+
 class SeededOrganizationFixture(unittest.TestCase):
     """A fresh database with the demo organization seeded, and the live turn endpoint."""
 
@@ -147,16 +166,17 @@ class SeededOrganizationFixture(unittest.TestCase):
 class LinearDemoOrganizationTest(SeededOrganizationFixture):
     """The seed package creates the demo organization, and its chat turns run on pinned sessions."""
 
-    def test_the_seeded_product_runs_v3_for_its_team(self):
+    def test_the_seeded_product_runs_its_current_version(self):
         binding = self.directory.product(TENANT_ID, PRODUCT_ID)
         self.assertEqual(
             (binding.team_id, binding.definition_id, binding.definition_version, binding.state),
-            ("planning-team", DEFINITION_ID, 3, "active"),
+            ("planning-team", DEFINITION_ID, CURRENT, "active"),
         )
         # Earlier versions are published first, so each was classified against its predecessor
         # and every earlier version is there to roll back to.
-        self.assertEqual([self.registry.get(DEFINITION_ID, version).state for version in (1, 2, 3)],
-                         ["published", "published", "published"])
+        versions = range(1, CURRENT + 1)
+        self.assertEqual([self.registry.get(DEFINITION_ID, version).state for version in versions],
+                         ["published"] * CURRENT)
         self.assertEqual(self.directory.membership(TENANT_ID, "demo-admin").role, "org_admin")
         for user_id in ("demo-product-eng", "demo-platform"):
             with self.subTest(user_id=user_id):
@@ -171,13 +191,13 @@ class LinearDemoOrganizationTest(SeededOrganizationFixture):
             ).fetchone()
         self.assertEqual(
             (row["tenant_id"], row["team_id"], row["product_id"], row["definition_id"], row["definition_version"]),
-            (TENANT_ID, "planning-team", PRODUCT_ID, DEFINITION_ID, 3),
+            (TENANT_ID, "planning-team", PRODUCT_ID, DEFINITION_ID, CURRENT),
         )
-        self.assertEqual(row["definition_checksum"], self.registry.get(DEFINITION_ID, 3).checksum)
+        self.assertEqual(row["definition_checksum"], self.registry.get(DEFINITION_ID, CURRENT).checksum)
 
     def test_revoking_the_version_ends_live_conversations(self):
         self.assertEqual(self.turn("live")["status"], "completed")
-        self.registry.revoke(DEFINITION_ID, 3)
+        self.registry.revoke(DEFINITION_ID, CURRENT)
         ended = self.turn("live", turn_id=2)
         self.assertEqual(ended["status"], "denied")
         self.assertIn("definition_revoked", ended["intent_trace"]["reason"])
@@ -217,19 +237,19 @@ class MoveProductVersionTest(SeededOrganizationFixture):
 
     def test_moving_back_and_forth_keeps_open_sessions_on_their_version(self):
         code, result = self.move(1)
-        self.assertEqual((code, result["moved"], result["from_version"], result["to_version"]), (0, True, 3, 1))
+        self.assertEqual((code, result["moved"], result["from_version"], result["to_version"]), (0, True, CURRENT, 1))
         self.assertEqual(self.turn("on-v1")["status"], "completed")
-        self.assertEqual(self.move(3)[0], 0)
-        self.assertEqual(self.turn("on-v3")["status"], "completed")
+        self.assertEqual(self.move(CURRENT)[0], 0)
+        self.assertEqual(self.turn("on-current")["status"], "completed")
         # The session opened on v1 keeps its pin and keeps working after the move.
         self.assertEqual(self.turn("on-v1", turn_id=2)["status"], "completed")
-        self.assertEqual((self.pinned_version("on-v1"), self.pinned_version("on-v3")), (1, 3))
+        self.assertEqual((self.pinned_version("on-v1"), self.pinned_version("on-current")), (1, CURRENT))
         self.assertEqual(result["definition_checksum"], self.registry.get(DEFINITION_ID, 1).checksum)
 
     def test_a_version_without_a_file_is_refused_and_nothing_moves(self):
         code, result = self.move(9)
         self.assertEqual((code, result["moved"]), (1, False))
-        self.assertEqual(self.binding_version(), 3)
+        self.assertEqual(self.binding_version(), CURRENT)
         self.assertIsNone(self.registry.get(DEFINITION_ID, 9))
 
     def test_a_breaking_version_is_refused_and_nothing_moves(self):
@@ -237,30 +257,30 @@ class MoveProductVersionTest(SeededOrganizationFixture):
             definitions = Path(root) / DEFINITION_ID / "definition"
             definitions.mkdir(parents=True)
             source_dir = REPO_ROOT / "products" / DEFINITION_ID / "definition"
-            for version in (1, 2, 3):
+            for version in range(1, CURRENT + 1):
                 name = f"v{version}.yaml"
                 (definitions / name).write_bytes((source_dir / name).read_bytes())
-            breaking = (source_dir / "v3.yaml").read_bytes().decode("utf-8")
-            breaking = breaking.replace("  version: 3\n", "  version: 4\n", 1)
+            breaking = (source_dir / f"v{CURRENT}.yaml").read_bytes().decode("utf-8")
+            breaking = breaking.replace(f"  version: {CURRENT}\n", f"  version: {NEXT}\n", 1)
             breaking = breaking.replace("      estimate: { type: text, max: 30 }\n", "", 1)
-            (definitions / "v4.yaml").write_bytes(breaking.encode("utf-8"))
+            (definitions / f"v{NEXT}.yaml").write_bytes(breaking.encode("utf-8"))
             registry = DefinitionRegistry(DefinitionSource(products_root=Path(root)))
             with patch.object(ops, "OrganizationDirectory", lambda: OrganizationDirectory(registry)):
-                code, result = self.move(4)
+                code, result = self.move(NEXT)
         self.assertEqual((code, result["moved"]), (1, False))
         self.assertIn("issue.estimate was removed", result["reason"])
-        self.assertEqual(self.binding_version(), 3)
-        refused = self.registry.get(DEFINITION_ID, 4)
+        self.assertEqual(self.binding_version(), CURRENT)
+        refused = self.registry.get(DEFINITION_ID, NEXT)
         self.assertTrue(refused is None or refused.state != "published")
 
     def test_failed_readiness_moves_the_binding_back(self):
         problem = _Problem(TENANT_ID, PRODUCT_ID, "definition_checksum_mismatch")
         with patch.object(ops, "session_start_problems", lambda: [problem]):
             code, result = self.move(1)
-        self.assertEqual((code, result["moved"], result["to_version"]), (1, False, 3))
-        self.assertEqual(self.binding_version(), 3)
-        self.assertEqual(self.turn("still-v3")["status"], "completed")
-        self.assertEqual(self.pinned_version("still-v3"), 3)
+        self.assertEqual((code, result["moved"], result["to_version"]), (1, False, CURRENT))
+        self.assertEqual(self.binding_version(), CURRENT)
+        self.assertEqual(self.turn("still-current")["status"], "completed")
+        self.assertEqual(self.pinned_version("still-current"), CURRENT)
 
     def test_an_unknown_product_is_refused(self):
         output = io.StringIO()

@@ -44,6 +44,8 @@ from app.engine.execution import (
 from app.record_access import RecordGrant, legacy_record_owner
 from app.services.engine_state import EngineStateStore
 from app.services.legacy_adapter import dispatch_legacy_mutation
+from app.services import turn_telemetry
+from starlette.background import BackgroundTask
 from app.schemas import CancelTurnRequest, CancelTurnResponse, ExecutionReceipt, TurnRequest, TurnResponse
 from app.record_schemas import (
     CycleInput,
@@ -112,10 +114,19 @@ class RetentionSchedule:
 
 
 def prune_execution_ledger() -> None:
+    """Bounded retention for the execution ledger and durable engine state (5b section 9, 5c 6.3)."""
     try:
         ExecutionLedger.prune()
     except Exception as error:  # noqa: BLE001 - retried at the next trigger
         logger.warning("execution_prune_failed", extra={"error": type(error).__name__})
+    try:
+        EngineStateStore().prune()
+    except Exception as error:  # noqa: BLE001 - retried at the next trigger
+        logger.warning("engine_state_prune_failed", extra={"error": type(error).__name__})
+    try:
+        turn_telemetry.prune()
+    except Exception as error:  # noqa: BLE001 - retried at the next trigger
+        logger.warning("telemetry_prune_failed", extra={"error": type(error).__name__})
 
 
 retention = RetentionSchedule()
@@ -133,11 +144,20 @@ _shadow_seen_on: bool | None = None
 # When this application instance started serving (set in `lifespan`). A conversation that started
 # earlier was not seen by this process's shadow, so its shadow memory is incomplete.
 _process_started: datetime | None = None
+# The authority selected once at startup (5c plan, section 3.1). Nothing a request carries can
+# change it; switching authority is a configuration change and a restart.
+_authority: str | None = None
+
+
+def configured_engine_mode() -> str:
+    configured = (env_value("PIXEL_ENGINE_MODE") or ENGINE_LEGACY).strip().lower()
+    return configured or ENGINE_LEGACY
 
 
 def engine_mode() -> str:
-    configured = (env_value("PIXEL_ENGINE_MODE") or ENGINE_LEGACY).strip().lower()
-    return configured or ENGINE_LEGACY
+    """The authority this process serves: fixed when it started (a test that never starts the
+    application reads the configuration directly)."""
+    return _authority if _authority is not None else configured_engine_mode()
 
 
 def engine_mode_problem() -> str | None:
@@ -223,8 +243,10 @@ def close_shadow() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    global _process_started
+    global _process_started, _authority
     _process_started = datetime.now(UTC)
+    _authority = configured_engine_mode()
+    logger.info("engine_authority", extra={"authority": _authority})
     was_armed = rate_limits.armed
     reset_was_armed = idle_reset.armed
     migrate()
@@ -242,6 +264,7 @@ async def lifespan(_: FastAPI):
             product_data.seed_if_empty()
         yield
     finally:
+        _authority = None
         close_shadow()
         # A TestClient owns only the lifecycle state it started. Production remains armed until
         # process shutdown; a temporary test server must not throttle later direct-app tests.
@@ -337,7 +360,9 @@ def health():
             status_code=503,
             content={"status": "unhealthy", "reason": "sessions_cannot_start", "products": len(problems)},
         )
-    return {"status": "ok"}
+    # The serving authority is reported so readiness can be checked against the configured mode
+    # (5c plan, sections 3.1 and 11.4). No secret or identifier is included.
+    return {"status": "ok", "authority": engine_mode(), "shadow": "on" if shadow_switch_on() else "off"}
 
 
 class DemoLoginRequest(BaseModel):
@@ -669,7 +694,15 @@ def _keyed(execution_key: str, session_id: str | None, user: AuthUser, change_se
         ),
         record=result.record,
     )
-    return JSONResponse(status_code=200 if executed else 409, content=receipt.model_dump(mode="json"))
+    pin = agent.sessions.pin_for(session_id) if session_id else None
+    outcome = "replayed" if result.replay else result.outcome
+    telemetry = BackgroundTask(
+        turn_telemetry.record, deployment_id=deployment_id(), tenant_id=user.tenant_id or "",
+        product_id=product_id, definition_version=pin.definition_version if pin else None,
+        authority=engine_mode(), counts={"receipt": outcome, "receipt_code": result.code},
+    )
+    return JSONResponse(status_code=200 if executed else 409, content=receipt.model_dump(mode="json"),
+                        background=telemetry)
 
 
 @app.post("/api/demo-data/projects")
@@ -817,6 +850,43 @@ def usage_summary(day: str | None = None, user: AuthUser = Depends(require_membe
 @app.post("/api/turn", response_model=TurnResponse)
 def create_turn(request: TurnRequest, http: Request, background: BackgroundTasks,
                 user: AuthUser = Depends(require_auth), engine=Depends(turn_engine)) -> TurnResponse:
+    started = time.monotonic()
+    response = _answer_turn(request, http, background, user, engine)
+    # Metadata only, after the response (5c plan, section 10).
+    background.add_task(_record_turn, request, user, response, (time.monotonic() - started) * 1000)
+    return response
+
+
+def _record_turn(request: TurnRequest, user: AuthUser, response: TurnResponse, milliseconds: float) -> None:
+    pin = agent.sessions.pin_for(request.session_id)
+    authority = engine_mode()
+    counts = {
+        "status": response.status,
+        "stage": _turn_stage(authority, response),
+        "dispatch": "keyed" if response.execution is not None else "none",
+        "latency": turn_telemetry.latency_band(milliseconds),
+    }
+    if response._model_outcome is not None:
+        counts["model"] = response._model_outcome
+    turn_telemetry.record(
+        deployment_id=deployment_id(), tenant_id=user.tenant_id or "", product_id=request.product_id,
+        definition_version=pin.definition_version if pin else None, authority=authority, counts=counts,
+    )
+
+
+def _turn_stage(authority: str, response: TurnResponse) -> str:
+    if authority == ENGINE_DEFINITION and response.intent_trace.current_intent:
+        return response.intent_trace.current_intent
+    if response.status in {"denied", "stale", "cancelled"}:
+        return response.status
+    action = response.validated_action
+    if action is None:
+        return "answer"
+    return "proposed" if action.type in {"CREATE_DEMO_ISSUE", "UPDATE_DEMO_ISSUE"} else "action"
+
+
+def _answer_turn(request: TurnRequest, http: Request, background: BackgroundTasks, user: AuthUser,
+                 engine) -> TurnResponse:
     rate_limits.enforce("turn", http, identity=user.user_id)
     retention.schedule(background.add_task)
     if user.kind == "member":

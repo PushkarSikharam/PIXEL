@@ -69,7 +69,7 @@ class ReadinessTest(ReadinessFixture):
     def test_a_healthy_deployment_reports_ok(self):
         response = self.client.get("/health")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"status": "ok"})
+        self.assertEqual(response.json(), {"status": "ok", "authority": "legacy", "shadow": "off"})
 
     def test_the_line_ending_mismatch_is_what_production_hit(self):
         """Guard the premise: the two checkouts really do give the file different identities."""

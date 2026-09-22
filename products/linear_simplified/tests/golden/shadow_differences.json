@@ -641,21 +641,21 @@
     "turn": 0,
     "field": "proposed_action",
     "kind": "behaviour",
-    "reason": "Gap to close before 5c. The definition requires priority, project and status for a new ticket and declares no defaults, while the router supplies only title and assignee, so the validator refuses the create (missing_required_field). The live engine invented Medium, Issue Triage and Todo. The fix is a question for the missing values or declared defaults, not a guess."
+    "reason": "The visitor named the owner and the title but no project. Linear v4 declares defaults only for priority (Medium) and status (Todo), so the definition engine asks which project the ticket belongs to and proposes nothing yet (5c plan, section 7.2). The live (legacy) engine creates the ticket at once in a project its planner chose itself; that guess is not carried forward and leaves with the old engine in 5d."
   },
   {
     "case": "create-known-owner",
     "turn": 0,
     "field": "validated_action",
     "kind": "behaviour",
-    "reason": "Gap to close before 5c. The definition requires priority, project and status for a new ticket and declares no defaults, while the router supplies only title and assignee, so the validator refuses the create (missing_required_field). The live engine invented Medium, Issue Triage and Todo. The fix is a question for the missing values or declared defaults, not a guess."
+    "reason": "The visitor named the owner and the title but no project. Linear v4 declares defaults only for priority (Medium) and status (Todo), so the definition engine asks which project the ticket belongs to and proposes nothing yet (5c plan, section 7.2). The live (legacy) engine creates the ticket at once in a project its planner chose itself; that guess is not carried forward and leaves with the old engine in 5d."
   },
   {
     "case": "create-known-owner",
     "turn": 0,
     "field": "speech",
     "kind": "behaviour",
-    "reason": "Gap to close before 5c. The definition requires priority, project and status for a new ticket and declares no defaults, while the router supplies only title and assignee, so the validator refuses the create (missing_required_field). The live engine invented Medium, Issue Triage and Todo. The fix is a question for the missing values or declared defaults, not a guess."
+    "reason": "The visitor named the owner and the title but no project. Linear v4 declares defaults only for priority (Medium) and status (Todo), so the definition engine asks which project the ticket belongs to and proposes nothing yet (5c plan, section 7.2). The live (legacy) engine creates the ticket at once in a project its planner chose itself; that guess is not carried forward and leaves with the old engine in 5d."
   },
   {
     "case": "create-known-owner",
@@ -669,7 +669,7 @@
     "turn": 0,
     "field": "signals",
     "kind": "platform_wording",
-    "reason": "Linear v3 now declares safe defaults for the create fields, so both engines produce a create-oriented turn. The remaining signal difference is wording/confidence only, not a behavior gap."
+    "reason": "The same signals are reported. Only the confidence differs: the live engine derives 0.72 from its reasoning score, the platform uses fixed values (0.7 feature, 0.84 person)."
   },
   {
     "case": "create-unknown-owner",
@@ -781,7 +781,7 @@
     "turn": 0,
     "field": "speech",
     "kind": "behaviour",
-    "reason": "Linear v3 declares safe defaults for priority, status and project, so the definition engine can propose a complete create. The live compatibility path still opens or prepares the form first until full cutover."
+    "reason": "\"Start a ticket assigned to Noah\" asks for a new ticket. The definition engine drafts the create with Noah Patel as assignee and asks for the one required field the visitor did not give, the title, and proposes nothing yet (Linear v4 declares no project default, so the project is asked next). The live (legacy) engine instead opens the ticket form prefilled with Noah Patel. Before this change the definition engine opened Noah's existing ticket, LIN-137, which was a defect."
   },
   {
     "case": "create-start-assigned",
@@ -796,6 +796,13 @@
     "field": "signals",
     "kind": "platform_wording",
     "reason": "The same signals are reported. Only the confidence differs: the live engine derives 0.72 from its reasoning score, the platform uses fixed values (0.7 feature, 0.84 person)."
+  },
+  {
+    "case": "create-start-assigned",
+    "turn": 0,
+    "field": "session_summary",
+    "kind": "behaviour",
+    "reason": "The summary agrees on interests, feature and person (Noah Patel). Only the pending question differs: the definition engine is waiting for the new ticket's title, the live engine asked nothing because it opened the form instead."
   },
   {
     "case": "member-add-named",
@@ -1332,23 +1339,9 @@
   {
     "case": "prospect-profile",
     "turn": 0,
-    "field": "proposed_action",
-    "kind": "behaviour",
-    "reason": "Decided in Linear v2: a profile statement is a prospect signal, not navigation. The live engine opened Teams because that rule came first; the new engine never breaks a tie by order."
-  },
-  {
-    "case": "prospect-profile",
-    "turn": 0,
-    "field": "validated_action",
-    "kind": "behaviour",
-    "reason": "Decided in Linear v2: a profile statement is a prospect signal, not navigation. The live engine opened Teams because that rule came first; the new engine never breaks a tie by order."
-  },
-  {
-    "case": "prospect-profile",
-    "turn": 0,
     "field": "speech",
-    "kind": "behaviour",
-    "reason": "Decided in Linear v2: a profile statement is a prospect signal, not navigation. The live engine opened Teams because that rule came first; the new engine never breaks a tie by order."
+    "kind": "platform_wording",
+    "reason": "Both engines now treat the profile statement as context, not navigation (the Linear v2 decision the live engine has adopted). Only the acknowledging sentence differs."
   },
   {
     "case": "prospect-profile",
@@ -1390,7 +1383,7 @@
     "turn": 0,
     "field": "execution",
     "kind": "behaviour",
-    "reason": "The live turn dispatches a create whose project the legacy planner chose on its own. Linear v3 declares no project default, so the definition engine asks which project instead (5c plan, section 7.2). The legacy guess leaves with the old engine in 5d."
+    "reason": "The visitor named the owner and the title but no project. Linear v4 declares defaults only for priority (Medium) and status (Todo), so the definition engine asks which project the ticket belongs to and proposes nothing yet (5c plan, section 7.2). The live (legacy) engine creates the ticket at once in a project its planner chose itself; that guess is not carried forward and leaves with the old engine in 5d."
   },
   {
     "case": "create-without-owner",
@@ -1432,21 +1425,14 @@
     "turn": 0,
     "field": "proposed_action",
     "kind": "behaviour",
-    "reason": "Linear v3 declares safe defaults for priority, status and project, so a request to start a ticket assigned to Noah can now become a complete create proposal. The live compatibility path still opens the form first."
+    "reason": "\"Start a ticket assigned to Noah\" asks for a new ticket. The definition engine drafts the create with Noah Patel as assignee and asks for the one required field the visitor did not give, the title, and proposes nothing yet (Linear v4 declares no project default, so the project is asked next). The live (legacy) engine instead opens the ticket form prefilled with Noah Patel. Before this change the definition engine opened Noah's existing ticket, LIN-137, which was a defect."
   },
   {
     "case": "create-start-assigned",
     "turn": 0,
     "field": "validated_action",
     "kind": "behaviour",
-    "reason": "Linear v3 declares safe defaults for priority, status and project, so the definition engine can validate the complete create while the live compatibility path remains form-first until full cutover."
-  },
-  {
-    "case": "create-start-assigned",
-    "turn": 0,
-    "field": "retrieved_context",
-    "kind": "behaviour",
-    "reason": "The live compatibility path attaches documents for ticket creation copy; the definition create proposal is fully structured and attaches no retrieved documents. No spoken claim depends on retrieval."
+    "reason": "\"Start a ticket assigned to Noah\" asks for a new ticket. The definition engine drafts the create with Noah Patel as assignee and asks for the one required field the visitor did not give, the title, and proposes nothing yet (Linear v4 declares no project default, so the project is asked next). The live (legacy) engine instead opens the ticket form prefilled with Noah Patel. Before this change the definition engine opened Noah's existing ticket, LIN-137, which was a defect."
   },
   {
     "case": "update-outside-person",
@@ -1475,5 +1461,19 @@
     "field": "retrieved_context",
     "kind": "behaviour",
     "reason": "The live compatibility path still carries issue documents for the reassignment conversation. The definition engine treats the unknown-person branch as UI guidance and attaches no documents; no spoken claim depends on retrieval."
+  },
+  {
+    "case": "create-known-owner",
+    "turn": 0,
+    "field": "retrieved_context",
+    "kind": "behaviour",
+    "reason": "The visitor named the owner and the title but no project. Linear v4 declares defaults only for priority (Medium) and status (Todo), so the definition engine asks which project the ticket belongs to and proposes nothing yet (5c plan, section 7.2). The live (legacy) engine creates the ticket at once in a project its planner chose itself; that guess is not carried forward and leaves with the old engine in 5d."
+  },
+  {
+    "case": "create-known-owner",
+    "turn": 0,
+    "field": "session_summary",
+    "kind": "behaviour",
+    "reason": "The visitor named the owner and the title but no project. Linear v4 declares defaults only for priority (Medium) and status (Todo), so the definition engine asks which project the ticket belongs to and proposes nothing yet (5c plan, section 7.2). The live (legacy) engine creates the ticket at once in a project its planner chose itself; that guess is not carried forward and leaves with the old engine in 5d."
   }
 ]

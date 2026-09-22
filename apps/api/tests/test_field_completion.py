@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from app import main  # noqa: E402
+from app import db, main  # noqa: E402
 from app.definitions.contract import FieldSpec  # noqa: E402
 from app.engine.field_completion import read_answer  # noqa: E402
 from app.engine.lookup import RecordView  # noqa: E402
@@ -63,20 +63,46 @@ class CreateCompletionTest(NewEngineFixture):
     def visible_project_names(self, scope: str = SCOPE) -> list[str]:
         return [project["name"] for project in main.product_data.load(frozenset({scope}))["projects"]]
 
-    def test_v3_applies_its_defaults_and_dispatches_the_complete_create(self):
-        proposed = self.say(CREATE)
+    def test_the_current_version_defaults_priority_and_status_and_asks_for_the_project(self):
+        asked = self.say(CREATE)
+        self.assertIsNone(asked["execution"], "nothing is dispatched while the project is missing")
+        self.assertIsNone(asked["validated_action"])
+        self.assertTrue(asked["speech"].startswith("Which project should the new ticket have:"), asked["speech"])
+        for name in self.visible_project_names():
+            self.assertIn(name, asked["speech"])
+
+        proposed = self.say("Issue Triage Workflow")
         self.assertEqual(proposed["validated_action"]["type"], "CREATE_DEMO_ISSUE")
         self.assertIsNotNone(proposed["execution"])
         fields = proposed["validated_action"]["payload"]
-        self.assertEqual(
-            (fields["priority"], fields["status"], fields["project"]),
-            ("Medium", "Todo", "PRJ-101"),
-            "declared defaults only",
-        )
+        self.assertEqual((fields["priority"], fields["status"]), ("Medium", "Todo"), "declared defaults only")
         receipt = self.write(proposed)
         self.assertEqual(receipt.status_code, 200, receipt.text)
         record = receipt.json()["record"]
-        self.assertEqual((record["assignee"], record["project"]), ("Noah Patel", "GitHub Integration Hardening"))
+        self.assertEqual((record["assignee"], record["project"]), ("Noah Patel", "Issue Triage Workflow"))
+
+    def test_a_drafted_create_records_the_person_it_names(self):
+        """The person is resolved before the missing field is asked, so a follow-up can use them."""
+        asked = self.say("Start a ticket assigned to Noah")
+        self.assertEqual(asked["speech"], "What should the title of the new ticket be?")
+        with db.get_connection() as connection:
+            people = {row["value"] for row in connection.execute(
+                "select value from signals where session_id = ? and type = 'person_interest'", ("new-engine",))}
+        self.assertEqual(people, {"Noah Patel"})
+
+    def test_every_workspace_can_create_in_its_own_projects(self):
+        """The regression v3 shipped: a defaulted project outside the workspace refused every create."""
+        say = lambda message: self.client.post("/api/turn", headers=self.headers, json={  # noqa: E731
+            "session_id": "platform", "turn_id": next(turns), "product_id": PRODUCT, "message": message,
+            "workspace_scope_id": "workspace-platform",
+        }).json()
+        turns = iter(range(1, 10))
+        asked = say("Create a ticket for Avery about flaky deploys")
+        self.assertTrue(asked["speech"].startswith("Which project should the new ticket have:"), asked["speech"])
+        platform_project = self.visible_project_names("workspace-platform")[-1]
+        proposed = say(platform_project)
+        self.assertEqual(proposed["validated_action"]["type"], "CREATE_DEMO_ISSUE")
+        self.assertIsNotNone(proposed["execution"])
 
     def test_v2_asks_for_every_undefaulted_field_in_definition_order(self):
         main.agent.directory.move_product_version(TENANT, PRODUCT, 2)

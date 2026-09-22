@@ -286,7 +286,7 @@ def _response(request: TurnRequest, turn: EngineTurn, *, envelope: ExecutionEnve
             role=profile.role, current_tool=profile.current_tool, goal=profile.goal,
             pain_point=profile.pain_point,
             relevant_feature=turn.feature.capitalize() if turn.feature else None,
-            current_intent=str(turn.stage), reason=f"New engine: {turn.stage}.",
+            current_intent=str(turn.stage), reason=_trace_reason(turn),
             confidence=1.0 if turn.validated is not None else 0.5,
             status="denied" if status == "denied" else "active",
         ),
@@ -301,6 +301,18 @@ def _response(request: TurnRequest, turn: EngineTurn, *, envelope: ExecutionEnve
         ),
         execution=envelope,
     )
+
+
+def _trace_reason(turn: EngineTurn) -> str:
+    if turn.stage == TurnStage.REFUSED and turn.reply.template_key == "out_of_scope":
+        return "Denied because the requested action is outside this product demo."
+    if turn.stage == TurnStage.REFUSED and turn.reply.template_key == "broad_scope_refused":
+        return "Denied because the request is outside the current workspace scope."
+    if turn.stage == TurnStage.REFUSED and turn.reply.template_key == "destructive_refused":
+        return "Denied because destructive actions are not available in this demo."
+    if turn.stage == TurnStage.REFUSED and turn.reply.template_key:
+        return f"Denied by {turn.reply.template_key}."
+    return f"New engine: {turn.stage}."
 
 
 def _denied(request: TurnRequest, reason: str) -> TurnResponse:

@@ -92,6 +92,17 @@ class EngineCutoverTest(EngineCutoverFixture):
         self.assertIn("New engine", body["intent_trace"]["reason"])
         self.assertNotIn("app.testing_main", sys.modules)
 
+    def test_definition_mode_refusal_trace_keeps_the_public_guardrail_reason(self):
+        env = {**HERMETIC, "PIXEL_ENGINE_MODE": "definition"}
+        with patch.dict(os.environ, env, clear=False):
+            response = self.turn("Open Salesforce")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["status"], "denied")
+        self.assertIsNone(body["validated_action"])
+        self.assertIn("outside this product demo", body["intent_trace"]["reason"])
+
     def test_definition_mode_ignores_the_shadow_switch(self):
         env = {**HERMETIC, "PIXEL_ENGINE_MODE": "definition", "PIXEL_SHADOW_ENGINE": "on"}
         with patch.dict(os.environ, env, clear=False), patch.object(main, "shadow_controller") as shadow:

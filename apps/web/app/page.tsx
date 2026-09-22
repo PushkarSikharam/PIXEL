@@ -67,6 +67,9 @@ const initialTrace: IntentTrace = {
 type TranscriptMessage = {
   speaker: "Agent" | "Visitor";
   text: string;
+  // A note the page adds about the conversation itself, never speech: the assistant's words are
+  // always the backend's (5c plan, section 2.3).
+  note?: string;
 };
 
 type SessionSummary = AgentTurnResponse["session_summary"];
@@ -606,6 +609,15 @@ export default function Home() {
       void cancelAgentTurn({ sessionId, turnId: previousTurnId }).catch(() => undefined);
       activeTurnIdRef.current = null;
       setIsSending(false);
+      // The unfinished reply is dropped on purpose. The page notes that on the message it
+      // answered, so the visitor is not left waiting for an answer that will never arrive.
+      setMessages((currentMessages) => {
+        const last = currentMessages.length - 1;
+        if (last < 0 || currentMessages[last].speaker !== "Visitor") return currentMessages;
+        const noted = [...currentMessages];
+        noted[last] = { ...noted[last], note: "Reply stopped when you sent a new message." };
+        return noted;
+      });
       setUiState((currentState) => ({
         ...currentState,
         active_turn_id: null
@@ -3011,6 +3023,7 @@ function ConversationCard({
           >
             <span>{message.speaker}</span>
             <p>{message.text}</p>
+            {message.note ? <p className="message-note">{message.note}</p> : null}
           </article>
         ))}
         {liveTranscript && (

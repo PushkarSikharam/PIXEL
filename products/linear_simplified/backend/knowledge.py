@@ -11,8 +11,20 @@ knowledge storage arrive in Milestone 3.4; this is the seam, not the implementat
 """
 from __future__ import annotations
 
+import re
+
 from app.engine.knowledge import KnowledgeContext, KnowledgePassage
 from app.services.retriever import ProductRetriever
+
+
+# A named product area scores 3 by itself in the shared retriever; plain words score 1 each.
+MIN_SCORE = 3
+_STOP_WORDS = frozenset({
+    "a", "an", "the", "is", "are", "was", "were", "be", "do", "does", "did", "can", "could", "would",
+    "should", "will", "what", "whats", "who", "why", "when", "where", "which", "how", "i", "me", "my",
+    "you", "your", "we", "our", "it", "its", "this", "that", "to", "of", "in", "on", "for", "with",
+    "and", "or", "about", "tell", "explain", "please", "there", "any", "some",
+})
 
 
 class LinearKnowledgeLookup:
@@ -40,8 +52,18 @@ class LinearKnowledgeLookup:
         if not text.strip() or limit <= 0:
             return []
         documents = self._retriever.retrieve(self._context.definition_id, text, limit=limit)
+        # The shared retriever counts any overlapping word, "who" and "is" included, so every
+        # question finds some document. A passage may be quoted as an answer only on a real match:
+        # a product area named in the question, or several meaningful words in common.
+        words = [word for word in re.findall(r"[a-z0-9-]+", text.lower()) if word not in _STOP_WORDS]
+        strong = {
+            document.source
+            for document in self._retriever.retrieve(self._context.definition_id, " ".join(words), limit=10)
+            if document.score >= MIN_SCORE
+        } if words else set()
         return [
-            KnowledgePassage(title=document.title, source=document.source, snippet=document.snippet)
+            KnowledgePassage(title=document.title, source=document.source, snippet=document.snippet,
+                             grounds_answer=document.source in strong)
             for document in documents
         ]
 

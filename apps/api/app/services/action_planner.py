@@ -13,6 +13,19 @@ from app.services.demo_data import (
 from app.services.language_normalizer import normalize_for_intent
 
 
+_QUESTION_OPENERS = ("what", "whats", "who", "why", "when", "where", "which", "how", "is", "are",
+                     "can", "could", "does", "do", "did", "tell", "explain")
+
+
+def _is_question(message: str) -> bool:
+    """A question asked about the product, rather than a request to change a record."""
+    stripped = message.strip()
+    if not stripped:
+        return False
+    first = re.split(r"[^a-zA-Z']+", stripped.lower(), maxsplit=1)[0]
+    return stripped.endswith("?") or first in _QUESTION_OPENERS
+
+
 class ActionPlanner:
     def plan(
         self,
@@ -158,6 +171,10 @@ class ActionPlanner:
         if not issue_id:
             return None
 
+        if _is_question(message):
+            # "What is this capable of doing?" is a question, not a request to set a status.
+            # A question never proposes a change here (found in the 5c production shadow run).
+            return None
         payload: dict[str, str] = {"issue_id": issue_id}
         assignee = self._assignment_target(message, data)
         if assignee:

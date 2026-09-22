@@ -75,6 +75,14 @@ class BackendConversationTest(EngineCutoverFixture):
         self.assertEqual(self.action(body), ("HIGHLIGHT_ADD_MEMBER_BUTTON", {"name": "Jen"}))
         self.assertIn("Jen is not in the team directory yet", body["speech"])
 
+    def test_a_question_never_proposes_a_change(self):
+        """Found in the 5c production shadow run: "capable of doing" proposed a status change."""
+        for index, message in enumerate(("what is pixel capable of doing?", "how do I mark a ticket done?",
+                                         "can I set a ticket to in progress?")):
+            body = self.say(message, session=f"asked-{index}")
+            self.assertIsNone(body["execution"], message)
+            self.assertNotEqual((body["validated_action"] or {}).get("type"), "UPDATE_DEMO_ISSUE", message)
+
     def test_a_person_in_another_workspace_reads_exactly_like_an_unknown_one(self):
         """Security (5c plan, section 3.3): the previous engine sees only the selected workspace, so
         it never confirms that someone exists elsewhere, even in rollback."""
@@ -264,6 +272,45 @@ class DefinitionAuthorityConversationTest(EngineCutoverFixture):
         self.assertEqual(self.say("show me the issues", session="plain")["speech"], "I'll open Issues.")
         self.assertEqual(self.say("make it high priority", session="which")["speech"],
                          "Which ticket do you mean? Open it first, or tell me which one.")
+
+    def test_the_owners_production_conversation(self):
+        """Replayed from the first production shadow run: each turn a visitor actually sent."""
+        self.say("Assign it to Noah", session="prod")
+        after = self.say("Show me issue assignment", session="prod", turn_id=2)
+        self.assertEqual(self.action(after)[0], "HIGHLIGHT_ASSIGNMENT_CONTROL",
+                         "a complete new request is never read as the answer to an open question")
+        self.assertNotIn("Noah", after["speech"])
+        for index, (message, name) in enumerate((("Hi there i am pushkar", "Pushkar"), ("hi i'm priya", "Priya"),
+                                                 ("my name is sam", "Sam"), ("I'm Sam from Acme", "Sam"))):
+            self.assertEqual(self.say(message, session=f"intro-{index}")["speech"],
+                             f"Nice to meet you, {name}. What would you like to explore in Pixel?", message)
+        for index, message in enumerate(("i am confused", "i am looking for a tool")):
+            self.assertNotIn("Nice to meet you", self.say(message, session=f"not-a-name-{index}")["speech"])
+        capable = self.say("what is pixel capable of doing?", session="capable")
+        self.assertTrue(capable["speech"].startswith("Here's what I can do in Pixel:"), capable["speech"])
+        self.assertIsNone(capable["execution"], "a question never proposes a change")
+        self.assertEqual(self.say("who build pixel?", session="who")["speech"],
+                         "I don't have approved Pixel information to answer that, so I won't guess.")
+        self.assertTrue(self.say("who is edith?", session="edith")["speech"].startswith("I'm Edith"))
+
+    def test_an_unknown_person_is_offered_for_adding_in_every_request(self):
+        """The last port row: an update naming someone unknown offers the add-member control."""
+        self.say("Open Maya's ticket", session="add")
+        body = self.say("assign it to Priya", session="add", turn_id=2)
+        self.assertEqual(self.action(body), ("HIGHLIGHT_ADD_MEMBER_BUTTON", {"name": "Priya"}))
+        self.assertEqual(body["speech"],
+                         "I can't find Priya in this workspace. I'll open Teams and highlight Add member.")
+        self.assertIsNone(body["execution"], "nothing is assigned to someone who is not there")
+
+    def test_a_visitor_describing_their_situation_is_acknowledged(self):
+        for index, message in enumerate(("i am new here", "we are just exploring", "I'm still looking around")):
+            self.assertEqual(self.say(message, session=f"situation-{index}")["speech"],
+                             "Thanks, that helps. What would you like to explore first in Pixel?", message)
+
+    def test_a_question_about_the_product_itself_is_answered(self):
+        for index, message in enumerate(("what is pixel?", "what does Pixel do?")):
+            self.assertTrue(self.say(message, session=f"product-{index}")["speech"]
+                            .startswith("Here's what I can do in Pixel:"), message)
 
     def test_a_request_after_a_self_description_is_still_served(self):
         body = self.say("I'm a manager, show me the projects")

@@ -25,10 +25,14 @@
       "params": {}
     },
     "actual": {
-      "outcome": "answer:unknown_person",
-      "params": {}
+      "outcome": "propose:highlight_add_member",
+      "params": {
+        "prefill": {
+          "name": "Avery"
+        }
+      }
     },
-    "reason": "Avery Brooks exists only in the Platform workspace. Today's engine replied that Avery is outside this workspace, which confirms that the person exists. The router treats a person hidden by scope exactly like an unknown person and answers with unknown_person, as the plan's section 7 requires.",
+    "reason": "Avery Brooks exists only in the Platform workspace. Today's engine replied that Avery is outside this workspace, which confirms that the person exists. The router reads a person hidden by scope exactly like an unknown one: it says it cannot find Avery here and offers the control that adds a member, prefilled with the name the visitor typed. Nothing is assigned, and nothing says the person exists elsewhere.",
     "resolution": "security"
   },
   {
@@ -40,10 +44,14 @@
       "params": {}
     },
     "actual": {
-      "outcome": "answer:unknown_person",
-      "params": {}
+      "outcome": "propose:highlight_add_member",
+      "params": {
+        "prefill": {
+          "name": "Priya"
+        }
+      }
     },
-    "reason": "Priya is not in any workspace. Today's engine answered 'That work is outside the workspace', a scope reply for someone who does not exist. The router gives the same unknown_person answer it gives for hidden people, so unknown and inaccessible people cannot be told apart.",
+    "reason": "Priya is not in any workspace. Today's engine answered 'That work is outside the workspace', a scope reply for someone who does not exist. The router gives the same answer it gives for hidden people: it cannot find Priya here, and offers the control that adds a member, prefilled with the name. Unknown and inaccessible people cannot be told apart.",
     "resolution": "security"
   },
   {

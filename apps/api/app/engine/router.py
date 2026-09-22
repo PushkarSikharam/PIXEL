@@ -195,7 +195,11 @@ class IntentRouter:
                 return self._complete_pending(pending, supplied, cleared, from_correction=False), cleared
 
         # A short answer is read together with the request that led to the question
-        # ("create something new" + "a contact" continues creating a contact).
+        # ("create something new" + "a contact" continues creating a contact). A complete request
+        # of its own is not: "show me how assignment works" after "assign it to Ana?" must not
+        # become a request about Ana.
+        if pending.context and self._is_complete_request(text, cleared, context):
+            return None, cleared
         if pending.context:
             combined = self.normalizer.normalize(f"{pending.context} {text.original}")
             routed = self._route_fresh(combined, cleared, context)
@@ -206,6 +210,13 @@ class IntentRouter:
         if self._matches_any_rule(text):
             return None, cleared  # a new request replaces the question
         return self._ask_again(pending, memory, context), cleared
+
+    def _is_complete_request(self, text: NormalizedMessage, memory: ConversationMemory, context: TurnContext) -> bool:
+        """A message of several words that routes to an action or a refusal entirely on its own."""
+        if len(text.full.split()) < 3:
+            return False
+        alone = self._route_fresh(text, memory, context).result
+        return alone.kind in (RouteKind.PROPOSE, RouteKind.CONFIRM, RouteKind.REFUSE)
 
     def _answer_choice(
         self, text: NormalizedMessage, pending: PendingClarification, memory: ConversationMemory,
@@ -523,6 +534,17 @@ class IntentRouter:
         placeholders = {"person": failure.name or ""}
         if leaders and _all_same(leaders):
             return self._propose(leaders[0], memory, override=("unknown_person", placeholders))
+        adding = self._add_person_action()
+        if adding is not None and failure.name:
+            # The product can show where people are added, so offer that instead of only refusing.
+            # Nothing is created: the visitor adds the person themselves.
+            spec = self._definition.actions[adding]
+            entity = self._definition.entities[spec.entity]
+            proposal = self._build(adding, view=spec.view, control=spec.control,
+                                   prefill={entity.title_field: failure.name})
+            result = RouteResult(RouteKind.PROPOSE, stage, "member_missing", proposal=proposal,
+                                 placeholders=placeholders)
+            return RoutedTurn(result, memory)
         result = RouteResult(RouteKind.ANSWER, stage, "unknown_person", placeholders=placeholders)
         return RoutedTurn(result, memory)
 
@@ -711,6 +733,18 @@ class IntentRouter:
     def _person_refs(self, people: tuple[PersonView, ...]) -> tuple[RecordRef, ...]:
         assert self._people_entity is not None
         return tuple(RecordRef(self._people_entity, person.id) for person in people)
+
+    def _add_person_action(self) -> str | None:
+        """The action that shows where a person is added, if the definition declares exactly one."""
+        if self._people_entity is None:
+            return None
+        entity = self._definition.entities[self._people_entity]
+        found = [
+            key for key, spec in sorted(self._definition.actions.items())
+            if spec.capability == Capability.HIGHLIGHT_CONTROL and spec.entity == self._people_entity
+            and list(spec.prefill) == [entity.title_field]
+        ]
+        return found[0] if len(found) == 1 else None
 
     def _people_fields(self, spec: ActionSpec) -> list[str]:
         if self._people_entity is None or spec.entity is None:

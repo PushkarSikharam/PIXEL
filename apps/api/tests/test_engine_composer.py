@@ -34,6 +34,7 @@ from app.engine.conversation import (
     offerable,
 )
 from app.engine.knowledge import (
+    answerable,
     Grounding,
     KnowledgeLookup,
     KnowledgePassage,
@@ -444,6 +445,17 @@ class KnowledgeBoundaryTest(unittest.TestCase):
                 return [KnowledgePassage(f"t{i}", f"s{i}", "x") for i in range(10)]
 
         self.assertEqual(len(ground(TooMany(), "anything", limit=2).passages), 2)
+
+    def test_only_a_real_match_is_quoted_as_an_answer(self):
+        """A weak match may support an action reply, but is never spoken as the answer."""
+        class Mixed:
+            def search(self, text, limit):
+                return [KnowledgePassage("Weak", "weak.md", "one", grounds_answer=False),
+                        KnowledgePassage("Strong", "strong.md", "two")]
+
+        grounding = ground(Mixed(), "anything")
+        self.assertEqual(len(grounding.passages), 2, "supporting passages are unchanged")
+        self.assertEqual([p.source for p in answerable(grounding).passages], ["strong.md"])
 
     def test_a_passage_cannot_be_edited(self):
         passage = KnowledgePassage("Cycles", "docs/product/cycles.md", "Cycles are time-boxed.")

@@ -29,6 +29,13 @@ from app.engine.routing import RouteKind
 GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
 
 
+def _without_name(proposal):
+    """A proposal with the name the visitor typed removed: only the name may differ."""
+    if proposal is None:
+        return None
+    return (proposal.action_key, proposal.view, proposal.control, sorted((proposal.prefill or {}).keys()))
+
+
 class RouterComparisonTest(unittest.TestCase):
     maxDiff = None
 
@@ -61,16 +68,28 @@ class RouterComparisonTest(unittest.TestCase):
             if note["resolution"] == "security":
                 with self.subTest(case=note["case"]):
                     self.assertNotEqual(note["actual"]["outcome"], "refuse:scope")
-                    self.assertIn("unknown_person", json.dumps(note["actual"]))
+                    # Both replies are the platform's "I can't find <person> in this workspace":
+                    # `unknown_person` alone, or `member_missing` when the product can also show
+                    # where a person is added. Neither says the person exists elsewhere.
+                    self.assertTrue(
+                        "unknown_person" in json.dumps(note["actual"])
+                        or note["actual"]["outcome"] == "propose:highlight_add_member",
+                        note["actual"],
+                    )
 
     def test_hidden_and_unknown_people_get_the_same_answer(self):
         routers = load_router()
-        hidden = routers["workspace-product-eng"].route("Show Avery's tickets", ConversationMemory(), TurnContext(1))
-        unknown = routers["workspace-product-eng"].route("Show Zed's tickets", ConversationMemory(), TurnContext(1))
-        self.assertEqual(
-            (hidden.result.kind, hidden.result.response_key, hidden.result.proposal),
-            (unknown.result.kind, unknown.result.response_key, unknown.result.proposal),
-        )
+        for hidden_request, unknown_request in (("Show Avery's tickets", "Show Zed's tickets"),
+                                                ("assign it to Avery", "assign it to Zed")):
+            with self.subTest(request=hidden_request):
+                hidden = routers["workspace-product-eng"].route(hidden_request, ConversationMemory(), TurnContext(1))
+                unknown = routers["workspace-product-eng"].route(unknown_request, ConversationMemory(), TurnContext(1))
+                self.assertEqual(
+                    (hidden.result.kind, hidden.result.response_key,
+                     _without_name(hidden.result.proposal)),
+                    (unknown.result.kind, unknown.result.response_key,
+                     _without_name(unknown.result.proposal)),
+                )
 
 
 class DefinitionV2ComparisonTest(unittest.TestCase):

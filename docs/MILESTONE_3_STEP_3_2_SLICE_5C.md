@@ -1,12 +1,16 @@
 # Milestone 3.2, Slice 5c: Authoritative Cutover
 
-Status: **BUILT, NOT SIGNED OFF.** Every code step of the plan's implementation order (section 13,
-steps 1 to 10) is built and tested. Sign-off still needs the production gates of section 2, the
-inert deployment check of section 11.2 and the acceptance window of section 11.3. **Definition
-authority is not enabled in production**, and must not be until those gates have evidence.
+Status: **BUILT, CUT OVER, ACCEPTANCE WINDOW STILL OPEN.** Every code step of the plan's
+implementation order (section 13, steps 1 to 10) is built and tested. Production now runs
+definition authority, live smoke passes, and the first production defects found after cutover are
+fixed and deployed. Full sign-off still needs the 5d entry evidence: the 500 accepted-turn window,
+the real-versus-synthetic split, a restart or redeploy during open conversations, archived
+telemetry, the retained 5c rollback artifact checklist, and the owner's explicit approval to end
+switch rollback.
 
 Date: 2026-09-22. Plan: `docs/MILESTONE_3_STEP_3_2_SLICE_5C_PLAN.md`. The first part landed in
-PR #21; a follow-up change closed the findings of the review of that pull request (listed below).
+PR #21; follow-up changes closed the findings of the review of that pull request and the first live
+production defects (listed below).
 
 ## What was built
 
@@ -74,6 +78,24 @@ Filled in from the final local run of this change; Linux CI on the pull request 
   own reviewed list.
 - Golden evidence, never regenerated: backend recording 68 reviewed differences, shadow 211,
   browser 59. Each names its kind and reason; the tests fail on an unlisted or stale difference.
+
+## Production evidence recorded so far
+
+Production is cut over to definition authority, but this is not the 5d acceptance window yet.
+
+- PR #25 merged on 2026-09-22 as merge commit `d493bb6`, after the follow-up fix for public
+  guardrail reasons in definition traces.
+- Main CI run `35778171127` is green: API tests, web checks and browser tests all passed. The
+  browser job ran both authority modes, with **116 passed** in each run.
+- Railway API deployment `250f3d04-a3ac-4582-81e4-aad946ae5656` is online in production.
+- Live `/api/agent/health` reports `{"status":"ok","authority":"definition","shadow":"off"}`.
+- `PIXEL_LIVE_URL=https://linear-simplified-web.vercel.app node scripts/smoke-live.mjs` passes:
+  health ok, separate visitor instances, administrator login refused, private writes isolated,
+  private reset rotates the generation, a normal turn completes, the Salesforce guardrail is
+  denied for the expected reason, global reset is refused, and speech is not requested.
+
+This evidence proves the deployed system is healthy enough to begin collecting the 5d acceptance
+window. It does **not** prove the 500-turn gate.
 
 ## Definition-engine defects found after this build (fixed)
 
@@ -217,33 +239,25 @@ A visitor who introduced themselves is greeted again as "Hi Priya, good to see y
 would you like to explore next in Pixel?"; the first reply to an introduction stays "Nice to meet
 you, Priya."
 
-## Open before sign-off (operator runbook)
+## Open before 5d deletion
 
-5c is built and tested; it is **not signed off** until these steps have evidence. They change the
-production service, so the operator runs them. Every command below exists and is tested. `ops`
-commands run in the API service shell (`PYTHONPATH=apps/api python -m app.ops ...`); the visitor
-script runs from any machine with the repository.
+5c is live under definition authority, but the project is not cleared to remove rollback yet. The
+remaining gates are evidence gates, not feature work:
 
-1. **Confirm the starting point.** `python scripts/visitor_check.py --api <api-url>
-   --expect-authority legacy` must print 11/11 checks passed. Its first check is that `/health`
-   reports `"authority": "legacy"`.
-2. **Back up and prove the restore** (plan, section 11.2, step 1). `ops backup` must print
-   `"restorable": true`. Encrypt the copy with your own key and store it off the Railway volume;
-   record its `sha256`. Keep the currently deployed build ready to redeploy.
-3. **Deploy this build inertly** (section 11.2). Leave `PIXEL_ENGINE_MODE` unset or `legacy`. Rerun
-   step 1. Then bind v5 for new sessions: `ops move-product-version --tenant pixel-dev --product
-   linear-demo --version 5` must print `"moved": true`.
-4. **Shadow evidence** (section 2.2). Set `PIXEL_SHADOW_ENGINE=on`, let at least 100 turns across 20
-   fresh sessions arrive (the visitor script adds labelled synthetic ones), then `ops shadow-report
-   --days 7`: zero `shadow_error` and `worker_unhealthy`, every difference class already reviewed.
-5. **Archive the legacy baseline** (5d plan, section 2.5): `ops cutover-report --days 30`, attached here.
-6. **Cut over** (section 11.3). Set `PIXEL_ENGINE_MODE=definition`, redeploy, then run
-   `python scripts/visitor_check.py --api <api-url> --expect-authority definition` (add `--voice`
-   to include playback, which calls Azure): 11/11 (12/12 with voice).
-7. **Watch** the first 100 accepted turns and at least 60 minutes of `ops cutover-report --days 1`
-   against the section 11.4 triggers. On any trigger, set `PIXEL_ENGINE_MODE=legacy` and redeploy.
+1. Build and run the 5d `acceptance-report` command so the acceptance window is measured from the
+   database rather than remembered manually.
+2. Collect at least 500 accepted definition-authority turns across at least 50 sessions, with at
+   least 250 turns and 25 sessions from real visitors.
+3. Keep the window open for at least 7 consecutive days, including at least one API restart or
+   redeploy while conversations are open.
+4. Archive the 30-day turn report before retention can prune the rows needed for comparison.
+5. Record the retained 5c artifact exactly: annotated `5c-accepted` tag, Railway deployment ID,
+   image digest, environment checklist, encrypted backup sha/location and proof the artifact still
+   starts in definition authority.
+6. Get the owner's explicit approval that 5d ends switch-based rollback.
 
-Sign-off also needs green Linux CI on the pull request, including both browser runs.
+Only after those gates are recorded should 5d-3 remove the authority switch. The next allowed work
+is 5d-1: evidence tooling and manifests.
 
 ## Deliberate limits
 

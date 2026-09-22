@@ -250,6 +250,14 @@ class ResponseComposer:
     def clarification(self, template_key: str, **values: str) -> Reply:
         return self._render(Stage.CLARIFICATION, template_key, values)
 
+    def field_question(self, template: str, **values: str) -> Reply:
+        """A question for one missing required field (5c plan, section 7.1).
+
+        The platform owns the question's structure (`field_completion`); the definition supplies
+        only the entity and field labels and the allowed values it names.
+        """
+        return self._render_platform(Stage.CLARIFICATION, "missing_field", template, values)
+
     def refused(self, template_key: str, **values: str) -> Reply:
         return self._render(Stage.REFUSED, template_key, values)
 
@@ -380,3 +388,42 @@ def _is_plain(speech: str) -> bool:
     except ValueError:
         return False
     return True
+
+
+# --- Execution receipts (5b plan, section 8) ---
+#
+# What the assistant says after a keyed write, composed from the committed outcome only. Receipt text is
+# never stored: a first execution names the values the key bound, a replayed success says only that
+# the change was already applied, and every failure is worded by its stored code alone, so replaying
+# a failure repeats the same sentence.
+
+RECEIPT_REPLAYED = "This change was already applied."
+RECEIPT_REPLAYED_UNAVAILABLE = "This change was already applied, and that record is no longer available here."
+RECEIPT_FAILURES: Mapping[str, str] = {
+    "superseded": "A newer request replaced this change, so it wasn't applied.",
+    "user_cancelled": "This change was cancelled before it was applied.",
+    "expired": "This change expired before it was applied.",
+    "record_conflict": "The record changed or is no longer available, so this change wasn't applied.",
+    "record_not_found": "The record changed or is no longer available, so this change wasn't applied.",
+    "scope_mismatch": "This change is not available in this workspace, so it wasn't applied.",
+    "scope_unavailable": "This change is not available in this workspace, so it wasn't applied.",
+    "invalid_change": "This change isn't valid for that record, so it wasn't applied.",
+}
+RECEIPT_REJECTED = RECEIPT_FAILURES["invalid_change"]
+
+
+def receipt_speech(
+    code: str, *, executed: bool, replay: bool, created: bool = False, record_id: str | None = None,
+    changes: Mapping[str, object] | None = None,
+) -> str:
+    """The platform sentence for one keyed-write outcome."""
+    if executed:
+        if code == "execution_result_unavailable":
+            return RECEIPT_REPLAYED_UNAVAILABLE
+        if replay:
+            return RECEIPT_REPLAYED
+        template = PLATFORM_LIFECYCLE_TEMPLATES[
+            (Stage.EXECUTED, "record_created" if created else "record_updated")
+        ]
+        return template.format(record_id=record_id or "the record", changes=describe_changes(changes or {}))
+    return RECEIPT_FAILURES.get(code, RECEIPT_REJECTED)

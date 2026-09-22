@@ -20,7 +20,7 @@ from app import db  # noqa: E402
 from app.auth import AuthUser  # noqa: E402
 from app.schemas import TurnRequest, TurnResponse  # noqa: E402
 from app.services import env as env_module  # noqa: E402
-from app.services.agent import DemoAgent  # noqa: E402
+from app.main import live_turn  # noqa: E402
 from app.services.product_data_store import ProductDataStore  # noqa: E402
 
 # The seeded development organization's product running this definition, used by its admin.
@@ -64,24 +64,26 @@ def record_backend_decisions() -> dict[str, list[dict]]:
             patch.object(env_module, "_env_files", lambda: ()), \
             patch.object(db, "DB_PATH", Path(directory) / "golden.sqlite3"):
         db.migrate()
-        agent = DemoAgent()
-        return {case["id"]: _run_case(agent, case) for case in load_cases()}
+        return {case["id"]: _run_case(case) for case in load_cases()}
 
 
-def _run_case(agent: DemoAgent, case: dict) -> list[dict]:
+def _run_case(case: dict) -> list[dict]:
     ProductDataStore().reset()
     page, selected = "dashboard", None
     turns = []
+    workspace = case.get("workspace", DEFAULT_WORKSPACE)
     for turn_id, message in enumerate(case["turns"], start=1):
-        response = agent.handle_turn(TurnRequest(
+        # Exactly what the turn endpoint does in legacy authority: the previous engine sees only the
+        # selected workspace, and its answer passes through the legacy authority adapter (5c, 3.3).
+        response = live_turn(TurnRequest(
             session_id=f"golden-{case['id']}",
             turn_id=turn_id,
             product_id=PRODUCT_ID,
             message=message,
             current_page=page,
             selected_issue_id=selected,
-            workspace_scope_id=case.get("workspace", DEFAULT_WORKSPACE),
-        ), PRINCIPAL, ProductDataStore().load())  # what the turn endpoint passes an administrator
+            workspace_scope_id=workspace,
+        ), PRINCIPAL, ProductDataStore().load(frozenset({workspace})), None)
         turns.append(_summarize(message, response))
         page, selected = _next_ui_state(response, page, selected)
     return turns

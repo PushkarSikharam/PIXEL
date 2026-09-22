@@ -32,6 +32,7 @@ from products.linear_simplified.tests.golden_backend import (
 from app import db
 from app.auth import product_record_grant
 from app.installed_products import package_for
+from app.main import live_turn
 from app.schemas import TurnRequest
 from app.services import env as env_module
 from app.services.agent import DemoAgent
@@ -94,7 +95,9 @@ def _run_case(agent: DemoAgent, runner: ShadowRunner, case: dict,
         )
         visible = ProductDataStore().load(grant.visible_scope_ids())
         prepared = runner.prepare(PRINCIPAL, grant, PRODUCT_ID, visible, request.workspace_scope_id)
-        response = agent.handle_turn(request, PRINCIPAL, visible)
+        # As the endpoint does: the live engine sees only the selected workspace (5c plan, 3.3).
+        selected_data = ProductDataStore().load(frozenset({request.workspace_scope_id}))
+        response = live_turn(request, PRINCIPAL, selected_data, grant)
         result = runner.complete(prepared, PRINCIPAL, request, response)
         turn_classes.append((case["id"], index, result.turn_class))
         for name, cls in result.classes.items():

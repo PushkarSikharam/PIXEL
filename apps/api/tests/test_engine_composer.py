@@ -342,23 +342,39 @@ class KnowledgeFallbackTest(unittest.TestCase):
                                                "answer that, so I won't guess.")
 
 
+#: The 5c definition-turn service and its shared assembly legitimately reach the pure engine
+#: (that is what "definition mode" means); the shadow comparator (5a/5b) does too, off the request
+#: path. Nothing else may.
+NEW_ENGINE_PATHS = ("app.services.shadow", "app.services.engine_assembly", "app.services.turn_execution",
+                    "app.testing_main")
+
+
 class NoRuntimeWiringTest(unittest.TestCase):
-    def test_the_composer_is_not_wired_into_the_runtime_yet(self):
+    def test_the_composer_reaches_the_runtime_only_through_receipts(self):
+        """`PIXEL_ENGINE_MODE=definition` (5c) is the only production path that reaches the new
+        engine's composer; `app.main` reaches it only lazily, through `turn_execution`, never
+        directly. Every other production module reaches the composer only through the platform
+        receipt after a keyed write (5b plan, section 8)."""
         from dependency_graph import module_path, package_modules
 
         root = Path(__file__).resolve().parents[1]
         new = {"app.engine.composer", "app.engine.conversation"}
+        allowed = {"app.main": "from app.engine.composer import receipt_speech"}
         offenders = {}
         for module in package_modules(root, "app"):
-            if module in new or module.startswith("app.engine.") or module.startswith("app.services.shadow"):
+            if module in new or module.startswith("app.engine.") or module.startswith(NEW_ENGINE_PATHS):
                 continue
             source = module_path(root, module)
             if source is None:
                 continue
-            hits = sorted(name for name in new if name in source.read_text(encoding="utf-8"))
+            text = source.read_text(encoding="utf-8")
+            if module in allowed:
+                self.assertIn(allowed[module], text)
+                text = text.replace(allowed[module], "")
+            hits = sorted(name for name in new if name in text)
             if hits:
                 offenders[module] = hits
-        self.assertEqual(offenders, {}, "slice 4b must not be wired into the runtime")
+        self.assertEqual(offenders, {}, "only the receipt entry point may be wired before 5c")
 
 
 class KnowledgeBoundaryTest(unittest.TestCase):

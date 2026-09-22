@@ -156,11 +156,11 @@ class AgentApiTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         body = response.json()
-        self.assertEqual(body["status"], "denied")
-        self.assertEqual(body["proposed_action"]["type"], "OPEN_DEMO_ISSUE")
-        self.assertIsNone(body["validated_action"])
-        self.assertIn("Maya Chen is outside Platform Workspace", body["speech"])
-        self.assertEqual(body["retrieved_context"], [])
+        # Security (5c plan, section 3.3): the ticket is never opened, and the reply does not
+        # confirm that Maya Chen exists in another workspace; she reads as unknown here.
+        self.assertNotEqual((body["validated_action"] or {}).get("type"), "OPEN_DEMO_ISSUE")
+        self.assertNotIn("Maya Chen", body["speech"])
+        self.assertNotIn("LIN-142", body["speech"])
 
     def test_platform_scope_allows_platform_issue(self) -> None:
         response = self.client.post(
@@ -464,8 +464,9 @@ class AgentApiTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertEqual(body["status"], "completed")
-        self.assertIsNone(body["proposed_action"])
-        self.assertIsNone(body["validated_action"])
+        # It shows where tickets are created and asks; nothing is created or dispatched.
+        self.assertEqual(body["validated_action"]["type"], "HIGHLIGHT_CREATE_TICKET_BUTTON")
+        self.assertIsNone(body["execution"])
         self.assertIn("Who should own this ticket", body["speech"])
 
     def test_broad_workspace_request_is_clarified_without_action(self) -> None:
@@ -805,7 +806,10 @@ class AgentApiTest(unittest.TestCase):
         self.assertEqual(body["validated_action"]["type"], "CREATE_DEMO_ISSUE")
         self.assertEqual(body["validated_action"]["payload"]["assignee"], "Maya Chen")
         self.assertEqual(body["validated_action"]["payload"]["status"], "Todo")
-        self.assertIn("I created", body["speech"])
+        # Nothing is written until the keyed request commits, so the reply proposes (5c, 3.3).
+        self.assertIsNotNone(body["execution"])
+        self.assertEqual(body["speech"], "I'll create a ticket assigned to Maya Chen.")
+        self.assertNotIn("I created", body["speech"])
 
     def test_ticket_creation_for_unknown_person_opens_team_directory(self) -> None:
         response = self.client.post(
@@ -846,7 +850,9 @@ class AgentApiTest(unittest.TestCase):
         self.assertEqual(body["validated_action"]["type"], "UPDATE_DEMO_ISSUE")
         self.assertEqual(body["validated_action"]["payload"]["issue_id"], "LIN-142")
         self.assertEqual(body["validated_action"]["payload"]["assignee"], "Noah Patel")
-        self.assertIn("assignee is now Noah Patel", body["speech"])
+        self.assertIsNotNone(body["execution"])
+        self.assertEqual(body["speech"], "I'll update LIN-142: assignee to Noah Patel.")
+        self.assertNotIn("is now", body["speech"])
 
     def test_selected_issue_follow_up_updates_priority(self) -> None:
         response = self.client.post(
@@ -866,7 +872,9 @@ class AgentApiTest(unittest.TestCase):
         self.assertEqual(body["status"], "completed")
         self.assertEqual(body["validated_action"]["type"], "UPDATE_DEMO_ISSUE")
         self.assertEqual(body["validated_action"]["payload"]["priority"], "High")
-        self.assertIn("priority is now High", body["speech"])
+        self.assertIsNotNone(body["execution"])
+        self.assertEqual(body["speech"], "I'll update LIN-137: priority to High.")
+        self.assertNotIn("is now", body["speech"])
 
     def test_new_ticket_workflow_question_opens_issues(self) -> None:
         response = self.client.post(

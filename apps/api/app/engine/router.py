@@ -71,6 +71,10 @@ class TurnContext:
     turn: int
     # The record the visitor has open, as reported by the client. Re-resolved before use.
     selected: RecordRef | None = None
+    # The caller's last executed change in this session and workspace, read from the execution
+    # ledger by the caller and passed in as immutable data (5b plan, section 8.4). The router
+    # ignores it; only the "what changed?" answer uses it.
+    last_change: object | None = None
 
 
 @dataclass(frozen=True)

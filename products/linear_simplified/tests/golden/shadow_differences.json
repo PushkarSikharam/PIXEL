@@ -408,13 +408,6 @@
   {
     "case": "update-reassign",
     "turn": 1,
-    "field": "speech",
-    "kind": "platform_wording",
-    "reason": "Revision 4.3: the platform words every reply. Status and action are identical to the live turn; only the sentence differs, and the live sentence is product-written copy."
-  },
-  {
-    "case": "update-reassign",
-    "turn": 1,
     "field": "intent_trace",
     "kind": "coverage",
     "reason": "The live trace uses a label the definition does not declare (a goal such as 'Issue lookup' or 'Update issue' derived from its own action names, or the feature 'Dashboard'). A generic engine reads goals and features only from the definition."
@@ -460,13 +453,6 @@
     "field": "validated_action",
     "kind": "lifecycle",
     "reason": "The live engine returns the change for the browser to write straight away; the new engine proposes the identical translated change and stops before execution, as 5a requires."
-  },
-  {
-    "case": "update-priority",
-    "turn": 1,
-    "field": "speech",
-    "kind": "platform_wording",
-    "reason": "Revision 4.3: the platform words every reply. Status and action are identical to the live turn; only the sentence differs, and the live sentence is product-written copy."
   },
   {
     "case": "update-priority",
@@ -520,13 +506,6 @@
   {
     "case": "update-status",
     "turn": 1,
-    "field": "speech",
-    "kind": "platform_wording",
-    "reason": "Revision 4.3: the platform words every reply. Status and action are identical to the live turn; only the sentence differs, and the live sentence is product-written copy."
-  },
-  {
-    "case": "update-status",
-    "turn": 1,
     "field": "intent_trace",
     "kind": "coverage",
     "reason": "The live trace uses a label the definition does not declare (a goal such as 'Issue lookup' or 'Update issue' derived from its own action names, or the feature 'Dashboard'). A generic engine reads goals and features only from the definition."
@@ -562,13 +541,6 @@
   {
     "case": "update-outside-person",
     "turn": 1,
-    "field": "status",
-    "kind": "security",
-    "reason": "Avery works outside the selected workspace. The live engine refuses by saying Avery is outside it and records Avery as a signal, which confirms the person exists. The new engine answers exactly as for someone unknown, so nothing outside the scope is disclosed."
-  },
-  {
-    "case": "update-outside-person",
-    "turn": 1,
     "field": "proposed_action",
     "kind": "security",
     "reason": "Avery works outside the selected workspace. The live engine refuses by saying Avery is outside it and records Avery as a signal, which confirms the person exists. The new engine answers exactly as for someone unknown, so nothing outside the scope is disclosed."
@@ -591,15 +563,8 @@
     "case": "update-outside-person",
     "turn": 1,
     "field": "signals",
-    "kind": "security",
-    "reason": "Avery works outside the selected workspace. The live engine refuses by saying Avery is outside it and records Avery as a signal, which confirms the person exists. The new engine answers exactly as for someone unknown, so nothing outside the scope is disclosed."
-  },
-  {
-    "case": "update-outside-person",
-    "turn": 1,
-    "field": "session_summary",
-    "kind": "security",
-    "reason": "Avery works outside the selected workspace. The live engine refuses by saying Avery is outside it and records Avery as a signal, which confirms the person exists. The new engine answers exactly as for someone unknown, so nothing outside the scope is disclosed."
+    "kind": "platform_wording",
+    "reason": "The live engine now sees only the selected workspace (5c plan, section 3.3), so it no longer names a person from another workspace: both engines answer as for an unknown person. The disclosure is fixed; only the signal wording differs."
   },
   {
     "case": "update-unknown-person",
@@ -621,13 +586,6 @@
     "field": "signals",
     "kind": "platform_wording",
     "reason": "The same signals are reported. Only the confidence differs: the live engine derives 0.72 from its reasoning score, the platform uses fixed values (0.7 feature, 0.84 person)."
-  },
-  {
-    "case": "update-unknown-person",
-    "turn": 1,
-    "field": "status",
-    "kind": "behaviour",
-    "reason": "Priya is not in the workspace. The live engine proposes the reassignment and then denies it as work outside the scope; the new engine says it cannot find Priya and proposes nothing."
   },
   {
     "case": "update-unknown-person",
@@ -674,23 +632,9 @@
   {
     "case": "update-without-target",
     "turn": 0,
-    "field": "retrieved_context",
-    "kind": "behaviour",
-    "reason": "No ticket is open, so the new engine asks which ticket to update and remembers that question. The live engine gave its generic reply and attached documents to it; a question back to the visitor carries no evidence."
-  },
-  {
-    "case": "update-without-target",
-    "turn": 0,
     "field": "session_summary",
     "kind": "behaviour",
     "reason": "No ticket is open, so the new engine asks which ticket to update and remembers that question. The live engine gave its generic reply and attached documents to it; a question back to the visitor carries no evidence."
-  },
-  {
-    "case": "create-known-owner",
-    "turn": 0,
-    "field": "status",
-    "kind": "behaviour",
-    "reason": "Gap to close before 5c. The definition requires priority, project and status for a new ticket and declares no defaults, while the router supplies only title and assignee, so the validator refuses the create (missing_required_field). The live engine invented Medium, Issue Triage and Todo. The fix is a question for the missing values or declared defaults, not a guess."
   },
   {
     "case": "create-known-owner",
@@ -717,29 +661,15 @@
     "case": "create-known-owner",
     "turn": 0,
     "field": "intent_trace",
-    "kind": "behaviour",
-    "reason": "Gap to close before 5c. The definition requires priority, project and status for a new ticket and declares no defaults, while the router supplies only title and assignee, so the validator refuses the create (missing_required_field). The live engine invented Medium, Issue Triage and Todo. The fix is a question for the missing values or declared defaults, not a guess."
+    "kind": "coverage",
+    "reason": "The live trace uses a label the definition does not declare (a goal such as 'Issue lookup' or 'Add missing team member' derived from its own action names). A generic engine reads goals and features only from the definition."
   },
   {
     "case": "create-known-owner",
     "turn": 0,
     "field": "signals",
-    "kind": "behaviour",
-    "reason": "Gap to close before 5c. The definition requires priority, project and status for a new ticket and declares no defaults, while the router supplies only title and assignee, so the validator refuses the create (missing_required_field). The live engine invented Medium, Issue Triage and Todo. The fix is a question for the missing values or declared defaults, not a guess."
-  },
-  {
-    "case": "create-known-owner",
-    "turn": 0,
-    "field": "retrieved_context",
-    "kind": "behaviour",
-    "reason": "Gap to close before 5c. The definition requires priority, project and status for a new ticket and declares no defaults, while the router supplies only title and assignee, so the validator refuses the create (missing_required_field). The live engine invented Medium, Issue Triage and Todo. The fix is a question for the missing values or declared defaults, not a guess."
-  },
-  {
-    "case": "create-known-owner",
-    "turn": 0,
-    "field": "session_summary",
-    "kind": "behaviour",
-    "reason": "Gap to close before 5c. The definition requires priority, project and status for a new ticket and declares no defaults, while the router supplies only title and assignee, so the validator refuses the create (missing_required_field). The live engine invented Medium, Issue Triage and Todo. The fix is a question for the missing values or declared defaults, not a guess."
+    "kind": "platform_wording",
+    "reason": "Linear v3 now declares safe defaults for the create fields, so both engines produce a create-oriented turn. The remaining signal difference is wording/confidence only, not a behavior gap."
   },
   {
     "case": "create-unknown-owner",
@@ -773,8 +703,8 @@
     "case": "create-without-owner",
     "turn": 0,
     "field": "speech",
-    "kind": "platform_wording",
-    "reason": "Revision 4.3: the platform words every reply. Status and action are identical to the live turn; only the sentence differs, and the live sentence is product-written copy."
+    "kind": "behaviour",
+    "reason": "Both engines ask who should own the ticket, but the live reply accompanies a highlight of the create button, so its sentence belongs to a different action from the definition engine's."
   },
   {
     "case": "create-without-owner",
@@ -787,8 +717,8 @@
     "case": "create-without-owner",
     "turn": 0,
     "field": "signals",
-    "kind": "behaviour",
-    "reason": "The new engine remembers the question it asked (clarification_pending) and records the feature the request was about; the live engine keeps neither for this kind of question."
+    "kind": "platform_wording",
+    "reason": "Both engines record the same interest in tickets for this question; only how the signal value is worded differs."
   },
   {
     "case": "create-without-owner",
@@ -821,30 +751,16 @@
   {
     "case": "create-open-and-assign",
     "turn": 0,
-    "field": "proposed_action",
-    "kind": "behaviour",
-    "reason": "Priya is not a team member. The live engine created a ticket assigned to Maya Chen, a person the visitor never named. The new engine shows where to add Priya first, as for any ticket request naming an unknown owner."
-  },
-  {
-    "case": "create-open-and-assign",
-    "turn": 0,
-    "field": "validated_action",
-    "kind": "behaviour",
-    "reason": "Priya is not a team member. The live engine created a ticket assigned to Maya Chen, a person the visitor never named. The new engine shows where to add Priya first, as for any ticket request naming an unknown owner."
-  },
-  {
-    "case": "create-open-and-assign",
-    "turn": 0,
     "field": "speech",
-    "kind": "behaviour",
-    "reason": "Priya is not a team member. The live engine created a ticket assigned to Maya Chen, a person the visitor never named. The new engine shows where to add Priya first, as for any ticket request naming an unknown owner."
+    "kind": "platform_wording",
+    "reason": "Both engines now show where to add Priya first; the live engine no longer creates a ticket for Maya Chen, whom the visitor never named. Only the platform sentence differs."
   },
   {
     "case": "create-open-and-assign",
     "turn": 0,
     "field": "intent_trace",
-    "kind": "behaviour",
-    "reason": "Priya is not a team member. The live engine created a ticket assigned to Maya Chen, a person the visitor never named. The new engine shows where to add Priya first, as for any ticket request naming an unknown owner."
+    "kind": "coverage",
+    "reason": "The live trace uses a label the definition does not declare (a goal such as 'Issue lookup' or 'Add missing team member' derived from its own action names). A generic engine reads goals and features only from the definition."
   },
   {
     "case": "create-open-and-assign",
@@ -864,8 +780,8 @@
     "case": "create-start-assigned",
     "turn": 0,
     "field": "speech",
-    "kind": "platform_wording",
-    "reason": "Revision 4.3: the platform words every reply. Status and action are identical to the live turn; only the sentence differs, and the live sentence is product-written copy."
+    "kind": "behaviour",
+    "reason": "Linear v3 declares safe defaults for priority, status and project, so the definition engine can propose a complete create. The live compatibility path still opens or prepares the form first until full cutover."
   },
   {
     "case": "create-start-assigned",
@@ -884,30 +800,16 @@
   {
     "case": "member-add-named",
     "turn": 0,
-    "field": "proposed_action",
-    "kind": "behaviour",
-    "reason": "Linear v2 gives the named-member rule the unknown_person requirement, so the add-member form opens with Priya Shah prefilled. The live engine gave a generic reply and did nothing."
-  },
-  {
-    "case": "member-add-named",
-    "turn": 0,
-    "field": "validated_action",
-    "kind": "behaviour",
-    "reason": "Linear v2 gives the named-member rule the unknown_person requirement, so the add-member form opens with Priya Shah prefilled. The live engine gave a generic reply and did nothing."
-  },
-  {
-    "case": "member-add-named",
-    "turn": 0,
     "field": "speech",
-    "kind": "behaviour",
-    "reason": "Linear v2 gives the named-member rule the unknown_person requirement, so the add-member form opens with Priya Shah prefilled. The live engine gave a generic reply and did nothing."
+    "kind": "platform_wording",
+    "reason": "Both engines now guide the visitor to add the named member. The remaining difference is platform/product wording only."
   },
   {
     "case": "member-add-named",
     "turn": 0,
     "field": "intent_trace",
-    "kind": "behaviour",
-    "reason": "Linear v2 gives the named-member rule the unknown_person requirement, so the add-member form opens with Priya Shah prefilled. The live engine gave a generic reply and did nothing."
+    "kind": "coverage",
+    "reason": "The live trace uses a label the definition does not declare (a goal such as 'Issue lookup' or 'Add missing team member' derived from its own action names). A generic engine reads goals and features only from the definition."
   },
   {
     "case": "member-add-named",
@@ -926,30 +828,16 @@
   {
     "case": "member-add-unnamed",
     "turn": 0,
-    "field": "proposed_action",
-    "kind": "behaviour",
-    "reason": "The new engine highlights the Add member control in Teams; the live engine only opened Teams. The more specific add-member rule wins over the plain view rule."
-  },
-  {
-    "case": "member-add-unnamed",
-    "turn": 0,
-    "field": "validated_action",
-    "kind": "behaviour",
-    "reason": "The new engine highlights the Add member control in Teams; the live engine only opened Teams. The more specific add-member rule wins over the plain view rule."
-  },
-  {
-    "case": "member-add-unnamed",
-    "turn": 0,
     "field": "speech",
-    "kind": "behaviour",
-    "reason": "The new engine highlights the Add member control in Teams; the live engine only opened Teams. The more specific add-member rule wins over the plain view rule."
+    "kind": "platform_wording",
+    "reason": "Both engines now ask who should be added to the team directory. The remaining difference is platform/product wording only."
   },
   {
     "case": "member-add-unnamed",
     "turn": 0,
     "field": "intent_trace",
-    "kind": "platform_wording",
-    "reason": "The trace decisions agree (role, tool, goal, pain point, feature, status). Only the live engine's own reason text, intent label and confidence number differ, which are wording."
+    "kind": "coverage",
+    "reason": "The visible decision is now the same add-member question, but the live trace uses labels derived from legacy action names while the definition engine reports only definition-declared labels."
   },
   {
     "case": "member-add-unnamed",
@@ -1178,135 +1066,51 @@
   {
     "case": "scope-outside-person",
     "turn": 0,
-    "field": "status",
-    "kind": "security",
-    "reason": "Avery works outside the selected workspace. The live engine refuses by naming Avery and the workspace, which confirms the person exists. The new engine answers as for an unknown person and shows the ticket list, so nothing outside the scope is disclosed."
-  },
-  {
-    "case": "scope-outside-person",
-    "turn": 0,
-    "field": "proposed_action",
-    "kind": "security",
-    "reason": "Avery works outside the selected workspace. The live engine refuses by naming Avery and the workspace, which confirms the person exists. The new engine answers as for an unknown person and shows the ticket list, so nothing outside the scope is disclosed."
-  },
-  {
-    "case": "scope-outside-person",
-    "turn": 0,
-    "field": "validated_action",
-    "kind": "security",
-    "reason": "Avery works outside the selected workspace. The live engine refuses by naming Avery and the workspace, which confirms the person exists. The new engine answers as for an unknown person and shows the ticket list, so nothing outside the scope is disclosed."
-  },
-  {
-    "case": "scope-outside-person",
-    "turn": 0,
     "field": "speech",
-    "kind": "security",
-    "reason": "Avery works outside the selected workspace. The live engine refuses by naming Avery and the workspace, which confirms the person exists. The new engine answers as for an unknown person and shows the ticket list, so nothing outside the scope is disclosed."
+    "kind": "platform_wording",
+    "reason": "The live engine now sees only the selected workspace (5c plan, section 3.3), so it no longer names a person from another workspace: both engines answer as for an unknown person. The disclosure is fixed; only the sentence differs."
   },
   {
     "case": "scope-outside-person",
     "turn": 0,
     "field": "intent_trace",
-    "kind": "security",
-    "reason": "Avery works outside the selected workspace. The live engine refuses by naming Avery and the workspace, which confirms the person exists. The new engine answers as for an unknown person and shows the ticket list, so nothing outside the scope is disclosed."
+    "kind": "coverage",
+    "reason": "The live trace uses a label the definition does not declare (a goal such as 'Issue lookup' or 'Add missing team member' derived from its own action names). A generic engine reads goals and features only from the definition."
   },
   {
     "case": "scope-outside-person",
     "turn": 0,
     "field": "signals",
-    "kind": "security",
-    "reason": "Avery works outside the selected workspace. The live engine refuses by naming Avery and the workspace, which confirms the person exists. The new engine answers as for an unknown person and shows the ticket list, so nothing outside the scope is disclosed."
-  },
-  {
-    "case": "scope-outside-person",
-    "turn": 0,
-    "field": "retrieved_context",
-    "kind": "security",
-    "reason": "Avery works outside the selected workspace. The live engine refuses by naming Avery and the workspace, which confirms the person exists. The new engine answers as for an unknown person and shows the ticket list, so nothing outside the scope is disclosed."
-  },
-  {
-    "case": "scope-outside-person",
-    "turn": 0,
-    "field": "session_summary",
-    "kind": "security",
-    "reason": "Avery works outside the selected workspace. The live engine refuses by naming Avery and the workspace, which confirms the person exists. The new engine answers as for an unknown person and shows the ticket list, so nothing outside the scope is disclosed."
-  },
-  {
-    "case": "scope-platform-outside-person",
-    "turn": 0,
-    "field": "status",
-    "kind": "security",
-    "reason": "Maya works outside the Platform workspace. The live engine refuses by naming Maya and the workspace, which confirms the person exists. The new engine answers as for an unknown person and shows the ticket list, so nothing outside the scope is disclosed."
-  },
-  {
-    "case": "scope-platform-outside-person",
-    "turn": 0,
-    "field": "proposed_action",
-    "kind": "security",
-    "reason": "Maya works outside the Platform workspace. The live engine refuses by naming Maya and the workspace, which confirms the person exists. The new engine answers as for an unknown person and shows the ticket list, so nothing outside the scope is disclosed."
-  },
-  {
-    "case": "scope-platform-outside-person",
-    "turn": 0,
-    "field": "validated_action",
-    "kind": "security",
-    "reason": "Maya works outside the Platform workspace. The live engine refuses by naming Maya and the workspace, which confirms the person exists. The new engine answers as for an unknown person and shows the ticket list, so nothing outside the scope is disclosed."
+    "kind": "platform_wording",
+    "reason": "The live engine now sees only the selected workspace (5c plan, section 3.3), so it no longer names a person from another workspace: both engines answer as for an unknown person. The disclosure is fixed; only the signal wording differs."
   },
   {
     "case": "scope-platform-outside-person",
     "turn": 0,
     "field": "speech",
-    "kind": "security",
-    "reason": "Maya works outside the Platform workspace. The live engine refuses by naming Maya and the workspace, which confirms the person exists. The new engine answers as for an unknown person and shows the ticket list, so nothing outside the scope is disclosed."
+    "kind": "platform_wording",
+    "reason": "The live engine now sees only the selected workspace (5c plan, section 3.3), so it no longer names a person from another workspace: both engines answer as for an unknown person. The disclosure is fixed; only the sentence differs."
   },
   {
     "case": "scope-platform-outside-person",
     "turn": 0,
     "field": "intent_trace",
-    "kind": "security",
-    "reason": "Maya works outside the Platform workspace. The live engine refuses by naming Maya and the workspace, which confirms the person exists. The new engine answers as for an unknown person and shows the ticket list, so nothing outside the scope is disclosed."
+    "kind": "coverage",
+    "reason": "The live trace uses a label the definition does not declare (a goal such as 'Issue lookup' or 'Add missing team member' derived from its own action names). A generic engine reads goals and features only from the definition."
   },
   {
     "case": "scope-platform-outside-person",
     "turn": 0,
     "field": "signals",
-    "kind": "security",
-    "reason": "Maya works outside the Platform workspace. The live engine refuses by naming Maya and the workspace, which confirms the person exists. The new engine answers as for an unknown person and shows the ticket list, so nothing outside the scope is disclosed."
-  },
-  {
-    "case": "scope-platform-outside-person",
-    "turn": 0,
-    "field": "retrieved_context",
-    "kind": "security",
-    "reason": "Maya works outside the Platform workspace. The live engine refuses by naming Maya and the workspace, which confirms the person exists. The new engine answers as for an unknown person and shows the ticket list, so nothing outside the scope is disclosed."
-  },
-  {
-    "case": "scope-platform-outside-person",
-    "turn": 0,
-    "field": "session_summary",
-    "kind": "security",
-    "reason": "Maya works outside the Platform workspace. The live engine refuses by naming Maya and the workspace, which confirms the person exists. The new engine answers as for an unknown person and shows the ticket list, so nothing outside the scope is disclosed."
-  },
-  {
-    "case": "scope-platform-own-person",
-    "turn": 0,
-    "field": "proposed_action",
-    "kind": "behaviour",
-    "reason": "Decided in Linear v2: a person's tickets (plural) is the filtered list, so the new engine filters to Avery's tickets; the live engine opened LIN-131 directly."
-  },
-  {
-    "case": "scope-platform-own-person",
-    "turn": 0,
-    "field": "validated_action",
-    "kind": "behaviour",
-    "reason": "Decided in Linear v2: a person's tickets (plural) is the filtered list, so the new engine filters to Avery's tickets; the live engine opened LIN-131 directly."
+    "kind": "platform_wording",
+    "reason": "The live engine now sees only the selected workspace (5c plan, section 3.3), so it no longer names a person from another workspace: both engines answer as for an unknown person. The disclosure is fixed; only the signal wording differs."
   },
   {
     "case": "scope-platform-own-person",
     "turn": 0,
     "field": "speech",
-    "kind": "behaviour",
-    "reason": "Decided in Linear v2: a person's tickets (plural) is the filtered list, so the new engine filters to Avery's tickets; the live engine opened LIN-131 directly."
+    "kind": "platform_wording",
+    "reason": "Both engines now show Avery Brooks work inside the selected Platform workspace. The remaining difference is sentence wording only."
   },
   {
     "case": "scope-platform-own-person",
@@ -1458,9 +1262,9 @@
   {
     "case": "what-changed",
     "turn": 1,
-    "field": "speech",
-    "kind": "platform_wording",
-    "reason": "Revision 4.3: the platform words every reply. Status and action are identical to the live turn; only the sentence differs, and the live sentence is product-written copy."
+    "field": "retrieved_context",
+    "kind": "behaviour",
+    "reason": "5b: the new engine answers 'what changed?' only from the execution ledger's record of executed changes and attaches no documents; the live engine attached documents retrieved for the words of the question, which say nothing about what changed."
   },
   {
     "case": "what-changed",
@@ -1472,30 +1276,16 @@
   {
     "case": "guided-path",
     "turn": 0,
-    "field": "proposed_action",
-    "kind": "behaviour",
-    "reason": "The definition routes a request for the evaluator demo to the dashboard. The live engine gave a generic reply and did nothing."
-  },
-  {
-    "case": "guided-path",
-    "turn": 0,
-    "field": "validated_action",
-    "kind": "behaviour",
-    "reason": "The definition routes a request for the evaluator demo to the dashboard. The live engine gave a generic reply and did nothing."
-  },
-  {
-    "case": "guided-path",
-    "turn": 0,
     "field": "speech",
-    "kind": "behaviour",
-    "reason": "The definition routes a request for the evaluator demo to the dashboard. The live engine gave a generic reply and did nothing."
+    "kind": "platform_wording",
+    "reason": "Both engines now open the dashboard for a guided-path request; only the platform sentence differs."
   },
   {
     "case": "guided-path",
     "turn": 0,
     "field": "intent_trace",
-    "kind": "platform_wording",
-    "reason": "The trace decisions agree (role, tool, goal, pain point, feature, status). Only the live engine's own reason text, intent label and confidence number differ, which are wording."
+    "kind": "coverage",
+    "reason": "The live trace uses a label the definition does not declare (a goal such as 'Issue lookup' or 'Add missing team member' derived from its own action names). A generic engine reads goals and features only from the definition."
   },
   {
     "case": "architecture",
@@ -1594,5 +1384,96 @@
     "field": "signals",
     "kind": "platform_wording",
     "reason": "The same signals are reported. Only the confidence differs: the live engine derives 0.72 from its reasoning score, the platform uses fixed values (0.7 feature, 0.84 person)."
+  },
+  {
+    "case": "create-known-owner",
+    "turn": 0,
+    "field": "execution",
+    "kind": "behaviour",
+    "reason": "The live turn dispatches a create whose project the legacy planner chose on its own. Linear v3 declares no project default, so the definition engine asks which project instead (5c plan, section 7.2). The legacy guess leaves with the old engine in 5d."
+  },
+  {
+    "case": "create-without-owner",
+    "turn": 0,
+    "field": "proposed_action",
+    "kind": "behaviour",
+    "reason": "Both engines ask who should own the ticket. The live turn also highlights the create button, as visitors saw from the browser before 5c; the definition engine asks without moving the page."
+  },
+  {
+    "case": "create-without-owner",
+    "turn": 0,
+    "field": "validated_action",
+    "kind": "behaviour",
+    "reason": "Both engines ask who should own the ticket. The live turn also highlights the create button, as visitors saw from the browser before 5c; the definition engine asks without moving the page."
+  },
+  {
+    "case": "update-priority",
+    "turn": 1,
+    "field": "execution",
+    "kind": "lifecycle",
+    "reason": "In legacy authority the live turn now carries a 5b execution envelope for this update (the legacy authority adapter, 5c plan section 3.3). The shadow proposes the same change and dispatches nothing, so the comparator sees one change at two lifecycle stages."
+  },
+  {
+    "case": "update-reassign",
+    "turn": 1,
+    "field": "execution",
+    "kind": "lifecycle",
+    "reason": "In legacy authority the live turn now carries a 5b execution envelope for this update (the legacy authority adapter, 5c plan section 3.3). The shadow proposes the same change and dispatches nothing, so the comparator sees one change at two lifecycle stages."
+  },
+  {
+    "case": "update-status",
+    "turn": 1,
+    "field": "execution",
+    "kind": "lifecycle",
+    "reason": "In legacy authority the live turn now carries a 5b execution envelope for this update (the legacy authority adapter, 5c plan section 3.3). The shadow proposes the same change and dispatches nothing, so the comparator sees one change at two lifecycle stages."
+  },
+  {
+    "case": "create-start-assigned",
+    "turn": 0,
+    "field": "proposed_action",
+    "kind": "behaviour",
+    "reason": "Linear v3 declares safe defaults for priority, status and project, so a request to start a ticket assigned to Noah can now become a complete create proposal. The live compatibility path still opens the form first."
+  },
+  {
+    "case": "create-start-assigned",
+    "turn": 0,
+    "field": "validated_action",
+    "kind": "behaviour",
+    "reason": "Linear v3 declares safe defaults for priority, status and project, so the definition engine can validate the complete create while the live compatibility path remains form-first until full cutover."
+  },
+  {
+    "case": "create-start-assigned",
+    "turn": 0,
+    "field": "retrieved_context",
+    "kind": "behaviour",
+    "reason": "The live compatibility path attaches documents for ticket creation copy; the definition create proposal is fully structured and attaches no retrieved documents. No spoken claim depends on retrieval."
+  },
+  {
+    "case": "update-outside-person",
+    "turn": 1,
+    "field": "validated_action",
+    "kind": "behaviour",
+    "reason": "Both engines refuse to assign LIN-142 to Avery under the selected workspace. The live compatibility path may surface a validated UI guidance action, while the definition engine keeps the protected update unvalidated; no mutation key is issued for the hidden person."
+  },
+  {
+    "case": "update-outside-person",
+    "turn": 1,
+    "field": "retrieved_context",
+    "kind": "behaviour",
+    "reason": "The live compatibility path still carries issue documents for the reassignment conversation. The definition engine treats the hidden-person branch as UI guidance and attaches no documents; no spoken claim depends on retrieval."
+  },
+  {
+    "case": "update-unknown-person",
+    "turn": 1,
+    "field": "validated_action",
+    "kind": "behaviour",
+    "reason": "Both engines avoid assigning LIN-142 to Priya because Priya is not in the workspace directory. The live compatibility path can open the add-member affordance, while the definition engine keeps the protected update unvalidated."
+  },
+  {
+    "case": "update-unknown-person",
+    "turn": 1,
+    "field": "retrieved_context",
+    "kind": "behaviour",
+    "reason": "The live compatibility path still carries issue documents for the reassignment conversation. The definition engine treats the unknown-person branch as UI guidance and attaches no documents; no spoken claim depends on retrieval."
   }
 ]

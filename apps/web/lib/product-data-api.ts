@@ -1,4 +1,5 @@
 import type {
+  DemoAction,
   DemoCycle,
   DemoDataResponse,
   DemoIssue,
@@ -120,6 +121,20 @@ export async function loadDemoData(): Promise<DemoDataResponse> {
   return parseJsonResponse<DemoDataResponse>(response);
 }
 
+export type ExecutionEnvelope = {
+  key: string;
+  session_id: string;
+  turn_id: number;
+  expires_at: string;
+};
+
+export type ExecutionReceipt = {
+  outcome: "executed" | "refused";
+  code: string;
+  speech: string;
+  record: DemoIssue | null;
+};
+
 type PrivateDemoResetResponse = {
   token: string;
   instance_id: string;
@@ -154,6 +169,26 @@ export async function updateStoredIssue(issue: DemoIssue): Promise<DemoIssue> {
     body: JSON.stringify(issue)
   });
   return parseJsonResponse<DemoIssue>(response);
+}
+
+export async function applyKeyedChange(
+  action: Extract<DemoAction, { type: "UPDATE_DEMO_ISSUE" | "CREATE_DEMO_ISSUE" }>,
+  envelope: ExecutionEnvelope
+): Promise<ExecutionReceipt | null> {
+  const request = keyedIssueRequest(action);
+  const response = await authorizedFetch(request.url, {
+    method: request.method,
+    headers: {
+      "Content-Type": "application/json",
+      "X-Execution-Key": envelope.key,
+      "X-Session-Id": envelope.session_id
+    },
+    body: JSON.stringify(request.body)
+  });
+
+  if (response.status === 404) return null;
+  if (response.status === 409) return response.json() as Promise<ExecutionReceipt>;
+  return parseJsonResponse<ExecutionReceipt>(response);
 }
 
 export async function saveStoredProject(
@@ -206,6 +241,27 @@ function jsonHeaders(requestKey?: string): Record<string, string> {
   return {
     "Content-Type": "application/json",
     ...(requestKey ? { "Idempotency-Key": requestKey } : {})
+  };
+}
+
+function keyedIssueRequest(
+  action: Extract<DemoAction, { type: "UPDATE_DEMO_ISSUE" | "CREATE_DEMO_ISSUE" }>
+): { url: string; method: "PATCH" | "POST"; body: unknown } {
+  if (action.type === "CREATE_DEMO_ISSUE") {
+    return {
+      url: apiUrl("/demo-data/issues"),
+      method: "POST",
+      body: { fields: action.payload }
+    };
+  }
+  const { issue_id: issueId, ...changes } = action.payload;
+  const boundChanges = Object.fromEntries(
+    Object.entries(changes).filter(([, value]) => value !== undefined)
+  );
+  return {
+    url: apiUrl(`/demo-data/issues/${encodeURIComponent(issueId)}`),
+    method: "PATCH",
+    body: { changes: boundChanges }
   };
 }
 

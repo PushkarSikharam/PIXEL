@@ -62,9 +62,11 @@ class ActionValidator:
             "OPEN_GITHUB_SETUP",
             "HIGHLIGHT_GITHUB_CARD",
             "HIGHLIGHT_SLACK_CARD",
-            "HIGHLIGHT_CREATE_TICKET_BUTTON",
         }:
             return {}
+
+        if action_type == "HIGHLIGHT_CREATE_TICKET_BUTTON":
+            return self._safe_ticket_prefill(payload, workspace_scope)
 
         if action_type == "HIGHLIGHT_ADD_MEMBER_BUTTON":
             name = payload.get("name")
@@ -125,6 +127,29 @@ class ActionValidator:
             return None
 
         return None
+
+    def _safe_ticket_prefill(self, payload: dict[str, Any], workspace_scope: WorkspaceScope) -> dict[str, Any] | None:
+        """What the ticket form may be prefilled with: only what the visitor said, only if valid here.
+
+        A prefill is shown for review in the form and creates nothing.
+        """
+        safe: dict[str, Any] = {}
+        assignee = payload.get("assignee")
+        if assignee is not None:
+            if assignee not in workspace_scope.allowed_team_members:
+                return None
+            safe["assignee"] = assignee
+        priority = payload.get("priority")
+        if priority is not None:
+            if priority not in {"Low", "Medium", "High"}:
+                return None
+            safe["priority"] = priority
+        title = payload.get("title")
+        if title is not None:
+            if not isinstance(title, str) or not 1 <= len(title) <= 120:
+                return None
+            safe["title"] = title
+        return safe
 
     def _safe_demo_issue_payload(
         self,

@@ -1,0 +1,544 @@
+[
+  {
+    "case": "correction-negation",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "person-ticket",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "person-all-tickets",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "person-follow-up",
+    "turn": 1,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "current-ticket",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "update-reassign",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "update-reassign",
+    "turn": 1,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "update-reassign",
+    "turn": 1,
+    "field": "reply",
+    "recorded": "Done. I updated LIN-142: assignee is now Noah Patel.",
+    "current": "Updated LIN-142: assignee to Noah Patel.",
+    "kind": "behaviour",
+    "reason": "5b/5c route assistant mutations through execution keys, so the visible reply is now the committed backend receipt rather than browser-authored success text."
+  },
+  {
+    "case": "update-priority",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "update-priority",
+    "turn": 1,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "update-priority",
+    "turn": 1,
+    "field": "reply",
+    "recorded": "Done. I updated LIN-142: the issue details are unchanged.",
+    "current": "Updated LIN-142: priority to High.",
+    "kind": "behaviour",
+    "reason": "5b/5c route assistant mutations through execution keys, so the visible reply is now the committed backend receipt rather than browser-authored success text."
+  },
+  {
+    "case": "update-status",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "update-status",
+    "turn": 1,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "update-status",
+    "turn": 1,
+    "field": "reply",
+    "recorded": "Done. I updated LIN-142: status is now Done.",
+    "current": "Updated LIN-142: status to Done.",
+    "kind": "behaviour",
+    "reason": "5b/5c route assistant mutations through execution keys, so the visible reply is now the committed backend receipt rather than browser-authored success text."
+  },
+  {
+    "case": "update-outside-person",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "update-outside-person",
+    "turn": 1,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "update-outside-person",
+    "turn": 1,
+    "field": "highlighted",
+    "recorded": [],
+    "current": [
+      "add-team-member-button"
+    ],
+    "kind": "security",
+    "reason": "5c makes the backend enforce the selected workspace boundary. The new response avoids relying on browser-local scope logic and prevents cross-workspace disclosure."
+  },
+  {
+    "case": "update-outside-person",
+    "turn": 1,
+    "field": "open_issue",
+    "recorded": "ISSUE DETAIL",
+    "current": null,
+    "kind": "security",
+    "reason": "5c makes the backend enforce the selected workspace boundary. The new response avoids relying on browser-local scope logic and prevents cross-workspace disclosure."
+  },
+  {
+    "case": "update-outside-person",
+    "turn": 1,
+    "field": "reply",
+    "recorded": "Avery Brooks is outside Product Engineering Workspace, so I can't show or change their project work here.",
+    "current": "Avery is not in the team directory yet. I'll open Teams so you can add Avery before assigning LIN-142.",
+    "kind": "security",
+    "reason": "5c makes the backend enforce the selected workspace boundary. The new response avoids relying on browser-local scope logic and prevents cross-workspace disclosure."
+  },
+  {
+    "case": "update-outside-person",
+    "turn": 1,
+    "field": "view",
+    "recorded": "Issue Detail",
+    "current": "Teams",
+    "kind": "security",
+    "reason": "5c makes the backend enforce the selected workspace boundary. The new response avoids relying on browser-local scope logic and prevents cross-workspace disclosure."
+  },
+  {
+    "case": "update-unknown-person",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "update-unknown-person",
+    "turn": 1,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "update-without-target",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "create-known-owner",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "I created PIX-143 and assigned it to Noah Patel. I'll open the new demo ticket.",
+    "current": "Created PIX-143: assignee to Noah Patel, priority to Medium, project to Issue Triage, status to Todo, title to Login errors.",
+    "kind": "behaviour",
+    "reason": "5b/5c route assistant creates through execution keys, so the visible reply is now the committed backend receipt with the server-created record."
+  },
+  {
+    "case": "create-without-owner",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "create-open-and-assign",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "create-start-assigned",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "member-add-named",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "member-add-unnamed",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "clarify-vague-create",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "clarify-vague-assign",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "clarify-vague-assign",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "Who should I assign the current ticket to? You can say Maya, Noah, or another teammate in this workspace.",
+    "current": "Who should I assign the current ticket to? You can name someone in this workspace.",
+    "kind": "wording",
+    "reason": "5c moves this reply into backend-authored product copy. The behavior is preserved, but the sentence is now backend wording."
+  },
+  {
+    "case": "github-explain",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "github-explain",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "GitHub keeps engineering activity connected to tickets. Pull requests, commits, branches, and reviews can appear beside the work they belong to. I'll show the GitHub integration.",
+    "current": "GitHub keeps pull requests, commits, and issue references connected to the work. I'll open Integrations and highlight GitHub.",
+    "kind": "wording",
+    "reason": "5c moves this reply into backend-authored product copy. The behavior is preserved, but the sentence is now backend wording."
+  },
+  {
+    "case": "github-setup",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "github-setup",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "I'll open the GitHub setup flow. This shows repository selection, branch mapping, PR sync, and how activity is attached to Pixel tickets.",
+    "current": "Integrations connect Pixel with tools used by engineering teams. I'll open the GitHub setup flow and show the connection steps.",
+    "kind": "wording",
+    "reason": "5c moves this reply into backend-authored product copy. The behavior is preserved, but the sentence is now backend wording."
+  },
+  {
+    "case": "scope-broad-request",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "scope-broad-request",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "I can only show work inside Product Engineering Workspace. Use the workspace switcher to change scope, then ask me again.",
+    "current": "I can only show work inside Product Engineering Workspace. Switch the workspace scope first, then ask me again.",
+    "kind": "security",
+    "reason": "5c makes the backend enforce the selected workspace boundary. The new response avoids relying on browser-local scope logic and prevents cross-workspace disclosure."
+  },
+  {
+    "case": "scope-outside-person",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "scope-outside-person",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "Avery Brooks is outside Product Engineering Workspace, so I can't show or change their project work here.",
+    "current": "Issues are the core work items used to track bugs, tasks, improvements, and customer-impacting work. I could not find a ticket for Avery, so I'll show the Issues list.",
+    "kind": "security",
+    "reason": "5c makes the backend enforce the selected workspace boundary. The new response avoids relying on browser-local scope logic and prevents cross-workspace disclosure."
+  },
+  {
+    "case": "scope-outside-person",
+    "turn": 0,
+    "field": "view",
+    "recorded": "Dashboard",
+    "current": "Issues",
+    "kind": "security",
+    "reason": "5c makes the backend enforce the selected workspace boundary. The new response avoids relying on browser-local scope logic and prevents cross-workspace disclosure."
+  },
+  {
+    "case": "scope-platform-outside-person",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "scope-platform-outside-person",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "Maya Chen is outside Platform Workspace, so I can't show or change their project work here.",
+    "current": "Issues are the core work items used to track bugs, tasks, improvements, and customer-impacting work. I could not find a ticket for Maya, so I'll show the Issues list.",
+    "kind": "security",
+    "reason": "5c makes the backend enforce the selected workspace boundary. The new response avoids relying on browser-local scope logic and prevents cross-workspace disclosure."
+  },
+  {
+    "case": "scope-platform-outside-person",
+    "turn": 0,
+    "field": "view",
+    "recorded": "Dashboard",
+    "current": "Issues",
+    "kind": "security",
+    "reason": "5c makes the backend enforce the selected workspace boundary. The new response avoids relying on browser-local scope logic and prevents cross-workspace disclosure."
+  },
+  {
+    "case": "scope-platform-own-person",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "greeting",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "greeting-with-name",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "identity",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "capabilities",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "count-team-members",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "count-projects",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "next-step",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "what-changed",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "what-changed",
+    "turn": 1,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "what-changed",
+    "turn": 1,
+    "field": "reply",
+    "recorded": "Most recently, opened LIN-142.",
+    "current": "Nothing has changed in this conversation yet.",
+    "kind": "behaviour",
+    "reason": "5b/5c answers change history only from the execution ledger. Opening a record is not a committed change, so the backend reports no change."
+  },
+  {
+    "case": "guided-path",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "architecture",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "prospect-profile",
+    "turn": 0,
+    "field": "handled_by",
+    "recorded": "browser",
+    "current": "backend",
+    "kind": "behaviour",
+    "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed."
+  },
+  {
+    "case": "prospect-profile",
+    "turn": 0,
+    "field": "reply",
+    "recorded": "Nice to meet you, An Engineering. What would you like to explore first: planning, tickets, projects, teams, or integrations?",
+    "current": "Integrations connect Pixel with tools used by engineering teams. I'll open Teams.",
+    "kind": "behaviour",
+    "reason": "5c sends this formerly browser-local interpretation through the backend router. The backend currently treats the profile statement as a product navigation signal."
+  },
+  {
+    "case": "prospect-profile",
+    "turn": 0,
+    "field": "view",
+    "recorded": "Dashboard",
+    "current": "Teams",
+    "kind": "behaviour",
+    "reason": "5c sends this formerly browser-local interpretation through the backend router. The backend currently treats the profile statement as a product navigation signal."
+  }
+]

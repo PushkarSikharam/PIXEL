@@ -17,10 +17,13 @@ import {
 } from "@/lib/demo-data";
 import {
   ensureDemoLogin,
+  applyKeyedChange,
   loadDemoData,
   resetPrivateDemo,
   RateLimitedError,
   RecordSaveError,
+  type ExecutionEnvelope,
+  type ExecutionReceipt,
   saveStoredCycle,
   saveStoredIssue,
   saveStoredProject,
@@ -185,7 +188,6 @@ export default function Home() {
   const [isAssistantCollapsed, setIsAssistantCollapsed] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [turnStatus, setTurnStatus] = useState<TurnStatus>("Ready");
-  const [visitorName, setVisitorName] = useState<string | null>(null);
   const currentPage = uiState.current_page;
   const activeNavItem = useMemo(
     () => navItems.find((item) => item.id === currentPage),
@@ -324,7 +326,7 @@ export default function Home() {
     }
 
     const nextIssues =
-        action.type === "CREATE_DEMO_ISSUE"
+        action.type === "CREATE_DEMO_ISSUE" && "id" in action.payload
           ? upsertIssue(issues, withScopedIssue(action.payload, scopedProjects, workspaceScope))
           : action.type === "UPDATE_DEMO_ISSUE"
             ? applyIssueUpdate(issues, action.payload)
@@ -342,15 +344,35 @@ export default function Home() {
     setUiState(result.nextState);
   }
 
-  async function runAction(action: DemoAction): Promise<void> {
+  async function runAction(action: DemoAction, envelope?: ExecutionEnvelope | null): Promise<ExecutionReceipt | null> {
     if (action.type === "CREATE_DEMO_ISSUE") {
+      if (envelope) {
+        const receipt = await applyKeyedChange(action, envelope);
+        if (receipt?.record) {
+          const saved = receipt.record;
+          setIssues((currentIssues) => upsertIssue(currentIssues, saved));
+          applyAction({ ...action, payload: saved });
+        }
+        return receipt;
+      }
+      // Without a key only a complete record from a form is saved; assistant fields never are.
+      if (!("id" in action.payload)) throw new RecordSaveError("This change was not found, so nothing was applied.");
       const saved = await saveStoredIssue(
         withScopedIssue(action.payload, scopedProjects, workspaceScope), crypto.randomUUID()
       );
       applyAction({ ...action, payload: saved });
-      return;
+      return null;
     }
     if (action.type === "UPDATE_DEMO_ISSUE") {
+      if (envelope) {
+        const receipt = await applyKeyedChange(action, envelope);
+        if (receipt?.record) {
+          const saved = receipt.record;
+          applyAction(action);
+          setIssues((currentIssues) => upsertIssue(currentIssues, saved));
+        }
+        return receipt;
+      }
       const changed = applyIssueUpdate(issues, action.payload).find((issue) => issue.id === action.payload.issue_id);
       if (!changed) throw new Error("This ticket is no longer available.");
       const saved = await updateStoredIssue(changed);
@@ -358,9 +380,10 @@ export default function Home() {
       // The server increments the optimistic revision. Keep it in browser state so a second
       // natural-language edit does not submit the stale version that preceded this write.
       setIssues((currentIssues) => upsertIssue(currentIssues, saved));
-      return;
+      return null;
     }
     applyAction(action);
+    return null;
   }
 
   function recordUiEvent(event: UiEvent) {
@@ -402,7 +425,6 @@ export default function Home() {
         workspaceScopeRef.current = nextScope;
         setWorkspaceScope(nextScope);
         setDraftPrefill({});
-        setVisitorName(null);
         setIsSending(false);
         setTurnStatus("Ready");
       })
@@ -425,7 +447,6 @@ export default function Home() {
     setSessionSummary(initialSessionSummary);
     setMessages(initialTranscript);
     setDraftPrefill({});
-    setVisitorName(null);
     setIsSending(false);
     setTurnStatus("Ready");
   }
@@ -591,21 +612,6 @@ export default function Home() {
       }));
     }
 
-    const localScopeResponse = handleScopeBoundaryIntent(trimmedMessage);
-    if (localScopeResponse) {
-      return localScopeResponse;
-    }
-
-    const localDraftResponse = handleLocalDraftIntent(trimmedMessage);
-    if (localDraftResponse) {
-      return localDraftResponse;
-    }
-
-    const localConversationResponse = await handleLocalConversationIntent(trimmedMessage, inputMode);
-    if (localConversationResponse) {
-      return localConversationResponse;
-    }
-
     const turnId = nextTurnIdRef.current;
     nextTurnIdRef.current += 1;
     activeTurnIdRef.current = turnId;
@@ -663,7 +669,29 @@ export default function Home() {
               : currentPrefill.issue
           }));
         }
-        await runAction(validatedAction);
+        if (validatedAction.type === "HIGHLIGHT_CREATE_TICKET_BUTTON") {
+          const { assignee, priority, title } = validatedAction.payload ?? {};
+          if (assignee || priority || title) {
+            setDraftPrefill((currentPrefill) => ({ ...currentPrefill, issue: { assignee, priority, title } }));
+          }
+        }
+        const mutation =
+          validatedAction.type === "CREATE_DEMO_ISSUE" || validatedAction.type === "UPDATE_DEMO_ISSUE";
+        if (mutation && !result.execution) {
+          throw new RecordSaveError("Edith could not verify this change, so nothing was applied.");
+        }
+        const receipt = await runAction(validatedAction, result.execution);
+        if (receipt) {
+          setMessages((currentMessages) => [
+            ...currentMessages,
+            { speaker: "Agent", text: receipt.speech }
+          ]);
+          setTurnStatus(receipt.outcome === "executed" ? "Ready" : "Action blocked");
+          return result;
+        }
+        if (mutation) {
+          throw new RecordSaveError("This change was not found, so nothing was applied.");
+        }
       } else if (result.proposed_action) {
         recordUiEvent({
           id: crypto.randomUUID(),
@@ -749,354 +777,6 @@ export default function Home() {
         }));
       }
     }
-  }
-
-function handleLocalDraftIntent(message: string): AgentTurnResponse | null {
-    const draftRequest = parseTicketDraftRequest(message);
-    if (!draftRequest) return null;
-
-    const normalizedMessage = normalizeText(message);
-    const requestedName = draftRequest.assignee;
-    const hasMixedAssignmentIntent = /\b(open|start|draft)\b/.test(normalizedMessage)
-      && /\b(assign|assigned|owner)\b/.test(normalizedMessage);
-    if (requestedName && !hasMixedAssignmentIntent) {
-      return null;
-    }
-
-    const companyMember = requestedName ? findTeamMember(team, requestedName) : undefined;
-    const matchingMember = requestedName ? findTeamMember(scopedTeam, requestedName) : undefined;
-    const turnId = nextTurnIdRef.current;
-    nextTurnIdRef.current += 1;
-
-    setMessages((currentMessages) => [
-      ...currentMessages,
-      { speaker: "Visitor", text: message }
-    ]);
-
-    if (!requestedName) {
-      const speech = "Who should own this ticket? Name a teammate in this workspace and I'll prefill the ticket form.";
-      setUiState((currentState) => ({
-        ...currentState,
-        current_page: "issues",
-        highlighted_target: "create_ticket_button",
-        issue_filter_assignee: undefined,
-        active_turn_id: null
-      }));
-      setTurnStatus("Ready");
-      setMessages((currentMessages) => [...currentMessages, { speaker: "Agent", text: speech }]);
-
-      return localTurnResponse({
-        action: { type: "HIGHLIGHT_CREATE_TICKET_BUTTON" },
-        message: speech,
-        sessionId,
-        turnId
-      });
-    }
-
-    if (requestedName && companyMember && !matchingMember) {
-      const speech = `${companyMember.name} is outside ${workspaceScope.name}, so I can't create or assign work for them here.`;
-      setTurnStatus("Ready");
-      setMessages((currentMessages) => [...currentMessages, { speaker: "Agent", text: speech }]);
-
-      return localTurnResponse({
-        action: null,
-        message: speech,
-        sessionId,
-        turnId
-      });
-    }
-
-    if (requestedName && !matchingMember) {
-      const speech = `${requestedName} is not in the team directory yet. I'll open Teams so you can add ${requestedName} first.`;
-      setDraftPrefill({
-        teamMember: { name: requestedName },
-        issue: {
-          assignee: requestedName,
-          priority: draftRequest.priority,
-          title: draftRequest.title
-        }
-      });
-      setUiState((currentState) => ({
-        ...currentState,
-        current_page: "teams",
-        highlighted_target: "add_member_button",
-        issue_filter_assignee: undefined,
-        active_turn_id: null
-      }));
-      setTurnStatus("Ready");
-      setMessages((currentMessages) => [...currentMessages, { speaker: "Agent", text: speech }]);
-
-      return localTurnResponse({
-        action: { type: "HIGHLIGHT_ADD_MEMBER_BUTTON", payload: { name: requestedName } },
-        message: speech,
-        sessionId,
-        turnId
-      });
-    }
-
-    const assignee = matchingMember?.name ?? team[0]?.name ?? "Maya Chen";
-    const speech = `I'll open the ticket form and prefill ${assignee}. Review the details, then create the ticket.`;
-    setDraftPrefill({
-      issue: {
-        assignee,
-        priority: draftRequest.priority,
-        title: draftRequest.title
-      }
-    });
-    setUiState((currentState) => ({
-      ...currentState,
-      current_page: "issues",
-      highlighted_target: "create_ticket_button",
-      issue_filter_assignee: undefined,
-      active_turn_id: null
-    }));
-    setTurnStatus("Ready");
-    setMessages((currentMessages) => [...currentMessages, { speaker: "Agent", text: speech }]);
-
-    return localTurnResponse({
-      action: { type: "HIGHLIGHT_CREATE_TICKET_BUTTON" },
-      message: speech,
-      sessionId,
-      turnId
-    });
-  }
-
-  async function handleLocalConversationIntent(
-    message: string,
-    inputMode: InputMode
-  ): Promise<AgentTurnResponse | null> {
-    const text = normalizeText(message);
-    const turnId = nextTurnIdRef.current;
-    const sayAndReturn = async (speech: string, action: DemoAction | null = null) => {
-      nextTurnIdRef.current += 1;
-      if (action) {
-        try {
-          await runAction(action);
-        } catch (error) {
-          speech = error instanceof Error ? error.message : "I couldn't save that change. Please try again.";
-          action = null;
-        }
-      }
-      setMessages((currentMessages) => [
-        ...currentMessages,
-        { speaker: "Visitor", text: message },
-        { speaker: "Agent", text: speech }
-      ]);
-      setTurnStatus("Ready");
-      return localTurnResponse({
-        action,
-        message: speech,
-        sessionId,
-        turnId
-      });
-    };
-
-    if (asksForEvaluatorDemo(text)) {
-      return sayAndReturn(
-        "Here is a clean guided path: start with sprint planning, open Maya's ticket, assign it to Noah, create a ticket for a new teammate, then try Salesforce to prove guardrails.",
-        { type: "OPEN_DASHBOARD" }
-      );
-    }
-
-    if (asksSystemArchitecture(text)) {
-      return sayAndReturn(
-        "I'll open the system architecture view so you can see how Pixel listens, checks project scope, validates actions, and updates the workspace.",
-        { type: "OPEN_SYSTEM_ARCHITECTURE" }
-      );
-    }
-
-    const introducedName = extractVisitorName(message);
-    if (introducedName) {
-      setVisitorName(introducedName);
-      return sayAndReturn(
-        `Nice to meet you, ${introducedName}. What would you like to explore first: planning, tickets, projects, teams, or integrations?`
-      );
-    }
-
-    if (asksCapabilities(text)) {
-      return sayAndReturn(
-        `I can guide this Pixel demo through ${workspaceScope.name}: planning, issues, projects, teams, and integrations. I can open views, find tickets, update issue fields, create demo records, and block work outside this scope.`
-      );
-    }
-
-    if (asksIdentityQuestion(text)) {
-      return sayAndReturn(
-        "I'm Edith, Pixel's live demo guide. I can walk you through planning, tickets, projects, teams, and integrations inside this workspace."
-      );
-    }
-
-    if (asksPlainGreeting(text)) {
-      return sayAndReturn(
-        visitorName
-          ? `Hi ${visitorName}. What would you like to explore next in Pixel?`
-          : "Hi there. What would you like to explore first in Pixel?"
-      );
-    }
-
-    const teamMemberDraft = parseTeamMemberDraftRequest(message);
-    if (teamMemberDraft) {
-      setDraftPrefill((currentPrefill) => ({
-        ...currentPrefill,
-        teamMember: { name: teamMemberDraft.name }
-      }));
-      return sayAndReturn(
-        teamMemberDraft.name
-          ? `I'll open Teams so you can add ${teamMemberDraft.name} to this workspace.`
-          : "Who should I add to the team directory?",
-        teamMemberDraft.name
-          ? { type: "HIGHLIGHT_ADD_MEMBER_BUTTON", payload: { name: teamMemberDraft.name } }
-          : { type: "OPEN_TEAMS" }
-      );
-    }
-
-    if (asksVagueCreateRequest(text)) {
-      return sayAndReturn(
-        "What should I create: a ticket, a project, a cycle, or a team member?"
-      );
-    }
-
-    if (asksVagueAssignmentRequest(text)) {
-      const selectedIssue = issues.find((issue) => issue.id === uiState.selected_issue_id);
-      const targetText = selectedIssue ? ` ${selectedIssue.id}` : " the current ticket";
-      return sayAndReturn(
-        `Who should I assign${targetText} to? You can say Maya, Noah, or another teammate in this workspace.`
-      );
-    }
-
-    if (asksBroadWorkspaceRequest(text)) {
-      return sayAndReturn(
-        `I can only show work inside ${workspaceScope.name}. Use the workspace switcher to change scope, then ask me again.`
-      );
-    }
-
-    if (asksForNextStep(text)) {
-      return sayAndReturn(nextStepSpeech(currentPage, workspaceScope.name));
-    }
-
-    const githubAction =
-      inputMode === "text" && !asksForTicketCreation(text)
-        ? githubConversationActionFor(text)
-        : null;
-    if (githubAction) {
-      return sayAndReturn(githubAction.speech, githubAction.action);
-    }
-
-    if (asksTeamCount(text)) {
-      return sayAndReturn(
-        `There are ${scopedTeam.length} team members in ${workspaceScope.name}. I'll open Teams.`,
-        { type: "OPEN_TEAMS" }
-      );
-    }
-
-    if (asksProjectCount(text)) {
-      return sayAndReturn(
-        `${workspaceScope.name} has ${scopedProjects.length} visible projects: ${formatNames(scopedProjects.map((project) => project.name))}. I'll open Projects.`,
-        { type: "OPEN_PROJECTS" }
-      );
-    }
-
-    if (asksWhatChanged(text)) {
-      const latestEvent = uiEvents[0];
-      const speech = latestEvent
-        ? `Most recently, ${lowercaseFirst(latestEvent.description)}`
-        : "We have not changed anything in the workspace yet.";
-      return sayAndReturn(speech);
-    }
-
-    const correctionAction = correctionActionFor(text);
-    if (correctionAction) {
-      return sayAndReturn(correctionSpeech(correctionAction), correctionAction);
-    }
-
-    const personTicketAction = scopedPersonTicketActionFor(message, scopedIssues);
-    if (personTicketAction) {
-      return sayAndReturn(personTicketAction.speech, personTicketAction.action);
-    }
-
-    const updateDraft = parseIssueUpdateRequest(message);
-    if (!updateDraft) return null;
-
-    const issue = resolveIssueForMessage(message, issues, uiState.selected_issue_id);
-    if (!issue) {
-      return sayAndReturn(
-        "Which ticket should I update: Maya's ticket, Noah's ticket, or the issue currently open?"
-      );
-    }
-
-    if (updateDraft.assignee) {
-      const member = findTeamMember(team, updateDraft.assignee);
-      const scopedMember = findTeamMember(scopedTeam, updateDraft.assignee);
-      if (member && !scopedMember) {
-        return sayAndReturn(
-          `${member.name} is outside ${workspaceScope.name}, so I can't show or change their project work here.`
-        );
-      }
-      if (!scopedMember) {
-        setDraftPrefill({
-          teamMember: { name: updateDraft.assignee },
-          issueUpdate: {
-            issueId: issue.id,
-            assignee: updateDraft.assignee,
-            priority: updateDraft.priority,
-            status: updateDraft.status
-          }
-        });
-        setUiState((currentState) => ({
-          ...currentState,
-          current_page: "teams",
-          highlighted_target: "add_member_button",
-          issue_filter_assignee: undefined,
-          active_turn_id: null
-        }));
-        return sayAndReturn(
-          `${updateDraft.assignee} is not in the team directory yet. I'll open Teams so you can add ${updateDraft.assignee} before assigning ${issue.id}.`,
-          { type: "HIGHLIGHT_ADD_MEMBER_BUTTON", payload: { name: updateDraft.assignee } }
-        );
-      }
-      updateDraft.assignee = scopedMember.name;
-    }
-
-    const updatedIssue = {
-      ...issue,
-      assignee: updateDraft.assignee ?? issue.assignee,
-      priority: updateDraft.priority ?? issue.priority,
-      status: updateDraft.status ?? issue.status
-    };
-    const changes = describeIssueChanges(issue, updatedIssue);
-    return sayAndReturn(`Done. I updated ${issue.id}: ${changes}.`, {
-      type: "UPDATE_DEMO_ISSUE",
-      payload: {
-        issue_id: issue.id,
-        assignee: updateDraft.assignee,
-        priority: updateDraft.priority,
-        status: updateDraft.status
-      }
-    });
-  }
-
-  function handleScopeBoundaryIntent(message: string): AgentTurnResponse | null {
-    const referencedName = extractReferencedPersonName(message);
-    if (!referencedName || !mentionsScopedWork(message)) return null;
-
-    const companyMember = findTeamMember(team, referencedName);
-    const scopedMember = findTeamMember(scopedTeam, referencedName);
-    if (!companyMember || scopedMember) return null;
-
-    const turnId = nextTurnIdRef.current;
-    nextTurnIdRef.current += 1;
-    const speech = `${companyMember.name} is outside ${workspaceScope.name}, so I can't show or change their project work here.`;
-    setMessages((currentMessages) => [
-      ...currentMessages,
-      { speaker: "Visitor", text: message },
-      { speaker: "Agent", text: speech }
-    ]);
-    setTurnStatus("Ready");
-    return localTurnResponse({
-      action: null,
-      message: speech,
-      sessionId,
-      turnId
-    });
   }
 
   return (
@@ -3506,7 +3186,7 @@ function savedWorkspaceEvent(
   if (action.type === "CREATE_DEMO_ISSUE") {
     return {
       ...event,
-      description: `Saved to ${workspaceName}: created ${action.payload.id} for ${action.payload.assignee}.`
+      description: `Saved to ${workspaceName}: created ${"id" in action.payload ? action.payload.id : "a ticket"} for ${action.payload.assignee}.`
     };
   }
 
@@ -3630,357 +3310,6 @@ function addProjectToScope(
   };
 }
 
-function findTeamMember(team: DemoTeamMember[], name: string): DemoTeamMember | undefined {
-  const normalizedName = normalizeText(name);
-  return team.find((member) => {
-    const memberName = normalizeText(member.name);
-    return (
-      memberName === normalizedName
-      || memberName.split(" ").includes(normalizedName)
-      || normalizedName.split(" ").some((part) => memberName.split(" ").includes(part))
-    );
-  });
-}
-
-function asksForEvaluatorDemo(text: string): boolean {
-  return (
-    /\b(evaluator|judge|reviewer|demo path|demo script|test script)\b/.test(text)
-    || text === "run the evaluator demo"
-  );
-}
-
-function asksSystemArchitecture(text: string): boolean {
-  return /\b(system architecture|technical architecture|product architecture|architecture page|open architecture|show architecture|view architecture)\b/.test(text);
-}
-
-function asksWhatChanged(text: string): boolean {
-  return /\b(what did we .*change|what changed|what just happened|what did you update)\b/.test(text);
-}
-
-function asksCapabilities(text: string): boolean {
-  return /\b(are you capable|what are you capable|what can you do|what are you able|what can this do|can you do|capable of doing)\b/.test(text);
-}
-
-function asksForNextStep(text: string): boolean {
-  return /\b(what next|next step|what should i try|what should we try|where should i go|guide me|walk me through)\b/.test(text);
-}
-
-function asksVagueCreateRequest(text: string): boolean {
-  return (
-    /\b(create|make|add|new)\b/.test(text)
-    && !/\b(it|this|that|priority|status|urgent|critical|high|medium|low|done|review|todo|backlog)\b/.test(text)
-    && !/\b(ticket|tickets|issue|issues|bug|bugs|project|projects|cycle|cycles|sprint|member|members|teammate|teammates|person|people)\b/.test(text)
-  );
-}
-
-function asksVagueAssignmentRequest(text: string): boolean {
-  return (
-    /\b(assign|reassign|owner|assignee)\b/.test(text)
-    && !/\b(to|for|maya|noah|avery|iris|lucifer)\b/.test(text)
-    && !/\b(how do i assign|how to assign|where.*assign|show assignment|issue assignment)\b/.test(text)
-  );
-}
-
-function asksBroadWorkspaceRequest(text: string): boolean {
-  return (
-    /\b(company|organization|org|other workspace|other project|another workspace|another team|all workspaces|every workspace|all teams|every team)\b/.test(text)
-    && /\b(project|projects|ticket|tickets|issue|issues|work|team|teams)\b/.test(text)
-  );
-}
-
-function nextStepSpeech(currentPage: DemoPage, workspaceName: string): string {
-  if (currentPage === "dashboard") {
-    return `A strong next move is sprint planning. Ask me to show planning, and I'll open the current cycle for ${workspaceName}.`;
-  }
-  if (currentPage === "issues" || currentPage === "issue_detail") {
-    return "Next, try a follow-up like assign it to Noah, make it high priority, or show all tickets for Maya.";
-  }
-  if (currentPage === "integrations") {
-    return "A good next step is GitHub. Ask me how GitHub works or tell me to set it up, and I'll show the repository workflow.";
-  }
-  if (currentPage === "teams") {
-    return "From here, add a team member or ask me to create a ticket for someone new. I'll keep the assignment inside this workspace.";
-  }
-  if (currentPage === "projects") {
-    return "Try creating a project or ask which projects are visible. I'll keep the roadmap scoped to this workspace.";
-  }
-  return "Try asking about tickets, planning, GitHub, or creating work. I'll move the workspace and explain what changed.";
-}
-
-function githubConversationActionFor(text: string): { speech: string; action: DemoAction } | null {
-  if (!/\b(github|pull request|pull requests|pr|prs|commit|commits|repository|repositories|repo|repos|branch|branches|webhook)\b/.test(text)) {
-    return null;
-  }
-
-  if (/\b(connect|setup|set up|configure|enable|install|add)\b/.test(text)) {
-    return {
-      speech: "I'll open the GitHub setup flow. This shows repository selection, branch mapping, PR sync, and how activity is attached to Pixel tickets.",
-      action: { type: "OPEN_GITHUB_SETUP" }
-    };
-  }
-
-  return {
-    speech: "GitHub keeps engineering activity connected to tickets. Pull requests, commits, branches, and reviews can appear beside the work they belong to. I'll show the GitHub integration.",
-    action: { type: "HIGHLIGHT_GITHUB_CARD" }
-  };
-}
-
-function asksTeamCount(text: string): boolean {
-  return /\b(how many|count|number of)\b/.test(text) && /\b(team members|members|people|teammates)\b/.test(text);
-}
-
-function asksIdentityQuestion(text: string): boolean {
-  return (
-    /\b(who are you|who r you|what are you|your name|who is edith|hi there who)\b/.test(text)
-    || /\b(hi|hii|hello|hey)\b/.test(text) && /\b(who|what)\b/.test(text)
-  );
-}
-
-function asksPlainGreeting(text: string): boolean {
-  return /^(hi|hii|hello|hey|hi there|hii there|hello there)[?!. ]*$/.test(text);
-}
-
-function extractVisitorName(message: string): string | null {
-  const match = message.match(
-    /\b(?:i am|i'm|im|my name is|this is)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i
-  );
-  if (!match?.[1]) return null;
-
-  const name = titleCase(
-    match[1]
-      .replace(/\b(and|from|with|here|today|checking|looking)\b.*$/i, "")
-      .replace(/[^a-zA-Z ]+/g, "")
-      .trim()
-  );
-
-  return name || null;
-}
-
-function asksProjectCount(text: string): boolean {
-  return /\b(how many|count|number of|what projects|which projects)\b/.test(text) && /\b(project|projects)\b/.test(text);
-}
-
-function mentionsScopedWork(message: string): boolean {
-  const text = normalizeText(message);
-  return /\b(ticket|tickets|issue|issues|bug|bugs|project|projects|work|assign|assigned|owner|what about)\b/.test(text);
-}
-
-function extractReferencedPersonName(message: string): string | undefined {
-  const possessive = message.match(/\b([a-zA-Z]+(?:\s+[a-zA-Z]+)?)'s\s+(?:ticket|issue|bug|work|project)/i);
-  if (possessive?.[1]) {
-    return titleCase(possessive[1]);
-  }
-
-  const direct = message.match(
-    /\b(?:for|assigned to|assign to|owner is|what about)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i
-  );
-  if (!direct?.[1]) return undefined;
-
-  return titleCase(
-    direct[1]
-      .replace(/\b(ticket|issue|bug|work|project|priority|status)\b/gi, "")
-      .trim()
-  );
-}
-
-function correctionActionFor(text: string): DemoAction | null {
-  if (!/\b(no|not|instead|rather)\b/.test(text)) return null;
-  if (/\b(issue|issues|ticket|tickets|bug|bugs)\b/.test(text)) return { type: "OPEN_ISSUES" };
-  if (/\b(cycle|cycles|sprint|planning)\b/.test(text)) return { type: "OPEN_CYCLES" };
-  if (/\b(github)\b/.test(text)) return { type: "HIGHLIGHT_GITHUB_CARD" };
-  if (/\b(slack)\b/.test(text)) return { type: "HIGHLIGHT_SLACK_CARD" };
-  if (/\b(project|projects)\b/.test(text)) return { type: "OPEN_PROJECTS" };
-  if (/\b(team|teams|members|people)\b/.test(text)) return { type: "OPEN_TEAMS" };
-  return null;
-}
-
-function correctionSpeech(action: DemoAction): string {
-  if (action.type === "OPEN_ISSUES") return "Got it. I'll switch to Issues.";
-  if (action.type === "OPEN_CYCLES") return "Got it. I'll switch to Cycles.";
-  if (action.type === "HIGHLIGHT_GITHUB_CARD") return "Got it. I'll show GitHub instead.";
-  if (action.type === "HIGHLIGHT_SLACK_CARD") return "Got it. I'll show Slack instead.";
-  if (action.type === "OPEN_PROJECTS") return "Got it. I'll switch to Projects.";
-  if (action.type === "OPEN_TEAMS") return "Got it. I'll switch to Teams.";
-  return "Got it. I'll switch views.";
-}
-
-function scopedPersonTicketActionFor(
-  message: string,
-  scopedIssues: DemoIssue[]
-): { speech: string; action: DemoAction } | null {
-  const text = normalizeText(message);
-  const isPersonFollowUp = /\bwhat about\b/.test(text);
-  if (!/\b(ticket|tickets|issue|issues|bug|bugs)\b/.test(text) && !isPersonFollowUp) return null;
-  if (asksForTicketCreation(text)) return null;
-  if (
-    /\b(how do i assign|how to assign|show assignment|issue assignment)\b/.test(text)
-    || (text.includes("where") && text.includes("assign"))
-  ) {
-    return null;
-  }
-
-  const personName = extractReferencedPersonName(message) ?? extractAssigneeName(message);
-  if (!personName) return null;
-
-  const matchingIssues = scopedIssues.filter((issue) =>
-    namesMatch(issue.assignee, personName)
-  );
-
-  if (matchingIssues.length === 0) return null;
-
-  const assignee = matchingIssues[0].assignee;
-  if (
-    isPersonFollowUp
-    || /\b(all|list|show)\b/.test(text) && /\b(tickets|issues|bugs)\b/.test(text)
-  ) {
-    return {
-      speech: `I found ${matchingIssues.length} ticket${matchingIssues.length === 1 ? "" : "s"} assigned to ${assignee}: ${formatNames(matchingIssues.map((issue) => issue.id))}. I'll show those issues.`,
-      action: { type: "FILTER_ISSUES_BY_ASSIGNEE", payload: { assignee } }
-    };
-  }
-
-  return {
-    speech: `I found ${matchingIssues[0].id}, assigned to ${assignee}. I'll open that ticket.`,
-    action: { type: "OPEN_DEMO_ISSUE", payload: { issue_id: matchingIssues[0].id } }
-  };
-}
-
-function parseIssueUpdateRequest(message: string): {
-  assignee?: string;
-  priority?: DemoIssue["priority"];
-  status?: string;
-} | null {
-  const text = normalizeText(message);
-  if (asksForTicketCreation(text)) {
-    return null;
-  }
-
-  if (
-    /\b(how do i assign|how to assign|show assignment|issue assignment)\b/.test(text)
-    || (text.includes("where") && text.includes("assign"))
-  ) {
-    return null;
-  }
-
-  const update: {
-    assignee?: string;
-    priority?: DemoIssue["priority"];
-    status?: string;
-  } = {};
-
-  if (/\b(assign|owner|reassign)\b/.test(text)) {
-    update.assignee = extractAssignmentTarget(message);
-  }
-
-  if (/\b(priority|urgent|critical|high|medium|low)\b/.test(text)) {
-    update.priority = extractPriority(text);
-  }
-
-  const status = extractStatus(text);
-  if (status) {
-    update.status = status;
-  }
-
-  return update.assignee || update.priority || update.status ? update : null;
-}
-
-function extractAssignmentTarget(message: string): string | undefined {
-  const match = message.match(
-    /\b(?:assign(?:ed)?\s+to|assign it to|assign this to|owner is|assignee is|to)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i
-  );
-  if (!match?.[1]) return undefined;
-
-  return titleCase(
-    match[1]
-      .replace(/\b(ticket|issue|bug|priority|status|review|done|todo)\b/gi, "")
-      .trim()
-  );
-}
-
-function extractStatus(text: string): string | undefined {
-  if (/\b(done|complete|completed|closed|resolved)\b/.test(text)) return "Done";
-  if (/\b(review|qa)\b/.test(text)) return "Review";
-  if (/\b(in progress|doing|started|working)\b/.test(text)) return "In progress";
-  if (/\b(todo|to do|backlog)\b/.test(text)) return "Todo";
-  return undefined;
-}
-
-function resolveIssueForMessage(
-  message: string,
-  issues: DemoIssue[],
-  selectedIssueId?: string
-): DemoIssue | undefined {
-  const explicitId = message.match(/\b(?:LIN|PIX)-\d+\b/i)?.[0]?.toUpperCase();
-  if (explicitId) {
-    return issues.find((issue) => issue.id.toUpperCase() === explicitId);
-  }
-
-  if (/\b(this|that|it|current|same)\b/.test(normalizeText(message))) {
-    return issues.find((issue) => issue.id === selectedIssueId);
-  }
-
-  const assigneeName = extractAssigneeName(message);
-  if (assigneeName) {
-    const normalizedAssignee = normalizeText(assigneeName);
-    const matchingIssue = issues.find((issue) => {
-      return namesMatch(issue.assignee, normalizedAssignee);
-    });
-    if (matchingIssue) return matchingIssue;
-  }
-
-  if (/\b(her|his)\b/.test(normalizeText(message))) {
-    return issues.find((issue) => issue.id === selectedIssueId);
-  }
-
-  return selectedIssueId ? issues.find((issue) => issue.id === selectedIssueId) : undefined;
-}
-
-function namesMatch(fullName: string, query: string): boolean {
-  const normalizedFullName = normalizeText(fullName);
-  const normalizedQuery = normalizeText(query);
-  return (
-    normalizedFullName === normalizedQuery
-    || normalizedFullName.split(" ").includes(normalizedQuery)
-    || normalizedQuery.split(" ").some((part) => normalizedFullName.split(" ").includes(part))
-  );
-}
-
-function describeIssueChanges(previousIssue: DemoIssue, updatedIssue: DemoIssue): string {
-  const changes = [];
-  if (previousIssue.assignee !== updatedIssue.assignee) {
-    changes.push(`assignee is now ${updatedIssue.assignee}`);
-  }
-  if (previousIssue.priority !== updatedIssue.priority) {
-    changes.push(`priority is now ${updatedIssue.priority}`);
-  }
-  if (previousIssue.status !== updatedIssue.status) {
-    changes.push(`status is now ${updatedIssue.status}`);
-  }
-  return changes.join(", ") || "the issue details are unchanged";
-}
-
-function lowercaseFirst(value: string): string {
-  return value ? `${value.charAt(0).toLowerCase()}${value.slice(1)}` : value;
-}
-
-function formatNames(names: string[]): string {
-  if (names.length === 0) return "none";
-  if (names.length === 1) return names[0];
-  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
-}
-
-function parseTicketDraftRequest(message: string): DraftPrefill["issue"] | null {
-  const normalizedMessage = normalizeText(message);
-  if (asksForTicketWorkflowQuestion(normalizedMessage)) return null;
-  if (!asksForTicketDraft(normalizedMessage)) return null;
-
-  return {
-    assignee: extractAssignmentTarget(message) ?? extractAssigneeName(message),
-    priority: extractPriority(normalizedMessage),
-    title: extractIssueTitle(message)
-  };
-}
-
 function asksForTicketCreation(text: string): boolean {
   const mentionsWorkItem = /\b(ticket|issue|bug)\b/.test(text);
   if (!mentionsWorkItem) return false;
@@ -3988,65 +3317,6 @@ function asksForTicketCreation(text: string): boolean {
     /\b(create|make|add|raise|file)\b/.test(text)
     || /\b(open|start|draft)\b/.test(text) && /\b(new|fresh)\b/.test(text)
   );
-}
-
-function asksForTicketDraft(text: string): boolean {
-  if (!/\b(ticket|issue|bug)\b/.test(text)) return false;
-  if (/\b(create|make|add|raise|file)\b/.test(text)) return true;
-  return /\b(open|start|draft)\b/.test(text) && /\b(new|fresh|assign|assigned|owner)\b/.test(text);
-}
-
-function asksForTicketWorkflowQuestion(text: string): boolean {
-  return (
-    /\b(where|how|best way|show me how|show how)\b/.test(text)
-    && /\b(create|make|add|raise|file)\b/.test(text)
-    && /\b(ticket|issue|bug)\b/.test(text)
-  );
-}
-
-function extractAssigneeName(message: string): string | undefined {
-  const match = message.match(
-    /\b(?:for|assigned to|assign to|owner is)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i
-  );
-  if (!match) return undefined;
-
-  const stopWords = new Set([
-    "about",
-    "regarding",
-    "with",
-    "on",
-    "in",
-    "as",
-    "ticket",
-    "issue",
-    "bug"
-  ]);
-  const nameParts = match[1]
-    .split(/\s+/)
-    .filter((part) => !stopWords.has(part.toLowerCase()));
-
-  return nameParts.length > 0 ? titleCase(nameParts.join(" ")) : undefined;
-}
-
-function parseTeamMemberDraftRequest(message: string): { name?: string } | null {
-  const text = normalizeText(message);
-  if (!/\b(add|create|invite|new)\b/.test(text)) return null;
-  if (!/\b(member|teammate|person|user|employee)\b/.test(text)) return null;
-
-  const match = message.match(
-    /\b(?:member|teammate|person|user|employee)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i
-  ) ?? message.match(
-    /\b(?:called|named|as)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i
-  );
-
-  if (!match?.[1]) return {};
-
-  const name = titleCase(
-    match[1]
-      .replace(/\b(to|in|into|for|the|workspace|team|directory)\b/gi, "")
-      .trim()
-  );
-  return name ? { name } : {};
 }
 
 function extractPriority(normalizedMessage: string): DemoIssue["priority"] {
@@ -4069,58 +3339,6 @@ function extractIssueTitle(message: string): string {
   if (normalizedMessage.includes("webhook")) return "Investigate webhook issue";
   if (normalizedMessage.includes("bug")) return "Investigate reported bug";
   return "Investigate customer onboarding issue";
-}
-
-function localTurnResponse({
-  action,
-  message,
-  sessionId,
-  turnId
-}: {
-  action: DemoAction | null;
-  message: string;
-  sessionId: string;
-  turnId: number;
-}): AgentTurnResponse {
-  return {
-    session_id: sessionId,
-    turn_id: turnId,
-    status: "completed",
-    speech: message,
-    proposed_action: action
-      ? {
-          type: action.type,
-          payload: "payload" in action && action.payload ? action.payload : {}
-        }
-      : null,
-    validated_action: action,
-    intent_trace: {
-      goal:
-        action?.type === "HIGHLIGHT_ADD_MEMBER_BUTTON"
-          ? "Validate assignee"
-          : action?.type === "UPDATE_DEMO_ISSUE"
-            ? "Update issue"
-            : "Guide demo",
-      current_intent:
-        action?.type === "HIGHLIGHT_ADD_MEMBER_BUTTON"
-          ? "Add missing team member"
-          : action?.type === "UPDATE_DEMO_ISSUE"
-            ? "Update issue"
-            : "Clarify next step",
-      relevant_feature:
-        action?.type === "OPEN_SYSTEM_ARCHITECTURE"
-          ? "Architecture"
-          : action?.type === "HIGHLIGHT_ADD_MEMBER_BUTTON"
-            ? "Teams"
-            : "Issues",
-      reason: "Handled locally because the browser has the current session directory.",
-      confidence: 0.9,
-      status: "active"
-    },
-    signals: [],
-    retrieved_context: [],
-    session_summary: initialSessionSummary
-  };
 }
 
 function initialsForName(name: string): string {

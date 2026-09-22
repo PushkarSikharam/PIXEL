@@ -52,9 +52,23 @@ GATED = "gated"
 SHADOW_ERROR = "shadow_error"
 OVER_BUDGET = "over_budget"
 COMPARED = "compared"
+# Turns the scheduler could not compare (5b plan, section 10).
+SHED = "shed"
+CIRCUIT_OPEN = "circuit_open"
+WORKER_UNHEALTHY = "worker_unhealthy"
 CLASSES = frozenset({
     MATCH, LIFECYCLE, PLATFORM_WORDING, BEHAVIOUR, SECURITY, COVERAGE, MEMORY_RESET,
-    NOT_COMPARED, GATED, SHADOW_ERROR, OVER_BUDGET, COMPARED,
+    NOT_COMPARED, GATED, SHADOW_ERROR, OVER_BUDGET, COMPARED, SHED, CIRCUIT_OPEN, WORKER_UNHEALTHY,
+})
+# Why a turn was not compared or a session was reset, counted under the field `turn_reason`.
+TURN_REASON = "turn_reason"
+REASONS = frozenset({
+    # shed
+    "queue_full", "snapshot_too_large", "too_many_in_flight", "worker_unhealthy", "shutdown",
+    # not compared
+    "no_context_effect", "lost", "stale", "late",
+    # memory reset: why the shadow's context for the session is incomplete
+    "restart", "epoch", "evicted", "gap_lost", "circuit_open", "error",
 })
 
 # Every field of the live response, in schema order (parent plan, exit criterion 9).
@@ -157,9 +171,17 @@ def compare(live: Mapping[str, Any], shadow: ShadowView, *, session_id: str, tur
     classes: dict[str, str] = {
         "session_id": MATCH if live.get("session_id") == session_id else BEHAVIOUR,
         "turn_id": MATCH if live.get("turn_id") == turn_id else BEHAVIOUR,
-        # 5a live responses have no execution field; one appearing is a change to investigate.
-        "execution": MATCH if "execution" not in live else BEHAVIOUR,
     }
+    # 5b adds `execution`, null until an engine dispatches keys. Null (or absent) is a match; an
+    # envelope is lifecycle only when it is for the same mutation the shadow proposed.
+    envelope = live.get("execution")
+    if envelope is None:
+        classes["execution"] = MATCH
+    elif shadow.action_is_mutation and shadow.lifecycle_open and \
+            _same(_action(live.get("validated_action")), _action(shadow.action)):
+        classes["execution"] = LIFECYCLE
+    else:
+        classes["execution"] = BEHAVIOUR
     both_denied = live.get("status") == "denied" and shadow.status == "denied"
     classes["status"] = MATCH if live.get("status") == shadow.status else BEHAVIOUR
     for name in ("proposed_action", "validated_action"):
@@ -299,7 +321,7 @@ class ParityCounters:
         day = self._today().strftime("%Y-%m-%d")
         with self._lock:
             for field, cls in classes.items():
-                if cls not in CLASSES:
+                if cls not in (REASONS if field == TURN_REASON else CLASSES):
                     raise ValueError(f"unknown class {cls}")
                 self._counts[CountKey(day, tenant_id, product_id, definition_id, definition_version, field, cls)] += 1
 

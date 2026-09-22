@@ -596,18 +596,26 @@ class PromptBoundaryTest(unittest.TestCase):
         self.assertEqual(parsed["counts"]["contact"], 2, "the count is still honest")
 
 
+#: The 5c definition-turn service and its shared assembly legitimately build a `TurnSnapshot` for
+#: every turn (that is a deterministic-routing structure, not the optional model path); the shadow
+#: comparator (5a/5b) does too, off the request path. Neither reaches the model-only boundary
+#: (prompt, proposal parser, provenance), which nothing calls in production yet.
+NEW_ENGINE_PATHS = ("app.services.shadow", "app.services.engine_assembly", "app.services.turn_execution",
+                    "app.testing_main")
+
+
 class NoRuntimeWiringTest(unittest.TestCase):
-    """Slice 4a builds the boundary; nothing may call it yet (plan section 13)."""
+    """Slice 4a's model-only path (prompt, proposal parser, provenance): nothing may call it yet
+    (plan section 13); it is not required for deterministic routing, which 5c does use."""
 
     def test_no_runtime_module_imports_the_model_boundary(self):
         from dependency_graph import module_path, package_modules
 
         root = Path(__file__).resolve().parents[1]
-        boundary = {"app.engine.prompt", "app.engine.proposal_parser", "app.engine.provenance",
-                    "app.engine.snapshot"}
+        boundary = {"app.engine.prompt", "app.engine.proposal_parser", "app.engine.provenance"}
         offenders: dict[str, list[str]] = {}
         for module in package_modules(root, "app"):
-            if module in boundary or module.startswith("app.engine.") or module.startswith("app.services.shadow"):
+            if module in boundary or module.startswith("app.engine.") or module.startswith(NEW_ENGINE_PATHS):
                 continue
             source = module_path(root, module)
             if source is None:

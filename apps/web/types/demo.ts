@@ -40,6 +40,8 @@ export type DemoTeamMember = {
   projectIds?: string[];
 };
 
+export type IssueFields = Omit<DemoIssue, "id" | "revision">;
+
 export type DemoIssue = {
   revision?: number;
   id: string;
@@ -131,7 +133,9 @@ export type DemoAction =
   | { type: "OPEN_INTEGRATIONS"; payload?: Record<string, never> }
   | { type: "OPEN_SYSTEM_ARCHITECTURE"; payload?: Record<string, never> }
   | { type: "OPEN_DEMO_ISSUE"; payload: { issue_id: string } }
-  | { type: "CREATE_DEMO_ISSUE"; payload: DemoIssue }
+  // An assistant create carries only the fields its execution key binds; the server assigns the
+  // ID when it commits. A form create carries the whole record.
+  | { type: "CREATE_DEMO_ISSUE"; payload: DemoIssue | IssueFields }
   | { type: "CREATE_DEMO_TEAM_MEMBER"; payload: DemoTeamMember }
   | {
       type: "UPDATE_DEMO_ISSUE";
@@ -144,7 +148,8 @@ export type DemoAction =
     }
   | { type: "FILTER_ISSUES_BY_ASSIGNEE"; payload: { assignee: string } }
   | { type: "HIGHLIGHT_ASSIGNMENT_CONTROL"; payload: { issue_id?: string } }
-  | { type: "HIGHLIGHT_CREATE_TICKET_BUTTON"; payload?: Record<string, never> }
+  // The backend may prefill the ticket form with what the visitor said; the form still asks.
+  | { type: "HIGHLIGHT_CREATE_TICKET_BUTTON"; payload?: { assignee?: string; priority?: DemoIssue["priority"]; title?: string } }
   | { type: "HIGHLIGHT_ADD_MEMBER_BUTTON"; payload?: { name?: string } }
   | { type: "HIGHLIGHT_CYCLE_PROGRESS"; payload?: Record<string, never> }
   | { type: "OPEN_GITHUB_SETUP"; payload?: Record<string, never> }

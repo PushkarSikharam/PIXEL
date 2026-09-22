@@ -80,6 +80,23 @@ class LinearLegacyTranslator:
         )
         return LegacyAction(legacy_type, builder(action))
 
+    def change_set(self, validated: ValidatedAction) -> dict[str, Any]:
+        """The exact change an execution key binds, in the keyed endpoint's vocabulary (5b, 7.1).
+
+        An update names its target and only the changed fields; a create names only the fields it
+        supplies. Anything else is not a keyed mutation of this product.
+        """
+        legacy = self.translate(validated)
+        payload = dict(legacy.payload)
+        if legacy.type == "UPDATE_DEMO_ISSUE":
+            target = payload.pop("issue_id", None)
+            if not isinstance(target, str) or not payload:
+                raise TranslationMissing("an update needs a target and at least one change")
+            return {"action": "update_issue", "target": target, "changes": payload}
+        if legacy.type == "CREATE_DEMO_ISSUE":
+            return {"action": "create_issue", "fields": payload}
+        raise TranslationMissing(f"{validated.action.action_key} is not a keyed mutation")
+
     # --- payloads ---
 
     def _no_payload(self, action) -> dict[str, Any]:

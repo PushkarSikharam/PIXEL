@@ -8,6 +8,7 @@ open a shell on the server. From the repository root (or `/app` in the container
     PYTHONPATH=apps/api python -m app.ops reset-demo-data
     PYTHONPATH=apps/api python -m app.ops move-product-version --tenant <tenant> --product <product> --version <n>
     PYTHONPATH=apps/api python -m app.ops shadow-report [--days N]
+    PYTHONPATH=apps/api python -m app.ops execution-preflight
 
 `check-readiness` exits non-zero when any active product cannot start a conversation, and prints
 which ones and why — the detail the public health endpoint deliberately withholds.
@@ -18,6 +19,10 @@ with the previous version moves back.
 
 `shadow-report` prints the shadow engine's parity counts (5a) for the last N days: per product,
 definition version, response field and class. Counts only; nothing a visitor said is stored.
+
+`execution-preflight` reports execution keys by state and exits non-zero if a key issued before
+5b (with no workspace) is still dispatched. Run it before deploying 5b; the application runs the
+same check at startup and refuses to serve if it fails.
 """
 from __future__ import annotations
 
@@ -32,6 +37,7 @@ from app.definitions.integrity import session_start_problems
 from app.definitions.loader import DefinitionError
 from app.definitions.organizations import OrganizationDirectory
 from app.definitions.registry import RegistryError
+from app.engine.execution import ExecutionLedger
 from app.services import shadow_parity
 from app.services.product_data_store import ProductDataStore
 
@@ -87,6 +93,12 @@ def shadow_report(days: int) -> int:
     return 0
 
 
+def execution_preflight() -> int:
+    report = ExecutionLedger.preflight()
+    print(json.dumps({"ready": not report["legacy_dispatched"], **report}, indent=2))
+    return 1 if report["legacy_dispatched"] else 0
+
+
 def _refused(reason: str) -> int:
     print(json.dumps({"moved": False, "reason": reason}, indent=2))
     return 1
@@ -101,6 +113,7 @@ def main(argv: list[str] | None = None) -> int:
     move.add_argument("--tenant", required=True)
     move.add_argument("--product", required=True)
     move.add_argument("--version", required=True, type=int)
+    commands.add_parser("execution-preflight")
     report = commands.add_parser("shadow-report")
     report.add_argument("--days", type=int, default=7)
     arguments = parser.parse_args(argv)
@@ -109,6 +122,8 @@ def main(argv: list[str] | None = None) -> int:
         return move_product_version(arguments.tenant, arguments.product, arguments.version)
     if arguments.command == "shadow-report":
         return shadow_report(arguments.days)
+    if arguments.command == "execution-preflight":
+        return execution_preflight()
     return {"check-readiness": check_readiness, "reset-demo-data": reset_demo_data}[arguments.command]()
 
 

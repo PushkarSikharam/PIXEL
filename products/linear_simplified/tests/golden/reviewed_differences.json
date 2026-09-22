@@ -1,1 +1,782 @@
-[]
+[
+  {
+    "case": "capabilities",
+    "turn": 0,
+    "field": "speech",
+    "recorded": "I can guide this Pixel demo through planning, issues, projects, teams, and integrations. I can open approved views, find demo issues, highlight controls, answer workflow questions, and block requests outside this product.",
+    "current": "I can guide this Pixel demo through Product Engineering Workspace: planning, issues, projects, teams, and integrations. I can open views, find tickets, update issue fields, create demo records, and block work outside this scope.",
+    "kind": "wording",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "correction-negation",
+    "turn": 0,
+    "field": "speech",
+    "recorded": "Issues are the core work items used to track bugs, tasks, improvements, and customer-impacting work. I'll open Issues.",
+    "current": "Got it. I'll switch to Issues.",
+    "kind": "wording",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "count-projects",
+    "turn": 0,
+    "field": "speech",
+    "recorded": "Projects group related issues into larger product or roadmap efforts. I'll open Projects.",
+    "current": "Product Engineering Workspace has 2 visible projects: GitHub Integration Hardening and Issue Triage Workflow. I'll open Projects.",
+    "kind": "wording",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "create-known-owner",
+    "turn": 0,
+    "field": "speech",
+    "recorded": "I created PIX-143 and assigned it to Noah Patel. I'll open the new demo ticket.",
+    "current": "I'll create a ticket assigned to Noah Patel.",
+    "kind": "wording",
+    "reason": "A create or update is now dispatched under a 5b execution key and applied only when the browser sends that key. The recorded answer claimed the change was already done; the reply now proposes it, and the committed receipt is spoken only after the write succeeds (5c plan, sections 3.3 and 9)."
+  },
+  {
+    "case": "create-known-owner",
+    "turn": 0,
+    "field": "validated_action",
+    "recorded": {
+      "type": "CREATE_DEMO_ISSUE",
+      "payload": {
+        "id": "PIX-143",
+        "title": "Login errors",
+        "priority": "Medium",
+        "assignee": "Noah Patel",
+        "project": "Issue Triage",
+        "status": "Todo"
+      }
+    },
+    "current": {
+      "type": "CREATE_DEMO_ISSUE",
+      "payload": {
+        "title": "Login errors",
+        "priority": "Medium",
+        "assignee": "Noah Patel",
+        "project": "Issue Triage",
+        "status": "Todo"
+      }
+    },
+    "kind": "behaviour",
+    "reason": "The client receives exactly the change its execution key is bound to. The legacy planner's guessed record ID is not part of it: the server assigns the ID when the create commits."
+  },
+  {
+    "case": "create-open-and-assign",
+    "turn": 0,
+    "field": "proposed_action",
+    "recorded": {
+      "type": "CREATE_DEMO_ISSUE",
+      "payload": {
+        "id": "PIX-143",
+        "title": "Investigate customer onboarding issue",
+        "priority": "Medium",
+        "assignee": "Maya Chen",
+        "project": "Issue Triage",
+        "status": "Todo"
+      }
+    },
+    "current": {
+      "type": "HIGHLIGHT_ADD_MEMBER_BUTTON",
+      "payload": {
+        "name": "Priya"
+      }
+    },
+    "kind": "behaviour",
+    "reason": "The recorded backend created a ticket for Maya Chen although the visitor asked to assign it to Priya, who is not in the team directory. Visitors saw the browser ask to add Priya first; the backend now does the same instead of creating work for someone the visitor did not name."
+  },
+  {
+    "case": "create-open-and-assign",
+    "turn": 0,
+    "field": "relevant_feature",
+    "recorded": "Issues",
+    "current": "Teams",
+    "kind": "behaviour",
+    "reason": "The recorded backend created a ticket for Maya Chen although the visitor asked to assign it to Priya, who is not in the team directory. Visitors saw the browser ask to add Priya first; the backend now does the same instead of creating work for someone the visitor did not name."
+  },
+  {
+    "case": "create-open-and-assign",
+    "turn": 0,
+    "field": "speech",
+    "recorded": "I created PIX-143 and assigned it to Maya Chen. I'll open the new demo ticket.",
+    "current": "Priya is not in the team directory yet. I'll open Teams so you can add Priya first.",
+    "kind": "wording",
+    "reason": "The recorded backend created a ticket for Maya Chen although the visitor asked to assign it to Priya, who is not in the team directory. Visitors saw the browser ask to add Priya first; the backend now does the same instead of creating work for someone the visitor did not name."
+  },
+  {
+    "case": "create-open-and-assign",
+    "turn": 0,
+    "field": "validated_action",
+    "recorded": {
+      "type": "CREATE_DEMO_ISSUE",
+      "payload": {
+        "id": "PIX-143",
+        "title": "Investigate customer onboarding issue",
+        "priority": "Medium",
+        "assignee": "Maya Chen",
+        "project": "Issue Triage",
+        "status": "Todo"
+      }
+    },
+    "current": {
+      "type": "HIGHLIGHT_ADD_MEMBER_BUTTON",
+      "payload": {
+        "name": "Priya"
+      }
+    },
+    "kind": "behaviour",
+    "reason": "The recorded backend created a ticket for Maya Chen although the visitor asked to assign it to Priya, who is not in the team directory. Visitors saw the browser ask to add Priya first; the backend now does the same instead of creating work for someone the visitor did not name."
+  },
+  {
+    "case": "create-start-assigned",
+    "turn": 0,
+    "field": "proposed_action",
+    "recorded": {
+      "type": "OPEN_DEMO_ISSUE",
+      "payload": {
+        "issue_id": "LIN-137"
+      }
+    },
+    "current": {
+      "type": "HIGHLIGHT_CREATE_TICKET_BUTTON",
+      "payload": {
+        "assignee": "Noah Patel"
+      }
+    },
+    "kind": "behaviour",
+    "reason": "The recorded backend opened Noah Patel's existing ticket for a request to start a new one. Visitors saw the browser open the ticket form prefilled with Noah Patel; the backend now does the same, prefilling only what the visitor said and creating nothing."
+  },
+  {
+    "case": "create-start-assigned",
+    "turn": 0,
+    "field": "sources",
+    "recorded": [
+      "issues.md",
+      "cycles.md"
+    ],
+    "current": [],
+    "kind": "behaviour",
+    "reason": "A conversational answer is not grounded in documents, so no retrieved sources are attached. Nothing spoken depends on them; before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "create-start-assigned",
+    "turn": 0,
+    "field": "speech",
+    "recorded": "I found LIN-137, assigned to Noah Patel. I'll open that ticket.",
+    "current": "I'll open the ticket form and prefill Noah Patel. Review the details, then create the ticket.",
+    "kind": "wording",
+    "reason": "The recorded backend opened Noah Patel's existing ticket for a request to start a new one. Visitors saw the browser open the ticket form prefilled with Noah Patel; the backend now does the same, prefilling only what the visitor said and creating nothing."
+  },
+  {
+    "case": "create-start-assigned",
+    "turn": 0,
+    "field": "validated_action",
+    "recorded": {
+      "type": "OPEN_DEMO_ISSUE",
+      "payload": {
+        "issue_id": "LIN-137"
+      }
+    },
+    "current": {
+      "type": "HIGHLIGHT_CREATE_TICKET_BUTTON",
+      "payload": {
+        "assignee": "Noah Patel"
+      }
+    },
+    "kind": "behaviour",
+    "reason": "The recorded backend opened Noah Patel's existing ticket for a request to start a new one. Visitors saw the browser open the ticket form prefilled with Noah Patel; the backend now does the same, prefilling only what the visitor said and creating nothing."
+  },
+  {
+    "case": "create-without-owner",
+    "turn": 0,
+    "field": "proposed_action",
+    "recorded": null,
+    "current": {
+      "type": "HIGHLIGHT_CREATE_TICKET_BUTTON",
+      "payload": {}
+    },
+    "kind": "behaviour",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "create-without-owner",
+    "turn": 0,
+    "field": "relevant_feature",
+    "recorded": "Dashboard",
+    "current": "Issues",
+    "kind": "behaviour",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "create-without-owner",
+    "turn": 0,
+    "field": "speech",
+    "recorded": "Who should own this ticket? Name a teammate in this workspace and I'll prepare the form.",
+    "current": "Who should own this ticket? Name a teammate in this workspace and I'll prefill the ticket form.",
+    "kind": "wording",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "create-without-owner",
+    "turn": 0,
+    "field": "validated_action",
+    "recorded": null,
+    "current": {
+      "type": "HIGHLIGHT_CREATE_TICKET_BUTTON",
+      "payload": {}
+    },
+    "kind": "behaviour",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "greeting",
+    "turn": 0,
+    "field": "speech",
+    "recorded": "Hey there! Welcome to Pixel. What would you like to explore — planning, issues, projects, teams, or integrations?",
+    "current": "Hi there. What would you like to explore first in Pixel?",
+    "kind": "wording",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "greeting-with-name",
+    "turn": 0,
+    "field": "speech",
+    "recorded": "Hey Priya! Welcome to Pixel. What would you like to explore first — planning, issues, projects, teams, or integrations?",
+    "current": "Nice to meet you, Priya. What would you like to explore first: planning, tickets, projects, teams, or integrations?",
+    "kind": "wording",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "guided-path",
+    "turn": 0,
+    "field": "proposed_action",
+    "recorded": null,
+    "current": {
+      "type": "OPEN_DASHBOARD",
+      "payload": {}
+    },
+    "kind": "behaviour",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "guided-path",
+    "turn": 0,
+    "field": "relevant_feature",
+    "recorded": null,
+    "current": "Dashboard",
+    "kind": "behaviour",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "guided-path",
+    "turn": 0,
+    "field": "speech",
+    "recorded": "I can help demonstrate planning, issues, projects, teams, and integrations in this product.",
+    "current": "Here is a clean guided path: start with sprint planning, open Maya's ticket, assign it to Noah, create a ticket for a new teammate, then try Salesforce to prove guardrails.",
+    "kind": "wording",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "guided-path",
+    "turn": 0,
+    "field": "validated_action",
+    "recorded": null,
+    "current": {
+      "type": "OPEN_DASHBOARD",
+      "payload": {}
+    },
+    "kind": "behaviour",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "identity",
+    "turn": 0,
+    "field": "speech",
+    "recorded": "I can help demonstrate planning, issues, projects, teams, and integrations in this product.",
+    "current": "I'm Edith, Pixel's live demo guide. I can walk you through planning, tickets, projects, teams, and integrations inside this workspace.",
+    "kind": "wording",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "member-add-named",
+    "turn": 0,
+    "field": "proposed_action",
+    "recorded": null,
+    "current": {
+      "type": "HIGHLIGHT_ADD_MEMBER_BUTTON",
+      "payload": {
+        "name": "Priya Shah"
+      }
+    },
+    "kind": "behaviour",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "member-add-named",
+    "turn": 0,
+    "field": "relevant_feature",
+    "recorded": null,
+    "current": "Teams",
+    "kind": "behaviour",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "member-add-named",
+    "turn": 0,
+    "field": "speech",
+    "recorded": "I can help demonstrate planning, issues, projects, teams, and integrations in this product.",
+    "current": "I'll open Teams so you can add Priya Shah to this workspace.",
+    "kind": "wording",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "member-add-named",
+    "turn": 0,
+    "field": "validated_action",
+    "recorded": null,
+    "current": {
+      "type": "HIGHLIGHT_ADD_MEMBER_BUTTON",
+      "payload": {
+        "name": "Priya Shah"
+      }
+    },
+    "kind": "behaviour",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "member-add-unnamed",
+    "turn": 0,
+    "field": "proposed_action",
+    "recorded": {
+      "type": "OPEN_TEAMS",
+      "payload": {}
+    },
+    "current": {
+      "type": "HIGHLIGHT_ADD_MEMBER_BUTTON",
+      "payload": {}
+    },
+    "kind": "behaviour",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "member-add-unnamed",
+    "turn": 0,
+    "field": "speech",
+    "recorded": "Teams represent engineering groups, ownership boundaries, and capacity. I'll open Teams.",
+    "current": "Who should I add to the team directory?",
+    "kind": "wording",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "member-add-unnamed",
+    "turn": 0,
+    "field": "validated_action",
+    "recorded": {
+      "type": "OPEN_TEAMS",
+      "payload": {}
+    },
+    "current": {
+      "type": "HIGHLIGHT_ADD_MEMBER_BUTTON",
+      "payload": {}
+    },
+    "kind": "behaviour",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "next-step",
+    "turn": 0,
+    "field": "speech",
+    "recorded": "I can help demonstrate planning, issues, projects, teams, and integrations in this product.",
+    "current": "A strong next move is sprint planning. Ask me to show planning, and I'll open the current cycle for Product Engineering Workspace.",
+    "kind": "wording",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "person-all-tickets",
+    "turn": 0,
+    "field": "speech",
+    "recorded": "I found 1 ticket assigned to Maya Chen: LIN-142. I'll show the filtered issue list.",
+    "current": "I found 1 ticket assigned to Maya Chen: LIN-142. I'll show those issues.",
+    "kind": "wording",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "person-follow-up",
+    "turn": 1,
+    "field": "speech",
+    "recorded": "I found 1 ticket assigned to Noah Patel: LIN-137. I'll show the filtered issue list.",
+    "current": "I found 1 ticket assigned to Noah Patel: LIN-137. I'll show those issues.",
+    "kind": "wording",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "scope-outside-person",
+    "turn": 0,
+    "field": "proposed_action",
+    "recorded": {
+      "type": "OPEN_DEMO_ISSUE",
+      "payload": {
+        "issue_id": "LIN-131"
+      }
+    },
+    "current": {
+      "type": "OPEN_ISSUES",
+      "payload": {}
+    },
+    "kind": "security",
+    "reason": "Security: the recorded answer named a person who works in another workspace, confirming they exist outside the selected scope. In legacy authority the previous engine now sees only the selected workspace (5c plan, section 3.3), so that person reads exactly like an unknown one, as the definition engine already answers. Rollback never restores the disclosure."
+  },
+  {
+    "case": "scope-outside-person",
+    "turn": 0,
+    "field": "sources",
+    "recorded": [],
+    "current": [
+      "issues.md",
+      "integrations.md"
+    ],
+    "kind": "security",
+    "reason": "Security: the recorded answer named a person who works in another workspace, confirming they exist outside the selected scope. In legacy authority the previous engine now sees only the selected workspace (5c plan, section 3.3), so that person reads exactly like an unknown one, as the definition engine already answers. Rollback never restores the disclosure."
+  },
+  {
+    "case": "scope-outside-person",
+    "turn": 0,
+    "field": "speech",
+    "recorded": "Avery Brooks is outside Product Engineering Workspace, so I cannot show or change that work here.",
+    "current": "Issues are the core work items used to track bugs, tasks, improvements, and customer-impacting work. I could not find a ticket for Avery, so I'll show the Issues list.",
+    "kind": "security",
+    "reason": "Security: the recorded answer named a person who works in another workspace, confirming they exist outside the selected scope. In legacy authority the previous engine now sees only the selected workspace (5c plan, section 3.3), so that person reads exactly like an unknown one, as the definition engine already answers. Rollback never restores the disclosure."
+  },
+  {
+    "case": "scope-outside-person",
+    "turn": 0,
+    "field": "status",
+    "recorded": "denied",
+    "current": "completed",
+    "kind": "security",
+    "reason": "Security: the recorded answer named a person who works in another workspace, confirming they exist outside the selected scope. In legacy authority the previous engine now sees only the selected workspace (5c plan, section 3.3), so that person reads exactly like an unknown one, as the definition engine already answers. Rollback never restores the disclosure."
+  },
+  {
+    "case": "scope-outside-person",
+    "turn": 0,
+    "field": "validated_action",
+    "recorded": null,
+    "current": {
+      "type": "OPEN_ISSUES",
+      "payload": {}
+    },
+    "kind": "security",
+    "reason": "Security: the recorded answer named a person who works in another workspace, confirming they exist outside the selected scope. In legacy authority the previous engine now sees only the selected workspace (5c plan, section 3.3), so that person reads exactly like an unknown one, as the definition engine already answers. Rollback never restores the disclosure."
+  },
+  {
+    "case": "scope-platform-outside-person",
+    "turn": 0,
+    "field": "proposed_action",
+    "recorded": {
+      "type": "OPEN_DEMO_ISSUE",
+      "payload": {
+        "issue_id": "LIN-142"
+      }
+    },
+    "current": {
+      "type": "OPEN_ISSUES",
+      "payload": {}
+    },
+    "kind": "security",
+    "reason": "Security: the recorded answer named a person who works in another workspace, confirming they exist outside the selected scope. In legacy authority the previous engine now sees only the selected workspace (5c plan, section 3.3), so that person reads exactly like an unknown one, as the definition engine already answers. Rollback never restores the disclosure."
+  },
+  {
+    "case": "scope-platform-outside-person",
+    "turn": 0,
+    "field": "sources",
+    "recorded": [],
+    "current": [
+      "issues.md",
+      "integrations.md"
+    ],
+    "kind": "security",
+    "reason": "Security: the recorded answer named a person who works in another workspace, confirming they exist outside the selected scope. In legacy authority the previous engine now sees only the selected workspace (5c plan, section 3.3), so that person reads exactly like an unknown one, as the definition engine already answers. Rollback never restores the disclosure."
+  },
+  {
+    "case": "scope-platform-outside-person",
+    "turn": 0,
+    "field": "speech",
+    "recorded": "Maya Chen is outside Platform Workspace, so I cannot show or change that work here.",
+    "current": "Issues are the core work items used to track bugs, tasks, improvements, and customer-impacting work. I could not find a ticket for Maya, so I'll show the Issues list.",
+    "kind": "security",
+    "reason": "Security: the recorded answer named a person who works in another workspace, confirming they exist outside the selected scope. In legacy authority the previous engine now sees only the selected workspace (5c plan, section 3.3), so that person reads exactly like an unknown one, as the definition engine already answers. Rollback never restores the disclosure."
+  },
+  {
+    "case": "scope-platform-outside-person",
+    "turn": 0,
+    "field": "status",
+    "recorded": "denied",
+    "current": "completed",
+    "kind": "security",
+    "reason": "Security: the recorded answer named a person who works in another workspace, confirming they exist outside the selected scope. In legacy authority the previous engine now sees only the selected workspace (5c plan, section 3.3), so that person reads exactly like an unknown one, as the definition engine already answers. Rollback never restores the disclosure."
+  },
+  {
+    "case": "scope-platform-outside-person",
+    "turn": 0,
+    "field": "validated_action",
+    "recorded": null,
+    "current": {
+      "type": "OPEN_ISSUES",
+      "payload": {}
+    },
+    "kind": "security",
+    "reason": "Security: the recorded answer named a person who works in another workspace, confirming they exist outside the selected scope. In legacy authority the previous engine now sees only the selected workspace (5c plan, section 3.3), so that person reads exactly like an unknown one, as the definition engine already answers. Rollback never restores the disclosure."
+  },
+  {
+    "case": "scope-platform-own-person",
+    "turn": 0,
+    "field": "proposed_action",
+    "recorded": {
+      "type": "OPEN_DEMO_ISSUE",
+      "payload": {
+        "issue_id": "LIN-131"
+      }
+    },
+    "current": {
+      "type": "FILTER_ISSUES_BY_ASSIGNEE",
+      "payload": {
+        "assignee": "Avery Brooks"
+      }
+    },
+    "kind": "behaviour",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "scope-platform-own-person",
+    "turn": 0,
+    "field": "speech",
+    "recorded": "I found LIN-131, assigned to Avery Brooks. I'll open that ticket.",
+    "current": "I found 1 ticket assigned to Avery Brooks: LIN-131. I'll show those issues.",
+    "kind": "wording",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "scope-platform-own-person",
+    "turn": 0,
+    "field": "validated_action",
+    "recorded": {
+      "type": "OPEN_DEMO_ISSUE",
+      "payload": {
+        "issue_id": "LIN-131"
+      }
+    },
+    "current": {
+      "type": "FILTER_ISSUES_BY_ASSIGNEE",
+      "payload": {
+        "assignee": "Avery Brooks"
+      }
+    },
+    "kind": "behaviour",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "update-outside-person",
+    "turn": 1,
+    "field": "proposed_action",
+    "recorded": {
+      "type": "UPDATE_DEMO_ISSUE",
+      "payload": {
+        "issue_id": "LIN-142",
+        "assignee": "Avery Brooks"
+      }
+    },
+    "current": {
+      "type": "HIGHLIGHT_ADD_MEMBER_BUTTON",
+      "payload": {
+        "name": "Avery"
+      }
+    },
+    "kind": "security",
+    "reason": "Security: the recorded answer named a person who works in another workspace, confirming they exist outside the selected scope. In legacy authority the previous engine now sees only the selected workspace (5c plan, section 3.3), so that person reads exactly like an unknown one, as the definition engine already answers. Rollback never restores the disclosure."
+  },
+  {
+    "case": "update-outside-person",
+    "turn": 1,
+    "field": "relevant_feature",
+    "recorded": "Issues",
+    "current": "Teams",
+    "kind": "security",
+    "reason": "Security: the recorded answer named a person who works in another workspace, confirming they exist outside the selected scope. In legacy authority the previous engine now sees only the selected workspace (5c plan, section 3.3), so that person reads exactly like an unknown one, as the definition engine already answers. Rollback never restores the disclosure."
+  },
+  {
+    "case": "update-outside-person",
+    "turn": 1,
+    "field": "sources",
+    "recorded": [],
+    "current": [
+      "issues.md",
+      "cycles.md"
+    ],
+    "kind": "security",
+    "reason": "Security: the recorded answer named a person who works in another workspace, confirming they exist outside the selected scope. In legacy authority the previous engine now sees only the selected workspace (5c plan, section 3.3), so that person reads exactly like an unknown one, as the definition engine already answers. Rollback never restores the disclosure."
+  },
+  {
+    "case": "update-outside-person",
+    "turn": 1,
+    "field": "speech",
+    "recorded": "Avery Brooks is outside Product Engineering Workspace, so I cannot show or change that work here.",
+    "current": "Avery is not in the team directory yet. I'll open Teams so you can add Avery before assigning LIN-142.",
+    "kind": "security",
+    "reason": "Security: the recorded answer named a person who works in another workspace, confirming they exist outside the selected scope. In legacy authority the previous engine now sees only the selected workspace (5c plan, section 3.3), so that person reads exactly like an unknown one, as the definition engine already answers. Rollback never restores the disclosure."
+  },
+  {
+    "case": "update-outside-person",
+    "turn": 1,
+    "field": "status",
+    "recorded": "denied",
+    "current": "completed",
+    "kind": "security",
+    "reason": "Security: the recorded answer named a person who works in another workspace, confirming they exist outside the selected scope. In legacy authority the previous engine now sees only the selected workspace (5c plan, section 3.3), so that person reads exactly like an unknown one, as the definition engine already answers. Rollback never restores the disclosure."
+  },
+  {
+    "case": "update-outside-person",
+    "turn": 1,
+    "field": "validated_action",
+    "recorded": null,
+    "current": {
+      "type": "HIGHLIGHT_ADD_MEMBER_BUTTON",
+      "payload": {
+        "name": "Avery"
+      }
+    },
+    "kind": "security",
+    "reason": "Security: the recorded answer named a person who works in another workspace, confirming they exist outside the selected scope. In legacy authority the previous engine now sees only the selected workspace (5c plan, section 3.3), so that person reads exactly like an unknown one, as the definition engine already answers. Rollback never restores the disclosure."
+  },
+  {
+    "case": "update-priority",
+    "turn": 1,
+    "field": "speech",
+    "recorded": "Done. I updated LIN-142: priority is now High.",
+    "current": "I'll update LIN-142: priority to High.",
+    "kind": "wording",
+    "reason": "A create or update is now dispatched under a 5b execution key and applied only when the browser sends that key. The recorded answer claimed the change was already done; the reply now proposes it, and the committed receipt is spoken only after the write succeeds (5c plan, sections 3.3 and 9)."
+  },
+  {
+    "case": "update-reassign",
+    "turn": 1,
+    "field": "speech",
+    "recorded": "Done. I updated LIN-142: assignee is now Noah Patel.",
+    "current": "I'll update LIN-142: assignee to Noah Patel.",
+    "kind": "wording",
+    "reason": "A create or update is now dispatched under a 5b execution key and applied only when the browser sends that key. The recorded answer claimed the change was already done; the reply now proposes it, and the committed receipt is spoken only after the write succeeds (5c plan, sections 3.3 and 9)."
+  },
+  {
+    "case": "update-status",
+    "turn": 1,
+    "field": "speech",
+    "recorded": "Done. I updated LIN-142: status is now Done.",
+    "current": "I'll update LIN-142: status to Done.",
+    "kind": "wording",
+    "reason": "A create or update is now dispatched under a 5b execution key and applied only when the browser sends that key. The recorded answer claimed the change was already done; the reply now proposes it, and the committed receipt is spoken only after the write succeeds (5c plan, sections 3.3 and 9)."
+  },
+  {
+    "case": "update-unknown-person",
+    "turn": 1,
+    "field": "proposed_action",
+    "recorded": {
+      "type": "UPDATE_DEMO_ISSUE",
+      "payload": {
+        "issue_id": "LIN-142",
+        "assignee": "Priya"
+      }
+    },
+    "current": {
+      "type": "HIGHLIGHT_ADD_MEMBER_BUTTON",
+      "payload": {
+        "name": "Priya"
+      }
+    },
+    "kind": "behaviour",
+    "reason": "Priya is not in the team directory. Visitors saw the browser offer to add Priya before assigning the ticket; the backend now does the same instead of refusing the update."
+  },
+  {
+    "case": "update-unknown-person",
+    "turn": 1,
+    "field": "relevant_feature",
+    "recorded": "Issues",
+    "current": "Teams",
+    "kind": "behaviour",
+    "reason": "Priya is not in the team directory. Visitors saw the browser offer to add Priya before assigning the ticket; the backend now does the same instead of refusing the update."
+  },
+  {
+    "case": "update-unknown-person",
+    "turn": 1,
+    "field": "sources",
+    "recorded": [],
+    "current": [
+      "issues.md",
+      "cycles.md"
+    ],
+    "kind": "behaviour",
+    "reason": "A conversational answer is not grounded in documents, so no retrieved sources are attached. Nothing spoken depends on them; before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "update-unknown-person",
+    "turn": 1,
+    "field": "speech",
+    "recorded": "That work is outside Product Engineering Workspace, so I cannot show or change it here.",
+    "current": "Priya is not in the team directory yet. I'll open Teams so you can add Priya before assigning LIN-142.",
+    "kind": "wording",
+    "reason": "Priya is not in the team directory. Visitors saw the browser offer to add Priya before assigning the ticket; the backend now does the same instead of refusing the update."
+  },
+  {
+    "case": "update-unknown-person",
+    "turn": 1,
+    "field": "status",
+    "recorded": "denied",
+    "current": "completed",
+    "kind": "behaviour",
+    "reason": "Priya is not in the team directory. Visitors saw the browser offer to add Priya before assigning the ticket; the backend now does the same instead of refusing the update."
+  },
+  {
+    "case": "update-unknown-person",
+    "turn": 1,
+    "field": "validated_action",
+    "recorded": null,
+    "current": {
+      "type": "HIGHLIGHT_ADD_MEMBER_BUTTON",
+      "payload": {
+        "name": "Priya"
+      }
+    },
+    "kind": "behaviour",
+    "reason": "Priya is not in the team directory. Visitors saw the browser offer to add Priya before assigning the ticket; the backend now does the same instead of refusing the update."
+  },
+  {
+    "case": "update-without-target",
+    "turn": 0,
+    "field": "sources",
+    "recorded": [
+      "cycles.md",
+      "issues.md"
+    ],
+    "current": [],
+    "kind": "behaviour",
+    "reason": "A conversational answer is not grounded in documents, so no retrieved sources are attached. Nothing spoken depends on them; before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "update-without-target",
+    "turn": 0,
+    "field": "speech",
+    "recorded": "I can help demonstrate planning, issues, projects, teams, and integrations in this product.",
+    "current": "Which ticket should I update: Maya's ticket, Noah's ticket, or the issue currently open?",
+    "kind": "wording",
+    "reason": "Before 5c the browser answered this turn itself, so this recorded backend answer was never shown to a visitor. Every message now reaches the backend (5c plan, section 2.3), and the backend gives the decision visitors actually saw, recorded in browser_decisions.json."
+  },
+  {
+    "case": "what-changed",
+    "turn": 1,
+    "field": "speech",
+    "recorded": "I can help demonstrate planning, issues, projects, teams, and integrations in this product.",
+    "current": "Nothing has changed in this conversation yet.",
+    "kind": "wording",
+    "reason": "Only a change the execution ledger committed is a change (5b plan, section 8.4). The browser reported opening a ticket as a change and the recorded backend gave a generic reply; nothing was changed in this conversation, and the answer now says so."
+  }
+]

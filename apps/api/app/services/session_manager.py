@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from app.db import get_connection, use_connection
 from app.definitions.sessions import SessionPin
+from app.engine.execution import ExecutionLedger, ExecutionOwner
 from app.schemas import SessionSummary, Signal
 from app.services.demo_instances import DemoContext
 
@@ -58,10 +59,8 @@ class SessionManager:
                     owner["instance_id"], owner["instance_generation"],
                 ) != (user_id, tenant_id, *expected_instance):
                     return False
-                connection.execute(
-                    "update conversation_owners set scope_id = ? where session_id = ?",
-                    (scope_id or "", session_id),
-                )
+                # An existing session's workspace moves only with an accepted, monotonic turn
+                # activation (5b plan, section 6.1 step 4): a stale or delayed request never moves it.
                 return True
 
             connection.execute(
@@ -143,8 +142,31 @@ class SessionManager:
             owner["user_id"], owner["customer_id"], owner["instance_id"], owner["instance_generation"]
         ) == (user_id, tenant_id, *expected_instance))
 
-    def activate_turn(self, session_id: str, turn_id: int) -> bool:
+    def activate_turn(
+        self, session_id: str, turn_id: int, *, owner: ExecutionOwner | None = None,
+        scope_id: str | None = None,
+    ) -> bool:
+        """Activate a newer turn, select its workspace and supersede older keys, atomically.
+
+        One transaction (5b plan, section 6.1 step 4): the session's recorded owner is read and,
+        when the caller names an owner, must match it; the turn becomes active only if it is newer
+        than every earlier turn; only then is the workspace recorded and are this owner's unused
+        keys from older turns cancelled (`superseded`), whatever workspace they were issued in.
+        Returns False, writing nothing, for a stale or foreign turn.
+        """
         with get_connection() as connection:
+            connection.execute("begin immediate")
+            recorded = connection.execute(
+                "select user_id, customer_id, product_id, instance_id, instance_generation "
+                "from conversation_owners where session_id = ?",
+                (session_id,),
+            ).fetchone()
+            session_owner = None if recorded is None else ExecutionOwner(
+                recorded["customer_id"], recorded["product_id"], recorded["user_id"],
+                recorded["instance_id"], recorded["instance_generation"],
+            )
+            if owner is not None and session_owner != owner:
+                return False
             cursor = connection.execute(
                 """
                 update sessions
@@ -154,7 +176,16 @@ class SessionManager:
                 """,
                 (turn_id, turn_id, session_id, turn_id),
             )
-            return cursor.rowcount == 1
+            if cursor.rowcount != 1:
+                return False
+            if session_owner is not None:
+                if scope_id is not None:
+                    connection.execute(
+                        "update conversation_owners set scope_id = ? where session_id = ?",
+                        (scope_id, session_id),
+                    )
+                ExecutionLedger().supersede(connection, session_owner, session_id, turn_id)
+            return True
 
     def is_active_turn(self, session_id: str, turn_id: int) -> bool:
         with get_connection() as connection:
@@ -164,12 +195,33 @@ class SessionManager:
             ).fetchone()
         return bool(row and row["active_turn_id"] == turn_id)
 
-    def cancel_turn(self, session_id: str, turn_id: int) -> bool:
+    def cancel_turn(self, session_id: str, turn_id: int, *, owner: ExecutionOwner | None = None) -> bool:
+        """Cancel one turn and its unused keys, in one owner-bound transaction (section 6.3).
+
+        The active turn is cleared only if it is this turn. Keys are cancelled only for exactly
+        this turn and only for the session's recorded owner (`user_cancelled`), in whichever
+        workspaces they were issued; no workspace is taken from the client and no record is read.
+        Returns True when the turn was the active one.
+        """
         with get_connection() as connection:
+            connection.execute("begin immediate")
+            recorded = connection.execute(
+                "select user_id, customer_id, product_id, instance_id, instance_generation "
+                "from conversation_owners where session_id = ?",
+                (session_id,),
+            ).fetchone()
+            session_owner = None if recorded is None else ExecutionOwner(
+                recorded["customer_id"], recorded["product_id"], recorded["user_id"],
+                recorded["instance_id"], recorded["instance_generation"],
+            )
+            if owner is not None and session_owner != owner:
+                return False
             cursor = connection.execute(
                 "update sessions set active_turn_id = null where id = ? and active_turn_id = ?",
                 (session_id, turn_id),
             )
+            if session_owner is not None:
+                ExecutionLedger().cancel_turn(connection, session_owner, session_id, turn_id)
             return cursor.rowcount == 1
 
     def complete_turn(self, session_id: str, turn_id: int) -> None:
@@ -183,17 +235,29 @@ class SessionManager:
                 (session_id, turn_id),
             )
 
-    def store_message(self, session_id: str, turn_id: int, role: str, content: str) -> None:
+    def store_message(self, session_id: str, turn_id: int, role: str, content: str,
+                       scope_id: str | None = None) -> None:
         with get_connection() as connection:
             connection.execute(
                 """
-                insert into messages(id, session_id, turn_id, role, content, created_at)
-                values (?, ?, ?, ?, ?, ?)
+                insert into messages(id, session_id, turn_id, role, content, created_at, scope_id)
+                values (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (str(uuid4()), session_id, turn_id, role, content, utc_now()),
+                (str(uuid4()), session_id, turn_id, role, content, utc_now(), scope_id),
             )
 
-    def store_signals(self, session_id: str, turn_id: int, signals: list[Signal]) -> None:
+    def recent_user_messages(self, session_id: str, limit: int = 20) -> list[str]:
+        """This session's own recent visitor messages, newest first (already stored; nothing copied)."""
+        with get_connection() as connection:
+            rows = connection.execute(
+                "select content from messages where session_id = ? and role = 'user' "
+                "order by turn_id desc, created_at desc limit ?",
+                (session_id, limit),
+            ).fetchall()
+        return [row["content"] for row in rows]
+
+    def store_signals(self, session_id: str, turn_id: int, signals: list[Signal],
+                       scope_id: str | None = None) -> None:
         if not signals:
             return
 
@@ -201,8 +265,8 @@ class SessionManager:
             for signal in signals:
                 connection.execute(
                     """
-                    insert into signals(id, session_id, turn_id, type, value, confidence, created_at)
-                    values (?, ?, ?, ?, ?, ?, ?)
+                    insert into signals(id, session_id, turn_id, type, value, confidence, created_at, scope_id)
+                    values (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         str(uuid4()),
@@ -212,6 +276,7 @@ class SessionManager:
                         signal.value,
                         signal.confidence,
                         utc_now(),
+                        scope_id,
                     ),
                 )
 

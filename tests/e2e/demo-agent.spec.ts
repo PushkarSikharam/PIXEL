@@ -339,11 +339,12 @@ test("keeps Edith inside the selected workspace scope", async ({ page }) => {
     "There are 2 team members in Platform Workspace"
   );
 
+  // Security (5c plan, section 3.3): someone in another workspace reads exactly like an unknown
+  // person; their ticket never opens and their name is never confirmed.
   await sendChat(page, "open Maya's ticket");
-  await expect(page.getByTestId("current-view-title")).toHaveText("Teams");
-  await expect(page.getByTestId("transcript")).toContainText(
-    "Maya Chen is outside Platform Workspace"
-  );
+  await expect(page.getByTestId("transcript")).toContainText("I could not find a ticket for Maya");
+  await expect(page.getByTestId("transcript")).not.toContainText("Maya Chen");
+  await expect(page.getByTestId("selected-issue-id")).toHaveCount(0);
 
   await sendChat(page, "open Avery's ticket");
   await expect(page.getByTestId("current-view-title")).toHaveText("Issue Detail");
@@ -375,16 +376,16 @@ test("sends the selected workspace scope to the agent API", async ({ page }) => 
   expect(capturedWorkspaceScopeId).toBe("workspace-platform");
 });
 
-test("blocks local requests for people outside the current workspace", async ({ page }) => {
+test("never reveals or creates work for people outside the current workspace", async ({ page }) => {
   await openApp(page);
 
   await sendChat(page, "create a ticket for Avery");
 
-  await expect(page.getByTestId("current-view-title")).toHaveText("Dashboard");
-  await expect(page.getByTestId("transcript")).toContainText(
-    "Avery Brooks is outside Product Engineering Workspace"
-  );
-  await expect(page.getByTestId("transcript")).not.toContainText("I created");
+  // Avery works in another workspace, so here Avery reads like anyone unknown: nothing is created
+  // and nothing confirms Avery exists elsewhere.
+  await expect(page.getByTestId("transcript")).toContainText("Avery is not in the team directory yet");
+  await expect(page.getByTestId("transcript")).not.toContainText("Avery Brooks");
+  await expect(page.getByTestId("transcript")).not.toContainText("Created");
 });
 
 test("collapses and expands the assistant sidebar", async ({ page }) => {
@@ -680,16 +681,16 @@ test("updates the current issue from natural follow-up commands", async ({ page 
   await expect(page.getByTestId("current-view-title")).toHaveText("Issue Detail");
   await expect(page.getByTestId("assignee-select")).toHaveValue("Noah Patel");
   await expect(page.getByText("Updated now")).toBeVisible();
-  await expect(page.getByTestId("transcript")).toContainText(
-    "Done. I updated LIN-142: assignee is now Noah Patel."
-  );
+  // The receipt is spoken only after the keyed change commits; nothing claims it earlier.
+  await expect(page.getByTestId("transcript")).toContainText("Updated LIN-142: assignee to Noah Patel.");
+  await expect(page.getByTestId("transcript")).not.toContainText("Done. I updated");
 
   await sendChat(page, "make it low priority");
   const prioritySelect = page.locator(".property-row").filter({ hasText: "Priority" }).locator("select");
   await expect(prioritySelect).toHaveValue("Low");
 
   await sendChat(page, "what did we just change?");
-  await expect(page.getByTestId("transcript")).toContainText("updated issue LIN-142");
+  await expect(page.getByTestId("transcript")).toContainText("The most recent change: updated LIN-142.");
 });
 
 test("creates a demo ticket and opens the new issue", async ({ page }) => {
@@ -702,7 +703,8 @@ test("creates a demo ticket and opens the new issue", async ({ page }) => {
   await expect(page.getByTestId("selected-issue-id")).toHaveText("PIX-143");
   await expect(page.getByTestId("assignee-control")).toContainText("Maya Chen");
   await expect(page.getByText("Created now")).toBeVisible();
-  await expect(page.getByTestId("transcript")).toContainText("I created PIX-143");
+  await expect(page.getByTestId("transcript")).toContainText("Created PIX-143:");
+  await expect(page.getByTestId("transcript")).not.toContainText("I created");
   await expect(page.getByTestId("activity-popup")).toContainText(
     "Saved to Product Engineering Workspace: created PIX-143 for Maya Chen."
   );
@@ -845,7 +847,7 @@ test("handles voice typo input and voice-only demo issue creation", async ({ pag
 
   await expect(page.getByTestId("turn-status")).toHaveText("Ready");
   await expect(page.getByTestId("selected-issue-id")).toContainText(/^PIX-\d+$/);
-  await expect(page.getByTestId("transcript")).toContainText("I created PIX-");
+  await expect(page.getByTestId("transcript")).toContainText("Created PIX-");
   await expect(page.getByTestId("current-view-title")).toHaveText("Issue Detail");
 });
 

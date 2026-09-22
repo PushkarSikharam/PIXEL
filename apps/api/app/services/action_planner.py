@@ -182,7 +182,18 @@ class ActionPlanner:
         if selected_issue_id and re.search(r"\b(this|that|it|current|same)\b", message, re.IGNORECASE):
             return selected_issue_id
 
-        person_issue = find_issue_by_person(message, data)
+        # "Assign Maya's ticket to Noah": the ticket is Maya's. The person after "to" is the new
+        # owner and is never read as the ticket to change.
+        owner = re.search(r"\b([a-zA-Z]+)'s\s+(?:ticket|issue|bug)\b", message, re.IGNORECASE)
+        if owner:
+            owned = find_issue_by_person(owner.group(1), data)
+            if owned:
+                return owned.id
+        without_new_owner = re.sub(
+            r"\b(?:assign(?:ed)?\s+(?:it\s+|this\s+)?to|owner is|assignee is|reassign\s+\S+\s+to)\s+[a-zA-Z]+(?:\s+[a-zA-Z]+)?",
+            " ", message, flags=re.IGNORECASE,
+        )
+        person_issue = find_issue_by_person(without_new_owner, data)
         if person_issue:
             return person_issue.id
 

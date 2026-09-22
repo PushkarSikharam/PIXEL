@@ -43,7 +43,7 @@ class NormalizedMessage:
 
     @property
     def corrected(self) -> bool:
-        """The visitor corrected themselves ("not cycles, show me the issues"; "actually, cycles")."""
+        """The visitor corrected themselves ("not that view, show me the other"; "actually, the other one")."""
         return self.focused != self.full
 
     @property

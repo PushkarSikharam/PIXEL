@@ -917,20 +917,17 @@ test("answers identity questions without generic routing", async ({ page }) => {
 
   await sendChat(page, "Hii there who are u");
 
-  // Quoted names are an open owner decision (5d plan revision 2, section 5).
   await expect(page.getByTestId("transcript")).toContainText(
-    said("I'm Edith, Pixel's live demo guide.", 'I am "Edith", the demo guide for "Pixel".')
+    said("I'm Edith, Pixel's live demo guide.", "I'm Edith, your guide to Pixel.")
   );
 });
 
 test("handles greetings, capabilities, and visitor introduction naturally", async ({ page }) => {
   await openApp(page);
 
-  // Quoted names are an open owner decision (5d plan revision 2, section 5).
   await sendChat(page, "Hii There?");
   await expect(page.getByTestId("transcript")).toContainText(
-    said("Hi there. What would you like to explore first in Pixel?",
-         'Welcome to "Pixel". I am "Edith", your demo guide.')
+    said("Hi there. What would you like to explore first in Pixel?", "Hi, I'm Edith, your guide to Pixel.")
   );
 
   await sendChat(page, "What are you capable of doing?");
@@ -940,13 +937,13 @@ test("handles greetings, capabilities, and visitor introduction naturally", asyn
 
   await sendChat(page, "HI there i am Pushkar!");
   await expect(page.getByTestId("transcript")).toContainText(
-    said("Nice to meet you, Pushkar.", "Hello Pushkar, welcome to")
+    said("Nice to meet you, Pushkar.", "Nice to meet you, Pushkar.")
   );
 
   await sendChat(page, "Hi");
   await expect(page.getByTestId("transcript")).toContainText(
     said("Hi Pushkar. What would you like to explore next in Pixel?",
-         'Hello Pushkar, welcome to "Pixel". What would you like to explore?')
+         "Hi Pushkar, good to see you again. What would you like to explore next in Pixel?")
   );
 });
 

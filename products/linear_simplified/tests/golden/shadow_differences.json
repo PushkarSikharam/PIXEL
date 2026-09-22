@@ -191,13 +191,6 @@
   {
     "case": "correction-negation",
     "turn": 0,
-    "field": "speech",
-    "kind": "platform_wording",
-    "reason": "Revision 4.3: the platform words every reply. Status and action are identical to the live turn; only the sentence differs, and the live sentence is product-written copy."
-  },
-  {
-    "case": "correction-negation",
-    "turn": 0,
     "field": "intent_trace",
     "kind": "platform_wording",
     "reason": "The trace decisions agree (role, tool, goal, pain point, feature, status). Only the live engine's own reason text, intent label and confidence number differ, which are wording."

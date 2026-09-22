@@ -68,7 +68,7 @@ Other defects found and fixed while building this slice:
 
 Filled in from the final local run of this change; Linux CI on the pull request is the gate.
 
-- API suite: 964 tests pass (3 skipped), including the cutover visitor script run in-process under both authorities. Product suite: 104 tests pass. Web unit tests: 44 pass; type-check clean.
+- API suite: 965 tests pass (3 skipped), including the cutover visitor script run in-process under both authorities. Product suite: 104 tests pass. Web unit tests: 44 pass; type-check clean.
 - Browser suite (Playwright, isolated servers): 116 tests pass under legacy authority and 116 under
   `PIXEL_ENGINE_MODE=definition`, each including the browser golden checked strictly against its
   own reviewed list.
@@ -156,10 +156,26 @@ Port rows completed after that review, each tested under definition authority:
 
 Still open:
 
-- **Owner decisions** (5d plan revision 2, section 5): quoted names in replies; the guided path;
-  the correction wording; the "which ticket" wording. The browser golden list names each as pending.
+- None of the owner decisions: all are recorded and applied (below).
 - **Not ported:** offering to add an unknown assignee during an update. The definition engine says
   it cannot find the person and changes nothing, which is safe; the offer is a convenience.
+
+## Owner decisions (5d plan revision 2, section 5)
+
+Recorded from the product owner and applied under definition authority; each is pinned by
+`test_the_owners_wording_decisions` and reviewed in `golden/browser_differences_definition.json`.
+
+| Row | Decision | What the visitor now hears |
+| --- | --- | --- |
+| Quoted names | Plain names | "I'm Edith, your guide to Pixel. Ask me what I can do, or tell me what you'd like to see." Capabilities are listed in plain words ("create a ticket, change a ticket's assignee, priority or status, ..."). |
+| Guided path | Conversational, whatever suits the chat | "Here's a good way to explore Pixel: open Cycles, then open Integrations, then create a ticket, then find Add member in Teams, then ask me for something outside Pixel to see how I stay in scope." Drawn from the caller's offers, so it never names a person or record. |
+| Correction | Acknowledge it | "Got it. I'll switch to Issues." |
+| Nothing open | Whatever feels more human | "Which ticket do you mean? Open it first, or tell me which one." |
+| Create without an owner | As legacy | Asks who should own it and highlights the create button (Linear v5). |
+
+A visitor who introduced themselves is greeted again as "Hi Priya, good to see you again. What
+would you like to explore next in Pixel?"; the first reply to an introduction stays "Nice to meet
+you, Priya."
 
 ## Open before sign-off (operator runbook)
 

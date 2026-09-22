@@ -222,13 +222,15 @@ class DefinitionAuthorityConversationTest(EngineCutoverFixture):
                          "I can't find Priya in this workspace. I'll open Teams and highlight Add member.")
 
     def test_a_later_greeting_uses_the_name_the_visitor_gave(self):
-        self.assertTrue(self.say("HI there i am Pushkar!", session="named")["speech"].startswith("Hello Pushkar"))
-        self.assertTrue(self.say("Hi", session="named", turn_id=2)["speech"].startswith("Hello Pushkar"))
+        self.assertEqual(self.say("HI there i am Pushkar!", session="named")["speech"],
+                         "Nice to meet you, Pushkar. What would you like to explore in Pixel?")
+        self.assertEqual(self.say("Hi", session="named", turn_id=2)["speech"],
+                         "Hi Pushkar, good to see you again. What would you like to explore next in Pixel?")
         self.assertNotIn("Pushkar", self.say("Hi", session="someone-else")["speech"])
 
     def test_the_next_step_is_drawn_from_the_open_view(self):
         self.assertEqual(self.say("what should I try next", page="teams")["speech"],
-                         'From Teams, you could highlight "Add member" in the "Teams" view.')
+                         "From Teams, you could show you where Add member is in Teams.")
         self.assertEqual(self.say("what next", session="home", page="dashboard")["speech"],
                          "Ask what I can do in Pixel to see where to go next.")
         # A page the definition does not declare is never trusted.
@@ -248,6 +250,20 @@ class DefinitionAuthorityConversationTest(EngineCutoverFixture):
         nobody = self.say("open Zed's ticket", scope=PLATFORM, session="zed")["speech"]
         self.assertEqual(elsewhere, "I can't find Maya in this workspace. I'll open Issues.")
         self.assertEqual(elsewhere.replace("Maya", "Zed"), nobody)
+
+    def test_the_owners_wording_decisions(self):
+        """5d plan revision 2, section 5: the four decisions, as the visitor hears them."""
+        identity = self.say("who are you?", session="identity")["speech"]
+        self.assertTrue(identity.startswith("I'm Edith, your guide to Pixel."), identity)
+        self.assertNotIn('"', identity + self.say("what can you do?", session="caps")["speech"])
+        route = self.say("Run the evaluator demo", session="route")["speech"]
+        self.assertTrue(route.startswith("Here's a good way to explore Pixel: open "), route)
+        self.assertIn("then ask me for something outside Pixel to see how I stay in scope.", route)
+        self.assertEqual(self.say("not cycles, show me the issues", session="fix")["speech"],
+                         "Got it. I'll switch to Issues.")
+        self.assertEqual(self.say("show me the issues", session="plain")["speech"], "I'll open Issues.")
+        self.assertEqual(self.say("make it high priority", session="which")["speech"],
+                         "Which ticket do you mean? Open it first, or tell me which one.")
 
     def test_a_request_after_a_self_description_is_still_served(self):
         body = self.say("I'm a manager, show me the projects")

@@ -76,9 +76,9 @@
     "turn": 0,
     "field": "reply",
     "kind": "wording",
-    "reason": "The recorded reply began with product-written copy about cycles. Under definition authority product copy is never spoken (4b): the platform says only what it does, \"I'll open Cycles\". The same view opens. The corrected clause still decides the view.",
+    "reason": "The same view opens. The recorded reply began with product-written copy about cycles; the platform acknowledges the correction instead (\"Got it. I'll switch to Cycles\"). Owner decision (5d plan revision 2, section 5): a correction is acknowledged.",
     "recorded": "Cycles organize work into time-boxed planning periods so engineering teams can decide what to focus on, track progress, and review what shipped. I'll show you the current cycle.",
-    "current": "I'll open Cycles."
+    "current": "Got it. I'll switch to Cycles."
   },
   {
     "case": "correction-negation",
@@ -88,15 +88,6 @@
     "reason": "5c moves this formerly browser-local demo decision into the backend authority path. The recorded visible outcome remains reviewed separately where it changed.",
     "recorded": "browser",
     "current": "backend"
-  },
-  {
-    "case": "correction-negation",
-    "turn": 0,
-    "field": "reply",
-    "kind": "wording",
-    "reason": "The same view opens. The recorded reply acknowledged the correction (\"Got it. I'll switch to Issues.\"); the platform says only \"I'll open Issues\". Owner decision pending (5d plan revision 2, section 5, row \"correction\").",
-    "recorded": "Got it. I'll switch to Issues.",
-    "current": "I'll open Issues."
   },
   {
     "case": "person-ticket",
@@ -420,9 +411,9 @@
     "turn": 0,
     "field": "reply",
     "kind": "wording",
-    "reason": "With nothing open, both engines ask which record to update and change nothing. The recorded question listed Maya's and Noah's tickets; the platform asks \"Which ticket do you mean?\". Owner decision pending (5d plan revision 2, section 5, row \"update with nothing open\").",
+    "reason": "With nothing open, both engines ask which record is meant and change nothing. The recorded question listed Maya's and Noah's tickets; the platform asks \"Which ticket do you mean? Open it first, or tell me which one\", which names no one and says how to answer. Owner decision (5d plan revision 2, section 5): the question says how to answer it.",
     "recorded": "Which ticket should I update: Maya's ticket, Noah's ticket, or the issue currently open?",
-    "current": "Which ticket do you mean?"
+    "current": "Which ticket do you mean? Open it first, or tell me which one."
   },
   {
     "case": "create-known-owner",
@@ -809,9 +800,9 @@
     "turn": 0,
     "field": "reply",
     "kind": "wording",
-    "reason": "Both greet and ask what to explore. The platform's 4b greeting quotes the product and assistant names. Owner decision pending (5d plan revision 2, section 5, row \"quoted names in replies\").",
+    "reason": "Both greet and ask what to explore. The platform introduces the assistant by name (\"Hi, I'm Edith, your guide to Pixel. What would you like to explore?\"). Owner decision (5d plan revision 2, section 5): names are spoken plainly.",
     "recorded": "Hi there. What would you like to explore first in Pixel?",
-    "current": "Welcome to \"Pixel\". I am \"Edith\", your demo guide. What would you like to explore?"
+    "current": "Hi, I'm Edith, your guide to Pixel. What would you like to explore?"
   },
   {
     "case": "greeting-with-name",
@@ -827,9 +818,9 @@
     "turn": 0,
     "field": "reply",
     "kind": "wording",
-    "reason": "Both greet Priya by name and ask what to explore; the wording differs and the platform quotes the product name. Owner decision pending (5d plan revision 2, section 5, row \"quoted names in replies\").",
+    "reason": "Both greet Priya by name and ask what to explore. The recorded reply listed five product areas; the platform asks \"Nice to meet you, Priya. What would you like to explore in Pixel?\". Owner decision (5d plan revision 2, section 5): names are spoken plainly.",
     "recorded": "Nice to meet you, Priya. What would you like to explore first: planning, tickets, projects, teams, or integrations?",
-    "current": "Hello Priya, welcome to \"Pixel\". What would you like to explore?"
+    "current": "Nice to meet you, Priya. What would you like to explore in Pixel?"
   },
   {
     "case": "identity",
@@ -845,9 +836,9 @@
     "turn": 0,
     "field": "reply",
     "kind": "wording",
-    "reason": "Both answer as Edith, the demo guide for Pixel. The platform's 4b wording quotes the names and does not list product areas. Owner decision pending (5d plan revision 2, section 5, row \"quoted names in replies\").",
+    "reason": "Both answer as Edith, Pixel's guide. The recorded reply listed product areas; the platform says \"I'm Edith, your guide to Pixel. Ask me what I can do, or tell me what you'd like to see\". Owner decision (5d plan revision 2, section 5): names are spoken plainly.",
     "recorded": "I'm Edith, Pixel's live demo guide. I can walk you through planning, tickets, projects, teams, and integrations inside this workspace.",
-    "current": "I am \"Edith\", the demo guide for \"Pixel\"."
+    "current": "I'm Edith, your guide to Pixel. Ask me what I can do, or tell me what you'd like to see."
   },
   {
     "case": "capabilities",
@@ -863,9 +854,9 @@
     "turn": 0,
     "field": "reply",
     "kind": "wording",
-    "reason": "The platform lists what this caller can actually do from the definition's filtered offers, and quotes entity, field and view names, where the recorded reply was product-written. Owner decision pending (5d plan revision 2, section 5, row \"quoted names in replies\").",
+    "reason": "The platform lists what this caller can actually do, from the definition's filtered offers and in plain words, where the recorded reply was product-written. Owner decision (5d plan revision 2, section 5): names are spoken plainly.",
     "recorded": "I can guide this Pixel demo through Product Engineering Workspace: planning, issues, projects, teams, and integrations. I can open views, find tickets, update issue fields, create demo records, and block work outside this scope.",
-    "current": "Here's what I can do in Pixel: create a \"Ticket\" record with \"assignee\", \"priority\", \"project\", \"status\", \"title\", highlight \"Add member\" in the \"Teams\" view, highlight \"Assignee\" in the \"Issue Detail\" view, highlight \"Create ticket\" in the \"Issues\" view, highlight \"Cycle progress\" in the \"Cycles\" view and highlight \"GitHub\" in the \"Integrations\" view."
+    "current": "Here's what I can do in Pixel: create a ticket, change a ticket's assignee, priority or status, open a ticket, list tickets by assignee, show the system architecture and open Cycles."
   },
   {
     "case": "count-team-members",
@@ -962,9 +953,9 @@
     "turn": 0,
     "field": "reply",
     "kind": "wording",
-    "reason": "Both open the Dashboard. The recorded reply was a scripted path naming Maya, Noah and Salesforce; the platform draws the starting points from the filtered offers, so it never names people or products another workspace or tenant cannot see. Owner decision pending (5d plan revision 2, section 5, row \"guided path\").",
+    "reason": "Both open the Dashboard. The recorded reply was a scripted path naming Maya, Noah and Salesforce; the platform offers a conversational route through what this caller can do, ending with the guardrail, so it never names people or products another workspace or tenant cannot see. Owner decision (5d plan revision 2, section 5): a conversational guided path.",
     "recorded": "Here is a clean guided path: start with sprint planning, open Maya's ticket, assign it to Noah, create a ticket for a new teammate, then try Salesforce to prove guardrails.",
-    "current": "A good place to start in Pixel: create a \"Ticket\" record with \"assignee\", \"priority\", \"project\", \"status\", \"title\", highlight \"Add member\" in the \"Teams\" view, highlight \"Assignee\" in the \"Issue Detail\" view, highlight \"Create ticket\" in the \"Issues\" view, highlight \"Cycle progress\" in the \"Cycles\" view and highlight \"GitHub\" in the \"Integrations\" view. I'll open Dashboard."
+    "current": "Here's a good way to explore Pixel: open Cycles, then open Integrations, then create a ticket, then find Add member in Teams, then ask me for something outside Pixel to see how I stay in scope. I'll open Dashboard."
   },
   {
     "case": "architecture",

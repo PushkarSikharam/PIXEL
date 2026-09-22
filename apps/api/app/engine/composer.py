@@ -129,10 +129,10 @@ PLATFORM_NOTHING_OFFERED = "There's nothing I can do for you in {product} right 
 # kind of record (an entity label or plural, chosen by the caller for the count); every other
 # value is supplied by the platform from what it actually found or did.
 PLATFORM_CONVERSATION_TEMPLATES: Mapping[tuple[Stage, str], str] = {
-    # Owner decision: names are spoken plainly ("I'm Edith"), never in quotation marks.
+    # Owner decision: names are spoken plainly ("I'm <assistant>"), never in quotation marks.
     (Stage.ANSWER, "greeting"): "Hi, I'm {assistant}, your guide to {product}. What would you like to explore?",
     (Stage.ANSWER, "greeting_named"): "Nice to meet you, {visitor}. What would you like to explore in {product}?",
-    (Stage.ANSWER, "greeting_again"): "Hi {visitor}, good to see you again. What would you like to explore next?",
+    (Stage.ANSWER, "greeting_again"): "Hi {visitor}, good to see you again. What would you like to explore next in {product}?",
     (Stage.ANSWER, "profile_acknowledged"): "Thanks, that helps. What would you like to explore first in {product}?",
     (Stage.ANSWER, "identity"): "I'm {assistant}, your guide to {product}. Ask me what I can do, or tell me what you'd like to see.",
     (Stage.CLARIFICATION, "clarify_create"): "Which type of record would you like to create?",

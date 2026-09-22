@@ -371,7 +371,9 @@ class RuntimeDefenceTest(unittest.TestCase):
         offers = offerable(definition, snapshot(), CapabilityPolicy(
             translatable=lambda key: key == "open_contacts", permitted=lambda key: True))
         reply = composer.capabilities(offers)
-        self.assertEqual(reply.speech, 'Here\'s what I can do in Sample Desk: open the "Contacts" view.')
+        # Labels are spoken plainly (owner decision, 5d plan revision 2, section 5), and only after
+        # passing the platform's name check.
+        self.assertEqual(reply.speech, "Here's what I can do in Sample Desk: open Contacts.")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,432 @@
+# Product Definition: the Linear-style planning demo.
+# Reusable product semantics only. Organization records, people and knowledge never belong here.
+# Published versions are immutable: change this product by adding a version, not by editing one.
+#
+# v5 (Milestone 3.2, slice 5c) extends v4, which is published and may be registered in any
+# environment that ran it; v4 is therefore left exactly as it was merged. v5 adds, and changes
+# nothing else:
+#   - vocabulary: "hii" reads as "hi" and "u" as "you";
+#   - "where/how to create tickets" and "how do I assign this issue" highlight the matching control;
+#   - "create a ticket" with no owner, target or assignment highlights the create button and asks
+#     who should own it;
+#   - "how many ... team members / projects" open Teams or Projects with a count answer;
+#   - "back to GitHub integrations" highlights GitHub;
+#   - "add a new member" no longer matches when the message is about a ticket.
+#   - "open the dashboard" opens the dashboard (no version routed the dashboard by name).
+# Priority defaults to Medium and status to Todo; the project is always asked for (as in v4).
+
+definition:
+  definition_id: linear_simplified
+  version: 5
+  ownership: platform_shared
+
+identity:
+  product_name: Pixel
+  assistant_name: Edith
+  persona: >-
+    A warm, concise product guide who explains planning, tickets, projects, teams and
+    integrations plainly, and only offers actions this product supports.
+  voice_style: >-
+    You are Edith, a soft-spoken, warm, gentle, and natural conversational assistant for Pixel.
+    Speak in a soft, calm, friendly female voice with unhurried conversational cadence.
+  # Required by the schema, but not spoken: the platform words the greeting.
+  greeting: Welcome to {product}. I'm {assistant}.
+
+vocabulary:
+  terms: [assignee, assign, assigned, assignment, bug, bugs, capacity, cycle, cycles, developer,
+          github, integration, integrations, issue, issues, jira, linear, planning, project,
+          projects, roadmap, slack, sprint, team, ticket, tickets, triage, workload]
+  corrections:
+    assigne: assignee
+    assigneee: assignee
+    cicle: cycle
+    cicles: cycles
+    git hub: github
+    hii: hi
+    issus: issues
+    jiraa: jira
+    planing: planning
+    projet: project
+    projets: projects
+    sprit: sprint
+    tikcet: ticket
+    tiket: ticket
+    tikit: ticket
+    tkt: ticket
+    u: you
+  negatable_terms: [cycle, cycles, sprint, planning, issue, issues, ticket, tickets, project,
+                    projects, team, teams, integration, integrations, github]
+  correction_markers: [actually, instead, rather, i mean, sorry, scratch that]
+
+entities:
+  project:
+    label: Project
+    plural: Projects
+    id: { strategy: prefix, prefix: PRJ }
+    title_field: name
+    summary_fields: [status, progress]
+    fields:
+      name: { type: text, required: true, min: 1, max: 200 }
+      description: { type: text, max: 10000 }
+      progress: { type: integer, required: true, min: 0, max: 100 }
+      status: { type: enum, required: true, values: [Planned, Active, At risk, Completed] }
+      lead: { type: ref, target: member, required: true }
+      team: { type: text, required: true, min: 1, max: 100 }
+      target_date: { type: date, required: true }
+
+  cycle:
+    label: Cycle
+    plural: Cycles
+    id: { strategy: prefix, prefix: CYC }
+    title_field: name
+    summary_fields: [status, progress]
+    fields:
+      name: { type: text, required: true, min: 1, max: 200 }
+      project: { type: ref, target: project }
+      days_left: { type: integer, required: true, min: 0 }
+      progress: { type: integer, required: true, min: 0, max: 100 }
+      completed: { type: integer, required: true, min: 0 }
+      in_progress: { type: integer, required: true, min: 0 }
+      remaining: { type: integer, required: true, min: 0 }
+      focus: { type: text_list, max: 50 }
+      status: { type: enum, required: true, values: [Planned, Active, Completed] }
+      team: { type: text, required: true, min: 1, max: 100 }
+      start_date: { type: date, required: true }
+      end_date: { type: date, required: true }
+
+  member:
+    label: Team member
+    plural: Team members
+    id: { strategy: slug, from_field: name }
+    title_field: name
+    summary_fields: [role]
+    fields:
+      name: { type: text, required: true, min: 1, max: 100, editable: false }
+      initials: { type: text, required: true, min: 1, max: 8 }
+      role: { type: text, required: true, min: 1, max: 100 }
+      load: { type: integer, required: true, min: 0, max: 100 }
+      email: { type: text, max: 254 }
+      active: { type: boolean, default: true }
+      projects: { type: refs, target: project }
+
+  issue:
+    label: Ticket
+    plural: Tickets
+    id: { strategy: prefix, prefix: PIX }
+    title_field: title
+    summary_fields: [status, priority]
+    fields:
+      title: { type: text, required: true, min: 1, max: 300 }
+      priority: { type: enum, required: true, values: [Low, Medium, High], default: Medium }
+      status: { type: enum, required: true, values: [Backlog, Todo, In progress, Review, Done], default: Todo }
+      assignee: { type: ref, target: member, required: true }
+      project: { type: ref, target: project, required: true }
+      cycle: { type: ref, target: cycle }
+      estimate: { type: text, max: 30 }
+      label: { type: text, max: 100 }
+      description: { type: text, max: 10000 }
+
+people:
+  entity: member
+  assigned_by: [issue.assignee, project.lead]
+  match_on: [name]
+
+scope:
+  anchor: project
+  paths:
+    project: []
+    cycle: [project]
+    issue: [project]
+    member: [projects]
+
+views:
+  dashboard:
+    label: Dashboard
+    kind: dashboard
+    shortcut: D
+  issues:
+    label: Issues
+    kind: list
+    entity: issue
+    shortcut: I
+    columns: [title, priority, status, assignee]
+    controls:
+      create_ticket_button: { label: Create ticket }
+  issue_detail:
+    label: Issue Detail
+    kind: detail
+    entity: issue
+    navigable: false
+    columns: [title, status, priority, assignee, project]
+    controls:
+      assignment_control: { label: Assignee }
+  projects:
+    label: Projects
+    kind: list
+    entity: project
+    shortcut: P
+    columns: [name, status, progress, lead]
+    controls:
+      create_project_button: { label: Create project }
+  cycles:
+    label: Cycles
+    kind: list
+    entity: cycle
+    shortcut: C
+    columns: [name, status, progress]
+    controls:
+      cycle_progress: { label: Cycle progress }
+      create_cycle_button: { label: Create cycle }
+  teams:
+    label: Teams
+    kind: list
+    entity: member
+    shortcut: T
+    columns: [name, role, load]
+    controls:
+      add_member_button: { label: Add member }
+  integrations:
+    label: Integrations
+    kind: adapter
+    shortcut: G
+    controls:
+      github_card: { label: GitHub }
+      slack_card: { label: Slack }
+      github_setup: { label: GitHub setup }
+
+actions:
+  open_dashboard: { capability: NAVIGATE_VIEW, view: dashboard, description: Open the dashboard. }
+  open_issues: { capability: NAVIGATE_VIEW, view: issues, description: Open the ticket list. }
+  open_projects: { capability: NAVIGATE_VIEW, view: projects, description: Open the project list. }
+  open_cycles: { capability: NAVIGATE_VIEW, view: cycles, description: Open the planning cycles. }
+  open_teams: { capability: NAVIGATE_VIEW, view: teams, description: Open the team directory. }
+  open_integrations: { capability: NAVIGATE_VIEW, view: integrations, description: Open the connected tools. }
+  open_architecture: { capability: NAVIGATE_VIEW, view: architecture, description: Open the system architecture. }
+  open_issue: { capability: OPEN_RECORD, entity: issue, description: Open one ticket. }
+  issues_by_assignee: { capability: FILTER_RECORDS, entity: issue, by: assignee, description: Show every ticket assigned to one person. }
+  create_issue:
+    capability: CREATE_RECORD
+    entity: issue
+    fields: [title, priority, assignee, project, status]
+    description: Create a ticket.
+  update_issue:
+    capability: UPDATE_RECORD
+    entity: issue
+    fields: [assignee, priority, status]
+    description: Change a ticket's assignee, priority or status.
+  create_member:
+    capability: CREATE_RECORD
+    entity: member
+    fields: [name, initials, role, load, email, projects]
+    description: Add a team member.
+  highlight_assignment:
+    capability: HIGHLIGHT_CONTROL
+    view: issue_detail
+    control: assignment_control
+    entity: issue
+    description: Show where a ticket is assigned.
+  highlight_create_issue:
+    capability: HIGHLIGHT_CONTROL
+    view: issues
+    control: create_ticket_button
+    entity: issue
+    prefill: [title, priority, assignee]
+    description: Show where tickets are created, optionally with a prepared draft.
+  highlight_add_member:
+    capability: HIGHLIGHT_CONTROL
+    view: teams
+    control: add_member_button
+    entity: member
+    prefill: [name]
+    description: Show where team members are added, optionally with a prepared name.
+  highlight_cycle_progress: { capability: HIGHLIGHT_CONTROL, view: cycles, control: cycle_progress, description: Show cycle progress. }
+  open_github_setup: { capability: HIGHLIGHT_CONTROL, view: integrations, control: github_setup, description: Show the GitHub setup flow. }
+  highlight_github: { capability: HIGHLIGHT_CONTROL, view: integrations, control: github_card, description: Show the GitHub integration. }
+  highlight_slack: { capability: HIGHLIGHT_CONTROL, view: integrations, control: slack_card, description: Show the Slack integration. }
+
+# The most specific matching intent wins; order never breaks a tie. A person's "tickets" (plural)
+# is the filtered list (issues_by_assignee); a person's "ticket" (singular) opens that one ticket.
+intents:
+  - action: open_architecture
+    match: [[system architecture, technical architecture, product architecture, architecture page,
+             open architecture, show architecture, view architecture]]
+  - action: open_dashboard
+    response: guided_path
+    match: [[evaluator, judge, reviewer, demo path, demo script, test script]]
+  - action: open_dashboard
+    response: view_opened
+    match: [[dashboard, home page, overview]]
+  - action: highlight_create_issue
+    exact: [where to create tickets for the users, where to create tickets, how to create tickets,
+            how do i create a ticket]
+  - action: highlight_create_issue
+    match: [[where, how, best way, show me how, show how],
+            [create, make, add, raise, file],
+            [ticket, issue, bug]]
+  - action: highlight_create_issue
+    response: clarify_owner
+    match: [[create, make, add, raise, file], [ticket, issue, bug]]
+    exclude: [for, to, assign, assigned, owner]
+  - action: highlight_add_member
+    requires: [unknown_person]
+    response: member_missing
+    match: [[create, make, add, raise, file, assign], [ticket, issue, bug]]
+  - action: highlight_add_member
+    requires: [unknown_person]
+    response: member_missing
+    match: [[start, draft], [ticket, issue, bug]]
+  - action: highlight_add_member
+    requires: [unknown_person]
+    response: member_missing
+    match: [[open], [new, fresh, assign, assigned, owner], [ticket, issue, bug]]
+  - action: create_issue
+    requires: [person]
+    response: record_created
+    match: [[create, make, add, raise, file], [ticket, issue, bug]]
+  - action: create_issue
+    requires: [person]
+    response: record_created
+    match: [[start, draft], [ticket, issue, bug]]
+  - action: create_issue
+    requires: [person]
+    response: record_created
+    match: [[open], [new, fresh, assign, assigned, owner], [ticket, issue, bug]]
+  - action: open_github_setup
+    match: [[github, pull request, repository, repo, webhook, branch],
+            [connect, setup, set up, configure, enable, install]]
+  - action: highlight_github
+    exact: [back to github integrations]
+  - action: highlight_github
+    match: [[github, pull request, pull requests, pr, prs, commit, commits, repository,
+             repositories, repo, repos, branch, branches, webhook],
+            [how, work, works, explain, what is, what are, use, used, help, helps]]
+  - action: highlight_github
+    match: [[github, pull request, pull requests, pr, prs, commit, commits, repository,
+             repositories, repo, repos, branch, branches, webhook]]
+  - action: highlight_slack
+    match: [[slack]]
+  - action: highlight_assignment
+    exact: [how do i assign this issue, how do i assign this ticket, how do i assign that ticket,
+            how do i assign the current issue, how do i assign the current ticket]
+  - action: highlight_assignment
+    requires: [person]
+    match: [[how do i assign, how to assign, show assignment], [ticket, issue, bug]]
+  - action: highlight_assignment
+    match: [[how do i assign, how to assign, show assignment, issue assignment, assignment workflow]]
+  - action: open_teams
+    response: people_count
+    match: [[how many, count, number of], [team, teams, people, members]]
+  - action: open_projects
+    response: anchor_count
+    match: [[how many, count, number of, which projects, what projects], [project, projects]]
+  - action: issues_by_assignee
+    requires: [person]
+    response: records_filtered
+    match: [[all, list, show, what about], [ticket, tickets, issue, issues, bug, bugs, work]]
+  - action: update_issue
+    requires: [record]
+    response: record_updated
+    match: [[assign, reassign, owner, priority, urgent, critical, high, medium, low, done, complete,
+             completed, closed, resolved, review, qa, in progress, doing, started, working, todo,
+             to do, backlog]]
+  - action: open_issue
+    requires: [person]
+    response: record_opened
+    match: [[ticket, issue, bug]]
+  - action: open_issue
+    requires: [selected_record]
+    response: record_opened
+    match: [[this ticket, current ticket, this issue, current issue, that ticket]]
+  - action: highlight_add_member
+    requires: [unknown_person]
+    response: member_missing
+    match: [[add, create, invite, new], [member, teammate, person, user, employee]]
+  - action: highlight_add_member
+    match: [[add, create, invite, new], [member, teammate, person, user, employee]]
+    exclude: [ticket, tickets, issue, issues, bug, bugs]
+  - action: open_cycles
+    response: view_opened
+    match: [[cycle, cycles, sprint, planning, time-boxed, week by week, each week, next batch of work]]
+  - action: open_issues
+    response: view_opened
+    match: [[issue, issues, bug, bugs, ticket, tickets, triage]]
+  - action: open_projects
+    response: view_opened
+    match: [[project, projects, roadmap, initiative, initiatives]]
+  - action: open_teams
+    response: view_opened
+    match: [[team, teams, capacity, workload, people, members]]
+  - action: open_integrations
+    response: view_opened
+    match: [[integration, integrations, jira, import, migration]]
+
+clarifications:
+  - response: clarify_all_items
+    exact: [open all, open all the, all, all the, show all the]
+  - response: clarify_create
+    match: [[create, make, add, new]]
+    exclude: [it, this, that, priority, status, urgent, critical, high, medium, low, done, review,
+              todo, backlog, ticket, tickets, issue, issues, bug, bugs, project, projects, cycle,
+              cycles, sprint, member, members, teammate, teammates, person, people]
+  - response: clarify_owner
+    match: [[create, make, add, raise, file], [ticket, issue, bug]]
+    exclude: [for, assign, assigned, owner, where, how]
+  - response: clarify_assign
+    match: [[assign, reassign, owner, assignee]]
+    exclude: [to, for, how do i assign, how to assign, show assignment, issue assignment]
+
+guardrails:
+  - topic: broad_scope
+    response: broad_scope_refused
+    match: [[company, organization, org, other workspace, other project, another workspace,
+             another team, all workspaces, every workspace, all teams, every team],
+            [project, projects, ticket, tickets, issue, issues, work, team, teams]]
+  - topic: external_crm
+    response: out_of_scope
+    match: [[salesforce, crm, opportunity, opportunities, lead, leads]]
+  - topic: external_email
+    response: out_of_scope
+    match: [[gmail]]
+  - topic: external_email
+    response: out_of_scope
+    match: [[open, pull up, check, read, show], [email, inbox]]
+  - topic: destructive_change
+    response: destructive_refused
+    match: [[delete, erase, wipe, clear, remove all, delete all]]
+
+
+knowledge_topics:
+  cycles: [cycle, cycles, sprint, planning, burndown, time-boxed, plan, week by week, each week]
+  issues: [issue, issues, bug, bugs, ticket, tickets, triage, assign, assignee]
+  projects: [project, projects, roadmap, initiative, initiatives, progress]
+  teams: [team, teams, capacity, workload, owner, ownership, people]
+  integrations: [integration, integrations, github, slack, jira, import, migration]
+
+prospect_signals:
+  roles:
+    Engineering Manager: [engineering manager, i manage, i'm a manager, i am a manager]
+    Software Developer: [i'm a developer, i am a developer, i'm a software developer,
+                         i am a software developer, as a developer, as an engineer]
+    Product Manager: [product manager, i'm a pm, i am a pm]
+  current_tools:
+    Jira: [jira]
+    Pixel: [pixel]
+    Asana: [asana]
+    Trello: [trello]
+  goals:
+    Sprint planning: [cycle, cycles, sprint, planning, plan, week by week, each week]
+    Bug tracking: [issue, issues, bug, bugs, ticket, tickets]
+    Project tracking: [project, projects, roadmap]
+    Connected workflow: [integration, integrations, github, slack]
+  pain_points:
+    Workflow complexity: [messy, complex, too much, confusing]
+    Migration effort: [migration, migrate, switching]
+
+reasoning_hints:
+  - Weekly planning, sprint planning, time-boxed work and capacity planning map to open_cycles.
+  - Customer bugs, tickets, work items, triage and assignment map to open_issues or the ticket actions.
+  - Roadmap, initiatives and project progress map to open_projects.
+  - People, team members, capacity and workload map to open_teams.
+  - GitHub, Slack, pull requests, commits and connected tools map to the integration actions.
+  - Architecture, system design and how this product works map to open_architecture.
+  - External CRM and email requests get no action; explain that this demo only covers this product.

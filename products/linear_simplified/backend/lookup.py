@@ -17,6 +17,10 @@ from app.services.product_data_store import ProductDataStore, filter_to_scopes
 # The entities this product's definition declares, and where each one's records come from.
 ENTITY_SOURCES = {"issue": "issues", "project": "projects", "cycle": "cycles", "member": "team"}
 PERSON_FIELDS = {"issue": "assignee", "project": "lead"}
+WORKSPACE_LABELS = {
+    "workspace-product-eng": "Product Engineering Workspace",
+    "workspace-platform": "Platform Workspace",
+}
 
 
 def person_id(name: str) -> str:
@@ -100,7 +104,9 @@ class LinearLegacyLookup:
 
     @property
     def scope_label(self) -> str:
-        return "all-workspaces" if self._scope_ids is None else ",".join(sorted(self._scope_ids))
+        if self._scope_ids is None:
+            return "all workspaces"
+        return ", ".join(WORKSPACE_LABELS.get(scope, scope) for scope in sorted(self._scope_ids))
 
     def materialize(self, connection) -> Mapping[str, tuple[RecordView, ...]]:
         """Read every visible record for one turn, inside the caller's read transaction.

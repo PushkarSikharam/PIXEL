@@ -42,6 +42,11 @@ class NormalizedMessage:
     focused: str
 
     @property
+    def corrected(self) -> bool:
+        """The visitor corrected themselves ("not that view, show me the other"; "actually, the other one")."""
+        return self.focused != self.full
+
+    @property
     def words(self) -> tuple[str, ...]:
         """Every word of the message, spelling fixed. Used where context must not be lost."""
         return tuple(self.full.split())
@@ -101,9 +106,11 @@ class Normalizer:
     def _focus(self, text: str) -> str:
         selected = text
         for marker in self._markers:
-            positions = [m.end() for m in _term_pattern(marker).finditer(selected)]
-            if positions:
-                selected = selected[positions[-1]:].strip()
+            matches = list(_term_pattern(marker).finditer(selected))
+            if matches:
+                match = matches[-1]
+                tail = selected[match.end():].strip()
+                selected = tail if tail else selected[:match.start()].strip()
         words = selected.split()
         if len(words) > 2 and words[0] == "no":
             selected = " ".join(words[1:])

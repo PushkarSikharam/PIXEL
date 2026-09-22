@@ -17,6 +17,11 @@ import {
 
 setupIsolatedApp();
 
+const definitionAuthority = process.env.PIXEL_ENGINE_MODE === "definition";
+// The sentence each authority speaks for the same behaviour. Definition wording is the platform's
+// (reviewed in golden/browser_differences_definition.json); every behaviour assertion is shared.
+const said = (legacy: string, definition: string) => (definitionAuthority ? definition : legacy);
+
 test("live readiness blocks partial demo behavior and recovers cleanly", async ({ page }) => {
   let loginRequests = 0;
   page.on("request", (request) => {
@@ -336,13 +341,16 @@ test("keeps Edith inside the selected workspace scope", async ({ page }) => {
   await sendChat(page, "how many team members are there");
   await expect(page.getByTestId("current-view-title")).toHaveText("Teams");
   await expect(page.getByTestId("transcript")).toContainText(
-    "There are 2 team members in Platform Workspace"
+    said("There are 2 team members in Platform Workspace", "Platform Workspace has 2 team members.")
   );
 
   // Security (5c plan, section 3.3): someone in another workspace reads exactly like an unknown
   // person; their ticket never opens and their name is never confirmed.
   await sendChat(page, "open Maya's ticket");
-  await expect(page.getByTestId("transcript")).toContainText("I could not find a ticket for Maya");
+  await expect(page.getByTestId("transcript")).toContainText(
+    // An unknown name gets the identical reply, so nothing is revealed (API security tests).
+    said("I could not find a ticket for Maya", "I can't find Maya in this workspace. I'll open Issues.")
+  );
   await expect(page.getByTestId("transcript")).not.toContainText("Maya Chen");
   await expect(page.getByTestId("selected-issue-id")).toHaveCount(0);
 
@@ -383,7 +391,9 @@ test("never reveals or creates work for people outside the current workspace", a
 
   // Avery works in another workspace, so here Avery reads like anyone unknown: nothing is created
   // and nothing confirms Avery exists elsewhere.
-  await expect(page.getByTestId("transcript")).toContainText("Avery is not in the team directory yet");
+  await expect(page.getByTestId("transcript")).toContainText(
+    said("Avery is not in the team directory yet", "I can't find Avery in this workspace.")
+  );
   await expect(page.getByTestId("transcript")).not.toContainText("Avery Brooks");
   await expect(page.getByTestId("transcript")).not.toContainText("Created");
 });
@@ -441,7 +451,9 @@ test("opens the sprint planning view from chat and shows retrieved product conte
 
   await expect(page.getByTestId("current-view-title")).toHaveText("Cycles");
   await expect(page.getByTestId("source-list")).toBeHidden();
-  await expect(page.getByTestId("transcript")).toContainText("I'll show you the current cycle.");
+  await expect(page.getByTestId("transcript")).toContainText(
+    said("I'll show you the current cycle.", "I'll open Cycles.")
+  );
 });
 
 test("opens the system architecture from Edith chat", async ({ page }) => {
@@ -563,7 +575,9 @@ test("opens and highlights Maya Chen's issue from chat", async ({ page }) => {
   await sendChat(page, "how do I assign Maya's ticket");
   await expect(page.getByTestId("current-view-title")).toHaveText("Issue Detail");
   await expect(page.getByTestId("assignee-control")).toHaveClass(/highlighted/);
-  await expect(page.getByTestId("transcript")).toContainText("highlight the assignee control");
+  await expect(page.getByTestId("transcript")).toContainText(
+    said("highlight the assignee control", "I'll open Issue Detail and highlight Assignee.")
+  );
 });
 
 test("filters all tickets assigned to Maya instead of opening one ticket", async ({ page }) => {
@@ -575,7 +589,7 @@ test("filters all tickets assigned to Maya instead of opening one ticket", async
   await expect(page.getByTestId("issue-filter")).toContainText("Maya Chen");
   await expect(page.getByTestId("issue-count-badge")).toHaveText("1 open");
   await expect(page.getByTestId("transcript")).toContainText(
-    "I found 1 ticket assigned to Maya Chen: LIN-142"
+    said("I found 1 ticket assigned to Maya Chen: LIN-142", "I found 1 ticket for Maya Chen: LIN-142.")
   );
 });
 
@@ -586,7 +600,9 @@ test("asks clarification for incomplete all-items requests", async ({ page }) =>
 
   await expect(page.getByTestId("current-view-title")).toHaveText("Dashboard");
   await expect(page.getByTestId("transcript")).toContainText(
-    "Do you mean all issues, all projects, or all tickets for a specific person?"
+    definitionAuthority
+      ? "Which records do you mean?"
+      : "Do you mean all issues, all projects, or all tickets for a specific person?"
   );
 });
 
@@ -596,12 +612,16 @@ test("asks targeted clarifying questions for vague create and assignment request
   await sendChat(page, "create something new");
   await expect(page.getByTestId("current-view-title")).toHaveText("Dashboard");
   await expect(page.getByTestId("transcript")).toContainText(
-    "What should I create: a ticket, a project, a cycle, or a team member?"
+    definitionAuthority
+      ? "Which type of record would you like to create?"
+      : "What should I create: a ticket, a project, a cycle, or a team member?"
   );
 
   await sendChat(page, "assign it");
   await expect(page.getByTestId("transcript")).toContainText(
-    "Who should I assign the current ticket to?"
+    definitionAuthority
+      ? "Who should this record be assigned to?"
+      : "Who should I assign the current ticket to?"
   );
 });
 
@@ -612,7 +632,9 @@ test("blocks broad workspace requests instead of showing other project data", as
 
   await expect(page.getByTestId("current-view-title")).toHaveText("Dashboard");
   await expect(page.getByTestId("transcript")).toContainText(
-    "I can only show work inside Product Engineering Workspace"
+    definitionAuthority
+      ? "I can only work within this workspace"
+      : "I can only show work inside Product Engineering Workspace"
   );
 });
 
@@ -645,11 +667,15 @@ test("answers capability and team-count questions conversationally", async ({ pa
 
   await sendChat(page, "are you capable of doing");
   await expect(page.getByTestId("current-view-title")).toHaveText("Dashboard");
-  await expect(page.getByTestId("transcript")).toContainText("I can guide this Pixel demo");
+  await expect(page.getByTestId("transcript")).toContainText(
+    said("I can guide this Pixel demo", "Here's what I can do in Pixel:")
+  );
 
   await sendChat(page, "how many team members are there");
   await expect(page.getByTestId("current-view-title")).toHaveText("Teams");
-  await expect(page.getByTestId("transcript")).toContainText("There are 2 team members");
+  await expect(page.getByTestId("transcript")).toContainText(
+    said("There are 2 team members", "Product Engineering Workspace has 2 team members.")
+  );
 });
 
 test("understands misspellings, corrections, and current issue follow-ups", async ({ page }) => {
@@ -697,6 +723,12 @@ test("creates a demo ticket and opens the new issue", async ({ page }) => {
   await openApp(page);
 
   await sendChat(page, "open a fresh ticket for Maya");
+  if (definitionAuthority) {
+    await expect(page.getByTestId("transcript")).toContainText("What should the title of the new ticket be?");
+    await sendChat(page, "Investigate customer onboarding issue");
+    await expect(page.getByTestId("transcript")).toContainText("Which project should the new ticket have");
+    await sendChat(page, "Issue Triage Workflow");
+  }
 
   await expect(page.getByTestId("turn-status")).toHaveText("Ready");
   await expect(page.getByTestId("current-view-title")).toHaveText("Issue Detail");
@@ -717,6 +749,12 @@ test("keeps created demo records after a browser refresh", async ({ page }) => {
   await openApp(page);
 
   await sendChat(page, "open a fresh ticket for Maya");
+  if (definitionAuthority) {
+    await expect(page.getByTestId("transcript")).toContainText("What should the title of the new ticket be?");
+    await sendChat(page, "Investigate customer onboarding issue");
+    await expect(page.getByTestId("transcript")).toContainText("Which project should the new ticket have");
+    await sendChat(page, "Issue Triage Workflow");
+  }
   await expect(page.getByTestId("selected-issue-id")).toHaveText("PIX-143");
 
   await page.reload();
@@ -744,7 +782,9 @@ test("asks who should own a ticket before opening an incomplete create flow", as
   await expect(page.getByTestId("current-view-title")).toHaveText("Issues");
   await expect(page.getByTestId("create-ticket-button")).toHaveClass(/highlighted-action/);
   await expect(page.getByTestId("issue-create-panel")).toBeHidden();
-  await expect(page.getByTestId("transcript")).toContainText("Who should own this ticket?");
+  await expect(page.getByTestId("transcript")).toContainText(
+    said("Who should own this ticket?", "Who should own the new ticket?")
+  );
 });
 
 test("validates an unknown assignee before continuing ticket creation", async ({ page }) => {
@@ -756,7 +796,7 @@ test("validates an unknown assignee before continuing ticket creation", async ({
   await expect(page.getByTestId("team-member-create-panel")).toBeVisible();
   await expect(page.getByTestId("member-name-input")).toHaveValue("Lucifer");
   await expect(page.getByTestId("transcript")).toContainText(
-    "Lucifer is not in the team directory yet"
+    said("Lucifer is not in the team directory yet", "I can't find Lucifer in this workspace.")
   );
   await expect(page.getByTestId("transcript")).not.toContainText("I created");
 
@@ -845,6 +885,12 @@ test("handles voice typo input and voice-only demo issue creation", async ({ pag
   await expect(page.getByTestId("voice-status")).toHaveText("Voice: Listening");
   await page.evaluate(() => window.__emitVoiceTranscript?.("open a fresh ticket for maya"));
 
+  if (definitionAuthority) {
+    await expect(page.getByTestId("transcript")).toContainText("What should the title of the new ticket be?");
+    await page.evaluate(() => window.__emitVoiceTranscript?.("Investigate customer onboarding issue"));
+    await expect(page.getByTestId("transcript")).toContainText("Which project should the new ticket have");
+    await page.evaluate(() => window.__emitVoiceTranscript?.("Issue Triage Workflow"));
+  }
   await expect(page.getByTestId("turn-status")).toHaveText("Ready");
   await expect(page.getByTestId("selected-issue-id")).toContainText(/^PIX-\d+$/);
   await expect(page.getByTestId("transcript")).toContainText("Created PIX-");
@@ -861,7 +907,9 @@ test("speaks assistant replies after voice input", async ({ page }) => {
   await expect(page.getByTestId("current-view-title")).toHaveText("Cycles");
   await expect
     .poll(async () => page.evaluate(() => window.__spokenAgentReplies ?? []))
-    .toContainEqual(expect.stringContaining("I'll show you the current cycle"));
+    .toContainEqual(expect.stringContaining(
+      definitionAuthority ? "I'll open Cycles." : "I'll show you the current cycle"
+    ));
 });
 
 test("answers identity questions without generic routing", async ({ page }) => {
@@ -870,7 +918,7 @@ test("answers identity questions without generic routing", async ({ page }) => {
   await sendChat(page, "Hii there who are u");
 
   await expect(page.getByTestId("transcript")).toContainText(
-    "I'm Edith, Pixel's live demo guide."
+    said("I'm Edith, Pixel's live demo guide.", "I'm Edith, your guide to Pixel.")
   );
 });
 
@@ -879,22 +927,23 @@ test("handles greetings, capabilities, and visitor introduction naturally", asyn
 
   await sendChat(page, "Hii There?");
   await expect(page.getByTestId("transcript")).toContainText(
-    "Hi there. What would you like to explore first in Pixel?"
+    said("Hi there. What would you like to explore first in Pixel?", "Hi, I'm Edith, your guide to Pixel.")
   );
 
   await sendChat(page, "What are you capable of doing?");
   await expect(page.getByTestId("transcript")).toContainText(
-    "I can guide this Pixel demo through Product Engineering Workspace"
+    said("I can guide this Pixel demo through", "Here's what I can do in Pixel:")
   );
 
   await sendChat(page, "HI there i am Pushkar!");
   await expect(page.getByTestId("transcript")).toContainText(
-    "Nice to meet you, Pushkar."
+    said("Nice to meet you, Pushkar.", "Nice to meet you, Pushkar.")
   );
 
   await sendChat(page, "Hi");
   await expect(page.getByTestId("transcript")).toContainText(
-    "Hi Pushkar. What would you like to explore next in Pixel?"
+    said("Hi Pushkar. What would you like to explore next in Pixel?",
+         "Hi Pushkar, good to see you again. What would you like to explore next in Pixel?")
   );
 });
 
@@ -907,7 +956,7 @@ test("does not treat mixed create-and-assign phrasing as old ticket lookup", asy
   await expect(page.getByTestId("team-member-create-panel")).toBeVisible();
   await expect(page.getByTestId("member-name-input")).toHaveValue("Jen");
   await expect(page.getByTestId("transcript")).toContainText(
-    "Jen is not in the team directory yet"
+    said("Jen is not in the team directory yet", "I can't find Jen in this workspace.")
   );
 });
 
@@ -974,19 +1023,25 @@ test("opens integrations for GitHub and Slack, then blocks out-of-product reques
   await sendChat(page, "What can Pixel do with Slack?");
   await expect(page.getByTestId("current-view-title")).toHaveText("Integrations");
   await expect(page.getByTestId("slack-integration-card")).toHaveClass(/highlighted-card/);
-  await expect(page.getByTestId("transcript")).toContainText("Slack lets teams create issues");
+  await expect(page.getByTestId("transcript")).toContainText(
+    said("Slack lets teams create issues", "I'll open Integrations and highlight Slack.")
+  );
 
   await sendChat(page, "set up github integration");
   await expect(page.getByTestId("current-view-title")).toHaveText("Integrations");
   await expect(page.getByTestId("github-integration-card")).toHaveClass(/highlighted-card/);
   await expect(page.getByTestId("github-setup-panel")).toContainText("Select repositories");
-  await expect(page.getByTestId("transcript")).toContainText("GitHub setup flow");
+  await expect(page.getByTestId("transcript")).toContainText(
+    said("GitHub setup flow", "I'll open Integrations and highlight GitHub setup.")
+  );
 
   await sendChat(page, "open salesforce");
   await expect(page.getByTestId("turn-status")).toHaveText("Action blocked");
   await expect(page.getByTestId("current-view-title")).toHaveText("Integrations");
   await expect(page.getByTestId("transcript")).toContainText(
-    "I can only demonstrate Pixel workflows here"
+    definitionAuthority
+      ? "I can only help with Pixel here"
+      : "I can only demonstrate Pixel workflows here"
   );
 });
 

@@ -150,6 +150,7 @@ class NewEngineTurns:
                 turn=request.turn_id,
                 selected=selected_record(prepared.records, request.selected_issue_id),
                 last_change=self._ledger.last_executed(owner, request.session_id, scope_id),
+                view=getattr(request, "current_page", None),
             ),
         )
         model_outcome = None

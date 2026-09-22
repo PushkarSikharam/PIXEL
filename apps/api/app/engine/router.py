@@ -75,6 +75,9 @@ class TurnContext:
     # ledger by the caller and passed in as immutable data (5b plan, section 8.4). The router
     # ignores it; only the "what changed?" answer uses it.
     last_change: object | None = None
+    # The view the client reports as open. Used only to suggest a next step, and only when it is a
+    # view the definition declares.
+    view: str | None = None
 
 
 @dataclass(frozen=True)
@@ -406,6 +409,12 @@ class IntentRouter:
             if not _all_same(leaders):
                 # A tie is never broken by file order.
                 return self._clarify_or_fallback(clarification, RouteStage.INTENT_GROUPS, memory, context)
+            unseen = next((u for u in unmet if u.reason == "not_visible" and u.slot == "person"), None)
+            if unseen is not None and leaders[0].person is None and "person" not in leaders[0].placeholders:
+                # The request named someone who is not available and the chosen action goes ahead
+                # without them ("open Zed's record" opens the list): say so first. Unknown and
+                # inaccessible people read the same.
+                return self._propose(leaders[0], memory, override=("unknown_person", {"person": unseen.name or ""}))
             return self._propose(leaders[0], memory, override=None)
 
         if clarification is None:

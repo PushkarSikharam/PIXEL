@@ -52,6 +52,16 @@ class LoadedState:
     pending_requires_repeat: bool
 
 
+# A visitor's name is stored only while it is short and plain; anything else is not kept.
+MAX_VISITOR_NAME = 60
+
+
+def _bounded_name(name: str | None) -> str | None:
+    if name is None or not name.strip() or len(name) > MAX_VISITOR_NAME or not name.isprintable():
+        return None
+    return name.strip()
+
+
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -88,6 +98,7 @@ class EngineStateStore:
         memory = ConversationMemory(
             focus=focus, last_person=last_person, last_view=row["last_view"],
             last_change=row["last_change"], turn=row["last_turn"], person_follow_up=follow_up,
+            visitor_name=row["visitor_name"],
         )
         return LoadedState(memory=memory, revision=row["revision"],
                             pending_requires_repeat=bool(row["pending_requires_repeat"]))
@@ -111,8 +122,8 @@ class EngineStateStore:
               knowledge_version, last_turn, revision, focus_entity, focus_id,
               last_person_entity, last_person_id, last_view, last_change,
               person_follow_up_action, person_follow_up_turn, pending_requires_repeat,
-              pending_turn, updated_at
-            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              pending_turn, updated_at, visitor_name
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             on conflict(session_id) do update set
               scope_id = excluded.scope_id, codec_version = excluded.codec_version,
               definition_id = excluded.definition_id, definition_version = excluded.definition_version,
@@ -125,7 +136,8 @@ class EngineStateStore:
               person_follow_up_action = excluded.person_follow_up_action,
               person_follow_up_turn = excluded.person_follow_up_turn,
               pending_requires_repeat = excluded.pending_requires_repeat,
-              pending_turn = excluded.pending_turn, updated_at = excluded.updated_at
+              pending_turn = excluded.pending_turn, updated_at = excluded.updated_at,
+              visitor_name = excluded.visitor_name
             where engine_state.revision = ? and engine_state.last_turn < ?
             """,
             (
@@ -136,7 +148,7 @@ class EngineStateStore:
                 memory.last_view, memory.last_change,
                 memory.person_follow_up.action_key if memory.person_follow_up else None,
                 memory.person_follow_up.turn if memory.person_follow_up else None,
-                int(pending), pending_turn, _utc_now(),
+                int(pending), pending_turn, _utc_now(), _bounded_name(memory.visitor_name),
                 expected_revision, turn_id,
             ),
         )

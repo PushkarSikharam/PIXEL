@@ -372,7 +372,8 @@ def migrate() -> None:
               person_follow_up_turn integer,
               pending_requires_repeat integer not null default 0,
               pending_turn integer,
-              updated_at text not null
+              updated_at text not null,
+              visitor_name text
             );
             create index if not exists engine_state_owner
               on engine_state(tenant_id, product_id, user_id, instance_id, instance_generation);
@@ -428,6 +429,10 @@ def migrate() -> None:
             },
             "signals": {
                 "scope_id": "text",
+            },
+            # 5c: the visitor's introduced name, so a later greeting can use it.
+            "engine_state": {
+                "visitor_name": "text",
             },
         }.items():
             present = {row["name"] for row in connection.execute(f"pragma table_info({table})")}

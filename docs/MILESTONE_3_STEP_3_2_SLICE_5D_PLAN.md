@@ -96,8 +96,9 @@ The rehearsal is the final proof that 5c's safety net works. Only after it passe
 
 Before any removal, the complete browser suite (`tests/e2e/**`) and the browser golden
 (`products/linear_simplified/tests/browser-golden.spec.ts`) pass with the isolated test API under
-**definition authority**. Today only `keyed-writes.spec.ts` runs the definition engine; the others
-run the legacy default, so a green browser suite does not yet prove the engine 5d keeps.
+**definition authority**. CI runs the whole browser suite twice, once per authority; under
+definition authority the browser golden is compared with its own reviewed list
+(`golden/browser_differences_definition.json`).
 
 - The browser golden under definition authority is compared with `browser_decisions.json`; every
   difference is listed in a reviewed file for this authority, and none is regenerated to pass.
@@ -123,9 +124,9 @@ changed behaviour), or *5c blocker* (fixed before cutover). No row may be undeci
 The decisions are made **before the first deletion commit**, not while deleting: the 5d PR may not
 remove any legacy module until every *decide* row carries its recorded decision. A decision taken
 under deletion pressure defaults to whatever the remaining code happens to do, which is exactly the
-drift this gate exists to prevent. The *decide* rows open today are: guided path, correction
-wording, create without an owner (highlight or not), update with nothing open, and quoted names in
-replies.
+drift this gate exists to prevent. All five *decide* rows (guided path, correction wording, create
+without an owner, update with nothing open, quoted names) now carry the owner's recorded decision
+(section 5 and the 5c report).
 
 ## 3. Deletion principles
 
@@ -184,7 +185,7 @@ when the manifest is produced.
 | execution ledger, receipts, `engine_state` and its retention, provider budgets, rate limits, speech | platform contracts |
 | `services/turn_telemetry.py` and `ops cutover-report` | the only per-turn health evidence; the authority dimension becomes a constant, and the command is renamed to a turn report |
 | `services/model_gateway.py`, strict parser, provenance, confirmation boundary, `PIXEL_MODEL_GATEWAY` | the generic model path (5c section 8) |
-| installed product registry and every published definition, with v4 bound | product definitions |
+| installed product registry and every published definition, with v5 bound | product definitions |
 | `shadow_parity_daily` table (dormant) and all reviewed-difference files | audit evidence |
 
 ### 4.4 Allowlist (`KNOWN_PRODUCT_COUPLING`) changes
@@ -220,16 +221,16 @@ need an owner decision to accept or port.
 | "what did we just change?" | ledger answer | was: **answered from product documentation**. Now: ledger answer | blocker, **fixed** | platform last-change cues |
 | "I'm an engineering manager ... moving from Jira" | acknowledges, records signals | was: "I'm not sure how to help with that". Now: acknowledges, records signals | blocker, **fixed** | engine: a message that only describes the visitor is acknowledged; a request in it is still served |
 | greeting remembers the visitor's name | "Hi Pushkar ..." | generic greeting | port | engine: greeting_named from session memory |
-| guided path | lists the demo path, opens Dashboard | opens Dashboard, no path | decide | definition response or accept |
+| guided path | lists the demo path, opens Dashboard | a conversational route drawn from the caller's offers, ending with the guardrail; opens Dashboard | **decided** | owner: "more conversational, whatever suits the chat"; platform composer |
 | next step | page-aware suggestion | product documentation passage | port | engine: next-step answer |
 | project / team count | states the count and names | opens the view only | port | composer: `anchor_count` / `people_count` answers |
-| correction ("not cycles, ...") | "Got it. I'll switch to Issues." | "I'll open Issues." | decide | wording only |
+| correction ("not cycles, ...") | "Got it. I'll switch to Issues." | "Got it. I'll switch to Issues." | **decided** | owner: keep the acknowledgement; platform composer |
 | member add (named / unnamed) | explicit sentence; asks for a name | "I'll highlight the requested control in Teams." | port | composer wording for highlight with a named person, and a question when unnamed |
-| create without an owner | asks and highlights the create button | asks, no highlight | decide | behaviour: highlight or not |
+| create without an owner | asks and highlights the create button | asks and highlights the create button (Linear v5) | **decided** | matches legacy |
 | create for an unknown owner | asks to add them first | highlights add-member, generic sentence | port | composer wording |
 | filter by person / "what about Noah" | names the count and IDs | "I'll filter the available records." | port | composer: filtered answer with count |
-| update with nothing open | "which ticket: Maya's, Noah's, or the open one?" | "Which ticket do you mean?" | decide | wording only |
-| quoted names in replies | plain names | `Welcome to "Pixel". I am "Edith"`; quoted field keys in capabilities | decide | a platform wording choice from 4b; approve or change before cutover |
+| update with nothing open | "which ticket: Maya's, Noah's, or the open one?" | "Which ticket do you mean? Open it first, or tell me which one." | **decided** | owner: "whatever feels more human"; names no one |
+| quoted names in replies | plain names | plain names ("I'm Edith, your guide to Pixel."), capabilities in plain words | **decided** | owner: "I'm Edith"; labels still pass the platform's name check |
 | broad workspace request | completed | denied | accept | the v2 guardrail decision |
 | out-of-scope person | unknown person, ticket list | unknown person, ticket list | same | none |
 

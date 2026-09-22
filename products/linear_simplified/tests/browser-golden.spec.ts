@@ -10,6 +10,9 @@ import { openApp, sendChat, setupIsolatedApp } from "../../../tests/e2e/harness"
 // The recording is evidence, never a target: it is not regenerated to make a test pass. Every field
 // that differs from it is listed, with its kind and reason, in golden/browser_differences.json, and
 // a listed difference that no longer occurs also fails (as golden_parity.py does for the backend).
+// Under definition authority (PIXEL_ENGINE_MODE=definition) the same recording is compared with the
+// same strictness against its own list, golden/browser_differences_definition.json, because the
+// two engines differ from the recording in different, separately reviewed ways.
 //
 // Capture what the app does now, for review, without touching the recording:
 //   PIXEL_CAPTURE_GOLDEN=<file> npx playwright test products/linear_simplified/tests/browser-golden.spec.ts
@@ -33,7 +36,10 @@ type ReviewedDifference = Difference & { kind: "wording" | "behaviour" | "securi
 
 const GOLDEN_DIR = join(__dirname, "golden");
 const RECORDING = join(GOLDEN_DIR, "browser_decisions.json");
-const DIFFERENCES = join(GOLDEN_DIR, "browser_differences.json");
+const DIFFERENCES = join(
+  GOLDEN_DIR,
+  process.env.PIXEL_ENGINE_MODE === "definition" ? "browser_differences_definition.json" : "browser_differences.json"
+);
 const UPDATING = process.env.PIXEL_UPDATE_GOLDEN === "1";
 const CAPTURE = process.env.PIXEL_CAPTURE_GOLDEN;
 const cases: GoldenCase[] = JSON.parse(readFileSync(join(GOLDEN_DIR, "conversations.json"), "utf-8")).cases;

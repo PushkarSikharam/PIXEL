@@ -100,6 +100,9 @@ class ConversationMemory:
     turn: int = 0
     # Added in 5a, optional: nothing that predates it is affected.
     person_follow_up: PersonFollowUp | None = None
+    # Added in 5c: the name the visitor introduced themselves with, used only to greet them again
+    # in this session. Never a record reference, never shared across sessions.
+    visitor_name: str | None = None
 
     def next_turn(self, turn: int) -> "ConversationMemory":
         """Advance to a new turn, expiring pending state that was not answered in time."""

@@ -557,7 +557,14 @@ test("restart preserves private records while reset restores this visitor's seed
   await expect(page.getByTestId("assignee-select")).toHaveValue("Noah Patel");
 
   await page.getByTestId("reset-demo").click();
+  // The reset rotates this visitor's instance and returns the restored records. Wait for that
+  // response, as the form write above does, before reading a record back.
+  const restored = page.waitForResponse((response) =>
+    response.url().endsWith("/demo-data/reset-mine")
+    && response.request().method() === "POST"
+  );
   await page.getByTestId("reset-demo-confirm").click();
+  expect((await restored).ok()).toBe(true);
   await expect(page.getByTestId("turn-status")).toHaveText("Ready");
   await page.getByTestId("nav-issues").click();
   await page.getByRole("button", { name: "Open LIN-142" }).click();

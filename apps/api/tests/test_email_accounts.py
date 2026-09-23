@@ -156,3 +156,37 @@ class EmailAccountsTest(EngineCutoverFixture):
         definition["definition"].update(definition_id="linear_simplified", version=99)
         with self.assertRaises(DefinitionError):
             store_definition(yaml.safe_dump(definition), definition_id="linear_simplified", version=99)
+
+class SignInLimitsTest(EmailAccountsTest):
+    """Abuse limits must not become a way to lock other people out."""
+
+    def request_code(self, email: str):
+        return self.client.post("/api/account/email-code", json={"email": email})
+
+    def test_one_address_is_limited_without_limiting_anybody_else(self):
+        for _ in range(account_api.ADDRESS_CODES_PER_HOUR):
+            self.assertEqual(self.request_code("busy@example.test").status_code, 200)
+        exhausted = self.request_code("busy@example.test")
+        self.assertEqual(exhausted.status_code, 429, exhausted.text)
+        # Everybody else is unaffected, which is the whole point.
+        self.assertEqual(self.request_code("somebody@example.test").status_code, 200)
+
+    def test_the_deployment_ceiling_is_far_above_one_persons_share(self):
+        """A ceiling one attacker could exhaust would lock every customer out of signing in."""
+        self.assertGreaterEqual(account_api.DEPLOYMENT_CODES_PER_HOUR,
+                                account_api.ADDRESS_CODES_PER_HOUR * 100)
+
+    def test_a_session_survives_its_organization_being_readable(self):
+        session = self.login()
+        answered = self.client.get("/api/account/session", headers={
+            "Authorization": f"Bearer {session['token']}"})
+        self.assertEqual(answered.status_code, 200, answered.text)
+        self.assertIn("console_product_id", answered.json())
+
+    def test_a_session_does_not_advertise_an_unbound_console_product(self):
+        session = self.login()
+        with patch.dict(os.environ, {"PIXEL_CONSOLE_DEFINITION": "pixel_console"}):
+            answered = self.client.get("/api/account/session", headers={
+                "Authorization": f"Bearer {session['token']}"})
+        self.assertEqual(answered.status_code, 200, answered.text)
+        self.assertIsNone(answered.json()["console_product_id"])

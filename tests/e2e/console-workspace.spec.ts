@@ -68,8 +68,13 @@ for (const mobile of [false, true]) {
       if (path.endsWith("/turn")) {
         const body = route.request().postDataJSON();
         turns.push(body);
+        const validated = body.message === "Open entry"
+          ? { type: "OPEN_ENTRY", payload: { record_id: "E-1" } }
+          : body.message === "Leave product"
+            ? { type: "OPEN_PRODUCTS", payload: { view: "products" } }
+            : null;
         return route.fulfill({ json: { session_id: body.session_id, turn_id: body.turn_id, status: "completed", speech: body.message === "Open entry" ? "Opening the entry." : `Only ${body.product_id} content.`,
-          validated_action: body.message === "Open entry" ? { type: "OPEN_ENTRY", payload: { record_id: "E-1" } } : null, execution: null } });
+          validated_action: validated, execution: null } });
       }
       if (path.endsWith("/speech")) { speechCalls++; return route.fulfill({ status: 503, json: { detail: "Unavailable" } }); }
       return route.fulfill({ status: 404, json: { detail: "Unexpected test request" } });
@@ -109,5 +114,8 @@ for (const mobile of [false, true]) {
     await expect(assistant.getByText("A spoken question", { exact: true })).toBeVisible();
     await expect(assistant.getByText("Voice is unavailable. Text remains available.")).toBeVisible();
     expect(speechCalls).toBe(1);
+    await assistant.getByLabel("Ask Edith").fill("Leave product");
+    await assistant.getByRole("button", { name: "Send message" }).click();
+    await expect(page).toHaveURL(/\/console\/products$/);
   });
 }

@@ -23,12 +23,37 @@ export interface Source { id: string; name: string; kind: "document" | "openapi"
 export interface ProposedAction { key: string; description: string; mutating: boolean; enabled: boolean; requiresConfirmation: boolean }
 export interface Finding { id: string; severity: "error" | "warning"; message: string }
 
+export interface DescribedField {
+  name: string;
+  type: "text" | "integer" | "enum" | "date" | "boolean";
+  required: boolean;
+  values: string;
+}
+
+export interface DescribedThing {
+  id: string;
+  label: string;
+  plural: string;
+  people: boolean;
+  fields: DescribedField[];
+}
+
+/** What Pixel wrote from the description, and has not yet been published. */
+export interface Understanding {
+  definition: string;
+  things: string[];
+  screens: string[];
+  canDo: string[];
+}
+
 export interface OnboardingState {
   step: Step;
   name: string;
   slug: string;
   teamId: string;
   sources: Source[];
+  things: DescribedThing[];
+  understanding: Understanding | null;
   analysisRevision: number | null; // the source revision the analysis was built from
   sourceRevision: number;
   understandingAccepted: boolean;
@@ -39,18 +64,23 @@ export interface OnboardingState {
 }
 
 export const initialOnboarding = (teamId: string): OnboardingState => ({
-  step: "details", name: "", slug: "", teamId, sources: [], analysisRevision: null, sourceRevision: 0,
+  step: "details", name: "", slug: "", teamId, sources: [], things: [], understanding: null,
+  analysisRevision: null, sourceRevision: 0,
   understandingAccepted: false, actions: [], findings: [], validatedRevision: null, configRevision: 0,
 });
 
 const SLUG = /^[a-z0-9][a-z0-9-]{1,62}$/;
+const THING_NAME = /^[a-z][a-z0-9_]{0,47}$/;
 
 export function canEnter(state: OnboardingState, step: Step): boolean {
   const accepted = state.sources.filter((s) => s.status === "accepted");
   switch (step) {
     case "details": return true;
     case "sources": return state.name.trim().length > 0 && SLUG.test(state.slug);
-    case "analyzing": return canEnter(state, "sources") && accepted.length > 0;
+    // Something to keep, and something to call each one: a product nobody can describe is not a
+    // product Pixel can write.
+    case "analyzing": return canEnter(state, "sources") && state.things.some((thing) => !thing.people)
+      && state.things.every((thing) => THING_NAME.test(thing.id) && thing.label.trim() && thing.plural.trim());
     case "review": return state.analysisRevision === state.sourceRevision && state.analysisRevision !== null;
     case "actions": return canEnter(state, "review") && state.understandingAccepted;
     case "validation": return canEnter(state, "actions") && state.actions.length > 0;
@@ -107,6 +137,30 @@ export function completeAnalysis(state: OnboardingState): OnboardingState {
 export function acceptUnderstanding(state: OnboardingState): OnboardingState {
   if (!canEnter(state, "review")) throw new Error("no_analysis");
   return { ...state, understandingAccepted: true, step: "actions" };
+}
+
+/**
+ * A server-generated definition has already passed the product contract. The guided live flow
+ * publishes that exact reviewed definition, so it does not show switches that would falsely
+ * imply the browser can rewrite individual actions inside the signed definition.
+ */
+export function approveGeneratedUnderstanding(state: OnboardingState): OnboardingState {
+  if (!canEnter(state, "review") || !state.understanding) throw new Error("no_analysis");
+  const actions = state.understanding.canDo.map((description, index) => ({
+    key: `generated-${index + 1}`,
+    description,
+    mutating: /^(add|change)\b/i.test(description),
+    enabled: true,
+    requiresConfirmation: /^(add|change)\b/i.test(description),
+  }));
+  return {
+    ...state,
+    understandingAccepted: true,
+    actions,
+    findings: [],
+    validatedRevision: state.configRevision,
+    step: "ready",
+  };
 }
 
 export function toggleAction(state: OnboardingState, key: string, enabled: boolean): OnboardingState {
@@ -225,4 +279,54 @@ export function starterDefinitionText(state: Pick<OnboardingState, "name" | "slu
       clarify_create: "What would you like to add?",
     },
   }, null, 2);
+}
+
+
+export function addThing(state: OnboardingState): OnboardingState {
+  const thing: DescribedThing = {
+    id: "", label: "", plural: "", people: false,
+    fields: [{ name: "name", type: "text", required: true, values: "" }],
+  };
+  return invalidateAnalysis({ ...state, things: [...state.things, thing] });
+}
+
+export function updateThing(state: OnboardingState, index: number,
+                            changes: Partial<DescribedThing>): OnboardingState {
+  const things = state.things.map((thing, at) => (at === index ? { ...thing, ...changes } : thing));
+  // Only one kind of record can be the people; marking another unmarks the first.
+  const people = changes.people ? things.map((thing, at) => (at === index ? thing : { ...thing, people: false })) : things;
+  return invalidateAnalysis({ ...state, things: people });
+}
+
+export function removeThing(state: OnboardingState, index: number): OnboardingState {
+  return invalidateAnalysis({ ...state, things: state.things.filter((_, at) => at !== index) });
+}
+
+export function updateField(state: OnboardingState, thingIndex: number, fieldIndex: number,
+                            changes: Partial<DescribedField>): OnboardingState {
+  return updateThing(state, thingIndex, {
+    fields: state.things[thingIndex].fields.map((field, at) => (at === fieldIndex ? { ...field, ...changes } : field)),
+  });
+}
+
+export function addField(state: OnboardingState, thingIndex: number): OnboardingState {
+  return updateThing(state, thingIndex, {
+    fields: [...state.things[thingIndex].fields, { name: "", type: "text", required: false, values: "" }],
+  });
+}
+
+export function removeField(state: OnboardingState, thingIndex: number, fieldIndex: number): OnboardingState {
+  return updateThing(state, thingIndex, {
+    fields: state.things[thingIndex].fields.filter((_, at) => at !== fieldIndex),
+  });
+}
+
+/** Changing the description throws away what Pixel made of the old one, and everything after. */
+function invalidateAnalysis(state: OnboardingState): OnboardingState {
+  return invalidateFromSources({ ...state, understanding: null });
+}
+
+/** What Pixel understood, recorded against the description it was written from. */
+export function understood(state: OnboardingState, understanding: Understanding): OnboardingState {
+  return { ...state, understanding, analysisRevision: state.sourceRevision, step: "review" };
 }

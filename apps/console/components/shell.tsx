@@ -8,6 +8,7 @@ import {
   Monitor, Moon, Rocket, Sun, UserCog, Users,
 } from "lucide-react";
 import { useConsole } from "./console-context";
+import { Edith } from "./edith-shell";
 import { Dialog } from "./overlays";
 import { Menu } from "./overlays";
 import { Alert, Button, LoadingRows } from "./ui";
@@ -43,6 +44,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const [pendingHref, setPendingHref] = useState<string | null>(null);
   const organization = c.live ? { name: c.account?.organization_name ?? "Your organization" } : ORGANIZATIONS.find((o) => o.id === c.organizationId);
   const product = c.visibleProducts.find((p) => p.id === c.productId);
+  const hasAssistant = Boolean(c.live && c.account && (c.productSurface || c.account.console_product_id));
   const [logoutError, setLogoutError] = useState<string | null>(null);
 
   function requestProduct(id: string | null) {
@@ -144,7 +146,8 @@ export function Shell({ children }: { children: ReactNode }) {
             ]} />
           </div>
         </header>
-        <main id="main" className="px-main" tabIndex={-1}>
+        <main id="main" className={`px-main${hasAssistant ? " px-with-assistant" : ""}`} tabIndex={-1}>
+          {hasAssistant ? <Edith /> : null}
           {c.live && c.loading ? <LoadingRows rows={4} /> : c.live && !c.account ? <div className="px-stack">
             <h1>Your Pixel workspace</h1><Alert>{c.liveError ?? "Sign in to continue."}</Alert>
             <Link className="px-button" data-variant="primary" href="/sign-in">Sign in</Link>

@@ -109,6 +109,8 @@ export class ApiError extends Error {}
 export interface ApiAccount {
   user_id: string; email: string | null; tenant_id: string; organization_name: string;
   role: "org_admin" | "team_admin" | "team_member"; team_id: string | null;
+  /** The product that answers requests about Pixel itself; null when none is configured. */
+  console_product_id: string | null;
   teams: Array<{ team_id: string; name: string }>;
 }
 
@@ -298,4 +300,54 @@ function withoutKey(source: Record<string, unknown>, key: string): Record<string
   const result = { ...source };
   delete result[key];
   return result;
+}
+
+export interface DraftThingField {
+  name: string;
+  type: "text" | "integer" | "enum" | "date" | "boolean";
+  required?: boolean;
+  values?: string[];
+}
+
+export interface DraftThing {
+  name: string;
+  label: string;
+  plural: string;
+  people?: boolean;
+  fields: DraftThingField[];
+}
+
+export interface ApiDraftedDefinition {
+  definition_id: string;
+  product_name: string;
+  definition: string;
+  things: string[];
+  screens: string[];
+  can_do: string[];
+}
+
+/**
+ * Ask Pixel to write a definition from a description of a product. Nothing is stored and no
+ * product is created: this is what Pixel understood, for the person who described it to read
+ * before anything runs on it.
+ */
+export async function productDraft(session: ApiSession, draft: {
+  productName: string; assistantName: string; definitionId: string; things: DraftThing[];
+}): Promise<ApiDraftedDefinition> {
+  return call<ApiDraftedDefinition>("/product-drafts", {
+    method: "POST",
+    body: JSON.stringify({
+      product_name: draft.productName,
+      assistant_name: draft.assistantName,
+      definition_id: draft.definitionId,
+      things: draft.things.map((thing) => ({
+        name: thing.name, label: thing.label, plural: thing.plural,
+        people: thing.people ?? false,
+        fields: thing.fields.map((field) => ({
+          name: field.name, type: field.type, required: field.required ?? false,
+          values: field.type === "enum" ? field.values ?? [] : [],
+        })),
+      })),
+    }),
+  }, session);
 }

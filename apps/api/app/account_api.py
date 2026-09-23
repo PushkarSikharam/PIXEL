@@ -15,10 +15,20 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 
+import logging
+
 from app.auth import AuthUser, create_token, require_auth, require_member
+from app.definitions.console import configured_console, ensure_console_product
+from app.definitions.organizations import OrganizationDirectory
 from app.db import get_connection
 from app.services.env import env_bool, env_value
 
+logger = logging.getLogger(__name__)
+# Codes one address may ask for in an hour, and the ceiling for the whole deployment. The second
+# is deliberately far above the first: it is an abuse ceiling, never a queue everyone shares.
+ADDRESS_CODES_PER_HOUR = 5
+DEPLOYMENT_CODES_PER_HOUR = 5000
+DEPLOYMENT_BUCKET = "deployment"
 router = APIRouter(prefix="/api/account", tags=["account"])
 
 
@@ -75,13 +85,18 @@ def request_code(body: EmailRequest, response: Response) -> dict:
         connection.execute("begin immediate")
         connection.execute("delete from email_challenges where expires_at < ?", (now,))
         connection.execute("delete from email_login_limits where starts_at < ?", (now - 3600,))
-        # A deployment-wide ceiling also limits rotating-address abuse behind proxies.
-        for bucket, maximum in (("global", 100), (_digest(settings[0], email), 5)):
+        # One address is limited tightly. The deployment-wide ceiling exists to blunt abuse from
+        # rotating addresses, so it is set far above ordinary use: a ceiling low enough for one
+        # attacker to exhaust would let them lock every other customer out of signing in, which
+        # is a worse failure than the abuse it prevents.
+        buckets = ((DEPLOYMENT_BUCKET, DEPLOYMENT_CODES_PER_HOUR),
+                   (_digest(settings[0], email), ADDRESS_CODES_PER_HOUR))
+        for bucket, maximum in buckets:
             row = connection.execute("select attempts from email_login_limits where bucket=?", (bucket,)).fetchone()
             if row and row[0] >= maximum:
                 limited = True
         if not limited:
-            for bucket in ("global", _digest(settings[0], email)):
+            for bucket, _ in buckets:
                 connection.execute("insert into email_login_limits values (?, ?, 1) "
                                    "on conflict(bucket) do update set attempts=attempts+1", (bucket, now))
             connection.execute("update email_challenges set consumed=1 where email=?", (email,))
@@ -103,7 +118,7 @@ def request_code(body: EmailRequest, response: Response) -> dict:
 def verify_code(body: CodeRequest, response: Response) -> dict:
     settings = _settings()
     now = time.time()
-    account = None
+    account, registered = None, False
     with get_connection() as connection:
         connection.execute("begin immediate")
         row = connection.execute("select * from email_challenges where challenge_id=?", (body.challenge_id,)).fetchone()
@@ -119,9 +134,17 @@ def verify_code(body: CodeRequest, response: Response) -> dict:
                     connection.execute("insert into teams values (?, 'default', 'My team', 'active', ?)", (tenant_id, created))
                     connection.execute("insert into memberships values (?, ?, 'org_admin', null)", (tenant_id, user_id))
                     connection.execute("insert into email_accounts values (?, ?, ?, ?)", (row["email"], user_id, tenant_id, created))
-                    account = {"user_id": user_id, "tenant_id": tenant_id}
+                    account, registered = {"user_id": user_id, "tenant_id": tenant_id}, True
     if account is None:
         raise HTTPException(401, "The code is invalid, expired, or this account has no access.")
+    if registered:
+        # A brand new organization gets the assistant for moving around the application, so the
+        # first screen somebody sees already has one. It is not worth failing a sign-in over.
+        try:
+            ensure_console_product(OrganizationDirectory(), account["tenant_id"], "default",
+                                   (account["user_id"],))
+        except Exception:  # noqa: BLE001 - never block somebody signing in
+            logger.warning("console_product_not_created", extra={"tenant_id": account["tenant_id"]})
     with get_connection() as connection:
         organization = connection.execute("select state from organizations where tenant_id=?", (account["tenant_id"],)).fetchone()
     if not organization or organization[0] != "active":
@@ -140,9 +163,18 @@ def account_session(response: Response, user: AuthUser = Depends(require_auth)) 
         teams = connection.execute("select team_id, name from teams where tenant_id=? and state='active' "
                                    "and (?='org_admin' or team_id=?)", (user.tenant_id, user.role, user.team_id)).fetchall()
     response.headers["Cache-Control"] = "no-store"
+    if organization is None:
+        # A membership whose organization is gone is not an account anybody can use.
+        raise HTTPException(403, "This account is unavailable.")
+    # Which product answers requests about the application itself, so the assistant can be asked
+    # to move around it from anywhere. Absent when this deployment configured none.
+    console = configured_console()
+    if console is not None and OrganizationDirectory().product(user.tenant_id, console.product_id) is None:
+        console = None
     return {"user_id": user.user_id, "email": account[0] if account else None,
             "tenant_id": user.tenant_id, "organization_name": organization[0],
             "role": user.role, "team_id": user.team_id,
+            "console_product_id": console.product_id if console else None,
             "teams": [dict(team) for team in teams]}
 
 

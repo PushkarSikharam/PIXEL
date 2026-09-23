@@ -49,7 +49,9 @@ from dataclasses import replace as dataclasses_replace
 from typing import Any
 
 from app.definitions.authoring import store_definition
-from app.definitions.loader import DefinitionError, MAX_DEFINITION_BYTES
+from app.definitions.console import configured_console
+from app.definitions.drafting import ProductDraft, draft_text
+from app.definitions.loader import DefinitionError, MAX_DEFINITION_BYTES, parse_definition
 from app.definitions.registry import RegistryError
 from app.record_access import RecordGrant, grant_records, legacy_record_owner
 from app.services.generic_package import DefinitionLookup
@@ -64,7 +66,7 @@ from app.services.engine_state import EngineStateStore
 from app.services.legacy_adapter import dispatch_legacy_mutation
 from app.services import turn_telemetry
 from starlette.background import BackgroundTask
-from app.schemas import CancelTurnRequest, CancelTurnResponse, ExecutionReceipt, TurnRequest, TurnResponse
+from app.schemas import FALLBACK_STAGE, CancelTurnRequest, CancelTurnResponse, ExecutionReceipt, TurnRequest, TurnResponse
 from app.record_schemas import (
     CycleInput,
     IssueInput,
@@ -449,9 +451,14 @@ def list_products(tenant_id: str, user: AuthUser = Depends(require_member)) -> P
     if tenant_id != user.tenant_id:
         raise HTTPException(status_code=404, detail="That organization is not available to you.")
     directory = agent.directory
+    # Pixel itself is not one of somebody's products, however it is served; listing it would
+    # invite them to open the application inside the application.
+    console = configured_console()
     summaries = []
     for binding in directory.active_products():
         if binding.tenant_id != tenant_id:
+            continue
+        if console is not None and binding.product_id == console.product_id:
             continue
         try:
             authorize_product(user, binding.product_id, directory)
@@ -481,6 +488,39 @@ def list_products(tenant_id: str, user: AuthUser = Depends(require_member)) -> P
             views=sorted(definition.views),
         ))
     return ProductsResponse(tenant_id=tenant_id, products=summaries)
+
+
+class DraftedDefinition(BaseModel):
+    """A definition written from a description, for the person who described it to read."""
+
+    definition_id: str
+    product_name: str
+    definition: str
+    things: list[str]
+    screens: list[str]
+    can_do: list[str]
+
+
+@app.post("/api/product-drafts", response_model=DraftedDefinition)
+def draft_product(draft: ProductDraft, user: AuthUser = Depends(require_member)) -> DraftedDefinition:
+    """Write a definition from a description of a product, and change nothing.
+
+    Nothing is stored and no product is created: this answers "here is what I understood", so the
+    person who described it can read it before it becomes a product anyone can talk to.
+    """
+    try:
+        text = draft_text(draft, user.tenant_id)
+        definition = parse_definition(text.encode())
+    except (DefinitionError, ValueError) as refused:
+        raise HTTPException(status_code=422, detail=str(refused)) from refused
+    return DraftedDefinition(
+        definition_id=draft.definition_id,
+        product_name=definition.identity.product_name,
+        definition=text,
+        things=[entity.plural for entity in definition.entities.values()],
+        screens=[view.label for view in definition.views.values()],
+        can_do=sorted({action.description for action in definition.actions.values()}),
+    )
 
 
 @app.post("/api/organizations/{tenant_id}/products", response_model=ProductSummary, status_code=201)
@@ -1274,6 +1314,7 @@ def create_turn(request: TurnRequest, http: Request, background: BackgroundTasks
                 user: AuthUser = Depends(require_auth), engine=Depends(turn_engine)) -> TurnResponse:
     started = time.monotonic()
     response = _answer_turn(request, http, background, user, engine)
+    response = _or_platform_navigation(request, http, background, user, engine, response)
     # Metadata only, after the response (5c plan, section 10).
     background.add_task(_record_turn, request, user, response, (time.monotonic() - started) * 1000)
     return response
@@ -1299,6 +1340,49 @@ def _record_turn(request: TurnRequest, user: AuthUser, response: TurnResponse, m
         deployment_id=deployment_id(), tenant_id=user.tenant_id or "", product_id=request.product_id,
         definition_version=pin.definition_version if pin else None, authority=authority, counts=counts,
     )
+
+
+# The one stage that means "this product could not help": an answer, a refusal, a question back
+# or a quoted document are all answers, and none of them is a request about the application.
+FELL_BACK = FALLBACK_STAGE
+# A turn answered by the application rather than the product keeps its own memory, so a product's
+# conversation is never joined to the application's.
+PLATFORM_SESSION = "::platform"
+
+
+def _or_platform_navigation(request: TurnRequest, http: Request, background: BackgroundTasks,
+                            user: AuthUser, engine, answered: TurnResponse) -> TurnResponse:
+    """Answer "take me back to my products" from inside a product.
+
+    Asking to leave where you are is navigation, not a question the product should have to
+    answer. Only a turn the product itself could make nothing of is offered to the application,
+    and only when this deployment has an application definition and this caller may use it. The
+    product's own conversation is untouched: the application answers in a session of its own.
+    """
+    console = configured_console()
+    if (console is None or user.kind != "member"
+            or request.product_id == console.product_id
+            or answered.status != "completed"
+            or answered.intent_trace.current_intent != FELL_BACK):
+        return answered
+    if agent.directory.product(user.tenant_id or "", console.product_id) is None:
+        return answered
+    moved = request.model_copy(update={
+        "product_id": console.product_id,
+        "session_id": f"{request.session_id}{PLATFORM_SESSION}",
+        "workspace_scope_id": PRIMARY,
+        "selected_issue_id": None,
+    })
+    try:
+        elsewhere = _answer_turn(moved, http, background, user, engine)
+    except HTTPException:
+        # No access to the application's own product is not a reason to lose the product's reply.
+        return answered
+    if elsewhere.validated_action is None or elsewhere.status != "completed":
+        return answered
+    # The conversation the caller is having is still the product's, so the turn is reported under
+    # the session they are in.
+    return elsewhere.model_copy(update={"session_id": request.session_id})
 
 
 def _turn_stage(authority: str, response: TurnResponse) -> str:

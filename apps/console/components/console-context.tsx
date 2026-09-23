@@ -4,7 +4,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import type { Environment, Permission } from "@pixel-console/lib/contracts";
 import { DIRECTORY, ORGANIZATIONS, PERSONAS, PRODUCTS, productById } from "@pixel-console/lib/mock-data";
 import { authorize, type Resource } from "@pixel-console/lib/permissions";
-import { isLive, listProducts, currentAccount, storedSession, type ApiProduct, type ApiAccount } from "@pixel-console/lib/pixel-api";
+import { isLive, listProducts, currentAccount, storedSession, type ApiAccount, type ApiActionShape,
+  type ApiProduct, type ApiProductShape } from "@pixel-console/lib/pixel-api";
 
 /**
  * The signed-in context of the mocked console: who is acting, in which organization, on which
@@ -23,6 +24,13 @@ interface ConsoleState {
   theme: "system" | "light" | "dark";
 }
 
+export interface ProductSurface {
+  productId: string;
+  shape: ApiProductShape;
+  reloadRecords: () => Promise<void>;
+  showAction: (action: ApiActionShape, payload: Record<string, unknown>) => void;
+}
+
 interface ConsoleApi extends ConsoleState {
   persona: (typeof PERSONAS)[number];
   can: (permission: Permission, resource?: Partial<Resource>) => boolean;
@@ -33,6 +41,13 @@ interface ConsoleApi extends ConsoleState {
   account: ApiAccount | null;
   loading: boolean;
   reloadProducts: () => void;
+  /**
+   * What the open product screen wants the assistant to be able to do: reload its records and act
+   * on its screens. Absent when nobody is inside a product, and replaced whole when another is
+   * opened, so one product's callbacks can never run against another's.
+   */
+  productSurface: ProductSurface | null;
+  setProductSurface: (surface: ProductSurface | null) => void;
   setPersona: (id: string) => void;
   selectProduct: (id: string | null) => void;
   setEnvironment: (env: Environment) => void;
@@ -119,6 +134,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
   }, [can, connected, live, state.organizationId]);
 
   const reloadProducts = useCallback(() => setReloads((count) => count + 1), []);
+  const [productSurface, setProductSurface] = useState<ProductSurface | null>(null);
 
   // Actions are stable across renders, and a setter that changes nothing keeps the same state
   // object, so effects that depend on them can never loop.
@@ -146,8 +162,10 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
 
   const api = useMemo<ConsoleApi>(() => ({
     ...state, persona, can, visibleProducts, live: connected, liveError, account, loading, reloadProducts,
+    productSurface, setProductSurface,
     setPersona, selectProduct, setEnvironment, setActiveWork, setTheme,
   }), [state, persona, can, visibleProducts, connected, liveError, account, loading, reloadProducts,
+       productSurface,
        setPersona, selectProduct, setEnvironment, setActiveWork, setTheme]);
   return <Context.Provider value={api}>{children}</Context.Provider>;
 }

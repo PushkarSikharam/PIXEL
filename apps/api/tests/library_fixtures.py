@@ -94,8 +94,10 @@ def library_definition(version: int = 1) -> dict:
              "match": [["librarian", "librarians"]]},
             {"action": "books_by_keeper", "requires": ["person"], "response": "records_filtered",
              "match": [["kept by", "for"], ["books"]]},
+            # Named like the drafting generator names them: the singular only, so a request to
+            # go somewhere in the application is not swallowed by a product's own intent.
             {"action": "open_book", "requires": ["record"], "response": "record_opened",
-             "match": [["open", "show", "pull up"]]},
+             "match": [["open", "pull up"], ["book"]]},
             {"action": "add_book", "requires": ["person"], "response": "record_created",
              "match": [["add", "create", "new"], ["book"]]},
             {"action": "add_librarian", "response": "record_created",

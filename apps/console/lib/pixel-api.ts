@@ -21,6 +21,80 @@ export interface ApiProduct {
   views: string[];
 }
 
+export interface ApiFieldShape {
+  name: string;
+  label: string;
+  type: string;
+  required: boolean;
+  editable: boolean;
+  display: boolean;
+  values: string[];
+  target: string | null;
+}
+
+export interface ApiEntityShape {
+  name: string;
+  label: string;
+  plural: string;
+  title_field: string;
+  summary_fields: string[];
+  fields: ApiFieldShape[];
+}
+
+export interface ApiViewShape {
+  name: string;
+  label: string;
+  kind: string;
+  entity: string | null;
+  shortcut: string | null;
+  navigable: boolean;
+  columns: string[];
+  controls: Array<{ name: string; label: string }>;
+}
+
+export interface ApiActionShape {
+  name: string;
+  client_type: string;
+  capability: string;
+  description: string;
+  entity: string | null;
+  view: string | null;
+  fields: string[];
+}
+
+export interface ApiProductShape {
+  product_id: string;
+  product_name: string;
+  assistant_name: string;
+  definition_id: string;
+  definition_version: number;
+  views: ApiViewShape[];
+  entities: ApiEntityShape[];
+  actions: ApiActionShape[];
+}
+
+export interface ApiRecords {
+  product_id: string;
+  scope: string;
+  records: Record<string, Array<Record<string, unknown> & { id: string; title?: string }>>;
+}
+
+export interface ApiTurnResponse {
+  session_id: string;
+  turn_id: number;
+  status: "completed" | "cancelled" | "stale" | "denied";
+  speech: string;
+  validated_action: { type: string; payload: Record<string, unknown> } | null;
+  execution: { key: string; session_id: string; turn_id: number; expires_at: string } | null;
+}
+
+export interface ApiExecutionReceipt {
+  outcome: "executed" | "failed" | "refused";
+  code: string;
+  speech: string;
+  record: Record<string, unknown> | null;
+}
+
 export interface ApiSession {
   token: string;
   userId: string;
@@ -127,4 +201,61 @@ export async function addProduct(session: ApiSession, product: {
     },
     session,
   );
+}
+
+export async function productShape(session: ApiSession, productId: string): Promise<ApiProductShape> {
+  return call<ApiProductShape>(`/products/${encodeURIComponent(productId)}/shape`, {}, session);
+}
+
+export async function productRecords(session: ApiSession, productId: string): Promise<ApiRecords> {
+  return call<ApiRecords>(`/products/${encodeURIComponent(productId)}/records`, {}, session);
+}
+
+export async function sendProductTurn(session: ApiSession, input: {
+  sessionId: string;
+  turnId: number;
+  productId: string;
+  message: string;
+}): Promise<ApiTurnResponse> {
+  return call<ApiTurnResponse>("/turn", {
+    method: "POST",
+    body: JSON.stringify({
+      session_id: input.sessionId,
+      turn_id: input.turnId,
+      product_id: input.productId,
+      message: input.message,
+      input_mode: "text",
+      current_page: "console",
+      workspace_scope_id: "primary",
+    }),
+  }, session);
+}
+
+export async function executeProductAction(session: ApiSession, input: {
+  productId: string;
+  entity: string;
+  action: string;
+  payload: Record<string, unknown>;
+  executionKey: string;
+  sessionId: string;
+}): Promise<ApiExecutionReceipt> {
+  const headers = { "X-Execution-Key": input.executionKey, "X-Session-Id": input.sessionId };
+  const recordId = typeof input.payload.record_id === "string" ? input.payload.record_id : null;
+  const body = recordId
+    ? { action: input.action, changes: withoutKey(input.payload, "record_id") }
+    : { action: input.action, fields: input.payload };
+  const path = recordId
+    ? `/products/${encodeURIComponent(input.productId)}/records/${encodeURIComponent(input.entity)}/${encodeURIComponent(recordId)}`
+    : `/products/${encodeURIComponent(input.productId)}/records/${encodeURIComponent(input.entity)}`;
+  return call<ApiExecutionReceipt>(path, {
+    method: recordId ? "PATCH" : "POST",
+    headers,
+    body: JSON.stringify(body),
+  }, session);
+}
+
+function withoutKey(source: Record<string, unknown>, key: string): Record<string, unknown> {
+  const result = { ...source };
+  delete result[key];
+  return result;
 }

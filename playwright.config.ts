@@ -4,10 +4,6 @@ const webPort = 3100;
 const webBaseUrl = `http://localhost:${webPort}`;
 
 export default defineConfig({
-  // Core browser tests, plus each product package's own browser tests.
-  testDir: ".",
-  testMatch: ["tests/e2e/**/*.spec.ts", "products/*/tests/**/*.spec.ts"],
-  testIgnore: [".worktrees/**", "**/.pytest_cache/**", "tmp-*.ts", "playwright-report/**", "test-results/**"],
   timeout: 30_000,
   expect: {
     timeout: 10_000
@@ -26,7 +22,17 @@ export default defineConfig({
   },
   projects: [
     {
-      name: "chromium",
+      name: "chromium-core",
+      testDir: "tests/e2e",
+      testMatch: ["**/*.spec.ts"],
+      testIgnore: ["**/.pytest_cache/**", "tmp-*.ts", "playwright-report/**", "test-results/**"],
+      use: { ...devices["Desktop Chrome"] }
+    },
+    {
+      name: "chromium-products",
+      testDir: "products",
+      testMatch: ["*/tests/**/*.spec.ts"],
+      testIgnore: ["**/__pycache__/**", "**/.pytest_cache/**", "tmp-*.ts", "playwright-report/**", "test-results/**"],
       use: { ...devices["Desktop Chrome"] }
     }
   ]

@@ -7,8 +7,9 @@ built for: one organization runs several products, and a definition serves sever
 A seed only ever names its own package's definition; a package never binds another's.
 
 Seeds load only when `PIXEL_DEMO_SEEDS=true` is set explicitly; when it is missing, nothing
-synthetic is ever created. Existing rows are left alone, so operator changes such as a version
-rollback survive restarts.
+synthetic is ever created. Existing product bindings are left alone, so operator changes such as a
+version rollback survive restarts. Existing seeded memberships are reconciled to the seed, because
+these identities are synthetic platform fixtures rather than operator-managed users.
 
 Demo *record* data is loaded by the application's startup instead (see `main.lifespan`), because
 this module must not depend on the record store. Either way it is deliberately not created on
@@ -108,8 +109,12 @@ def _apply(directory: OrganizationDirectory, definition_id: str, seed: DemoOrgan
     if directory.team(tenant_id, team_id) is None:
         directory.create_team(tenant_id, team_id, seed.team.name)
     for member in seed.members:
-        if directory.membership(tenant_id, member.user_id) is None:
-            directory.add_member(tenant_id, member.user_id, member.role, team_id if member.team else None)
+        member_team = team_id if member.team else None
+        current = directory.membership(tenant_id, member.user_id)
+        if current is None:
+            directory.add_member(tenant_id, member.user_id, member.role, member_team)
+        elif current.role != member.role or current.team_id != member_team:
+            directory.set_member_role(tenant_id, member.user_id, member.role, member_team)
     for product in seed.products:
         _apply_product(directory, definition_id, tenant_id, team_id, product)
 

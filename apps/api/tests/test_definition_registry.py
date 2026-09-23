@@ -617,6 +617,13 @@ class DemoSeedTest(RegistryFixture):
         load_demo_seeds(self.files.source)
         self.assertEqual(self.directory.product("sample-org", "sample-desk").definition_version, 2)
 
+    def test_seeds_reconcile_synthetic_membership_roles(self):
+        load_demo_seeds(self.files.source)
+        self.directory.set_member_role("sample-org", "sample-agent", "team_admin", "desk-team")
+        load_demo_seeds(self.files.source)
+        membership = self.directory.membership("sample-org", "sample-agent")
+        self.assertEqual((membership.role, membership.team_id), ("team_member", "desk-team"))
+
     def test_seeds_are_off_when_disabled(self):
         os.environ["PIXEL_DEMO_SEEDS"] = "false"
         load_demo_seeds(self.files.source)

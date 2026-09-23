@@ -307,6 +307,27 @@ class ProductEndpointsTest(AddedProductFixture):
         answered = self.ask("what can you do", product="added-through-the-api")
         self.assertIn("Sample Library", answered["speech"])
 
+    def test_a_team_admin_may_add_a_product_for_their_team(self):
+        self.directory.add_member(TENANT, "team-owner", "team_admin", "planning-team")
+        response = self.client.post(f"/api/organizations/{TENANT}/products",
+                                    headers=self.as_user("team-owner"), json={
+            "product_id": "added-by-team-owner", "team_id": "planning-team",
+            "definition_id": DEFINITION,
+            "definition": yaml.safe_dump(library_definition(), sort_keys=False),
+        })
+        self.assertEqual(response.status_code, 201, response.text)
+
+    def test_a_team_admin_cannot_add_a_product_for_another_team(self):
+        self.directory.create_team(TENANT, "platform-team", "Platform")
+        self.directory.add_member(TENANT, "team-owner", "team_admin", "planning-team")
+        response = self.client.post(f"/api/organizations/{TENANT}/products",
+                                    headers=self.as_user("team-owner"), json={
+            "product_id": "wrong-team-product", "team_id": "platform-team",
+            "definition_id": DEFINITION,
+            "definition": yaml.safe_dump(library_definition(), sort_keys=False),
+        })
+        self.assertEqual(response.status_code, 403, response.text)
+
     def test_a_definition_that_is_not_one_is_refused_and_nothing_is_added(self):
         response = self.client.post(f"/api/organizations/{TENANT}/products", headers=self.as_user(), json={
             "product_id": "never-added", "team_id": "planning-team",

@@ -15,6 +15,7 @@ class EmailAccountsTest(EngineCutoverFixture):
         super().setUp()
         enabled = patch.dict(os.environ, {
             "PIXEL_EMAIL_LOGIN_ENABLED": "true", "PIXEL_SELF_SIGNUP_ENABLED": "true",
+            "PIXEL_ENGINE_MODE": "definition",
             "PIXEL_AUTH_SECRET": "test-only-stable-secret", "PIXEL_SMTP_HOST": "invalid.example",
             "PIXEL_SMTP_USER": "test", "PIXEL_SMTP_PASSWORD": "test", "PIXEL_EMAIL_FROM": "noreply@example.test",
         })
@@ -36,6 +37,11 @@ class EmailAccountsTest(EngineCutoverFixture):
 
     def test_disabled_signin_does_not_send_mail(self):
         with patch.dict(os.environ, {"PIXEL_EMAIL_LOGIN_ENABLED": "false"}):
+            self.assertEqual(self.client.post("/api/account/email-code", json={"email": "a@example.test"}).status_code, 503)
+        self.mail.assert_not_called()
+
+    def test_customer_login_requires_definition_authority(self):
+        with patch.dict(os.environ, {"PIXEL_ENGINE_MODE": "legacy"}):
             self.assertEqual(self.client.post("/api/account/email-code", json={"email": "a@example.test"}).status_code, 503)
         self.mail.assert_not_called()
 

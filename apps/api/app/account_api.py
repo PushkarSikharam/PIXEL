@@ -40,6 +40,8 @@ def _settings() -> tuple[str, ...]:
     ))
     if not env_bool("PIXEL_EMAIL_LOGIN_ENABLED", default=False) or not all(values):
         raise HTTPException(503, "Email sign-in is not configured. Shared access is disabled.")
+    if env_value("PIXEL_ENGINE_MODE") != "definition":
+        raise HTTPException(503, "Customer workspaces require the definition engine before sign-in can be enabled.")
     return values
 
 

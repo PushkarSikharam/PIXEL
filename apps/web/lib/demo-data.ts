@@ -65,20 +65,30 @@ export const demoProjects: DemoProject[] = [
   }
 ];
 
+// The placeholder shown before the API answers. Its dates are anchored to today for the same
+// reason the seeded ones are: a cycle called active must still be running when someone reads it.
+function anchored(startsIn: number, endsIn: number): { startDate: string; endDate: string } {
+  const day = (offset: number) => {
+    const when = new Date();
+    when.setDate(when.getDate() + offset);
+    return when.toISOString().slice(0, 10);
+  };
+  return { startDate: day(startsIn), endDate: day(endsIn) };
+}
+
 export const demoCycle: DemoCycle = {
   id: "CYC-14",
   name: "Product Engineering Cycle 14",
   projectId: "PRJ-101",
   daysLeft: 8,
-  progress: 68,
+  progress: 47,
   completed: 18,
   inProgress: 9,
   remaining: 11,
   focus: ["Bug triage", "Cycle planning", "GitHub sync", "Assignment flow"],
   status: "Active",
   team: "Product Engineering",
-  startDate: "2026-08-24",
-  endDate: "2026-09-08"
+  ...anchored(-7, 8)
 };
 
 export const demoCycles: DemoCycle[] = [
@@ -88,15 +98,14 @@ export const demoCycles: DemoCycle[] = [
     name: "Platform Cycle 21",
     projectId: "PRJ-103",
     daysLeft: 6,
-    progress: 42,
+    progress: 32,
     completed: 7,
     inProgress: 6,
     remaining: 9,
     focus: ["Capacity forecast", "Migration readiness", "Planning accuracy"],
     status: "Active",
     team: "Platform",
-    startDate: "2026-08-31",
-    endDate: "2026-09-14"
+    ...anchored(-9, 6)
   }
 ];
 

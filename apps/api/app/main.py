@@ -10,7 +10,7 @@ from fastapi import BackgroundTasks, Body, Depends, FastAPI, Header, HTTPExcepti
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from app.auth import (
     AuthUser,
@@ -41,7 +41,21 @@ from app.engine.execution import (
     principal_owner,
     require_no_legacy_keys,
 )
-from app.record_access import RecordGrant, legacy_record_owner
+from dataclasses import replace as dataclasses_replace
+from typing import Any
+
+from app.definitions.authoring import store_definition
+from app.definitions.loader import DefinitionError, MAX_DEFINITION_BYTES
+from app.definitions.registry import RegistryError
+from app.record_access import RecordGrant, grant_records, legacy_record_owner
+from app.services.generic_package import DefinitionLookup
+from app.services.record_store import (
+    PRIMARY,
+    RecordConflict as StoreConflict,
+    RecordInvalid,
+    RecordStore,
+    SpaceFull,
+)
 from app.services.engine_state import EngineStateStore
 from app.services.legacy_adapter import dispatch_legacy_mutation
 from app.services import turn_telemetry
@@ -390,6 +404,357 @@ def demo_login(body: DemoLoginRequest, http: Request) -> DemoLoginResponse:
     tenant_id = organizations[0]
     token = create_token(body.user_id, tenant_id)
     return DemoLoginResponse(token=token, user_id=body.user_id, tenant_id=tenant_id)
+
+
+class ProductSummary(BaseModel):
+    """One product of the caller's organization, as the console lists it."""
+
+    product_id: str
+    name: str
+    definition_id: str
+    definition_version: int
+    state: str
+    visitor_access: bool
+    entities: list[str]
+    views: list[str]
+
+
+class ProductsResponse(BaseModel):
+    tenant_id: str
+    products: list[ProductSummary]
+
+
+class AddProductRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    product_id: str = Field(min_length=1, max_length=64)
+    team_id: str = Field(min_length=1, max_length=64)
+    definition_id: str = Field(min_length=1, max_length=64)
+    # The definition itself, as its author wrote it. It is parsed and validated before anything
+    # is stored: a product nobody can describe is not a product Pixel will run.
+    definition: str = Field(min_length=1, max_length=MAX_DEFINITION_BYTES)
+    definition_version: int = Field(default=1, ge=1)
+
+
+@app.get("/api/organizations/{tenant_id}/products", response_model=ProductsResponse)
+def list_products(tenant_id: str, user: AuthUser = Depends(require_member)) -> ProductsResponse:
+    """Every product of the caller's own organization. Never another organization's."""
+    if tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="That organization is not available to you.")
+    directory = agent.directory
+    summaries = []
+    for binding in directory.active_products():
+        if binding.tenant_id != tenant_id:
+            continue
+        try:
+            definition = directory.definitions.load(
+                binding.definition_id, binding.definition_version).definition
+        except Exception:
+            # A product whose definition cannot be read is listed plainly rather than hidden, so
+            # an operator can see that it needs attention.
+            summaries.append(ProductSummary(
+                product_id=binding.product_id, name=binding.product_id,
+                definition_id=binding.definition_id, definition_version=binding.definition_version,
+                state="unreadable", visitor_access=binding.visitor_access, entities=[], views=[]))
+            continue
+        summaries.append(ProductSummary(
+            product_id=binding.product_id,
+            name=definition.identity.product_name,
+            definition_id=binding.definition_id,
+            definition_version=binding.definition_version,
+            state=binding.state,
+            visitor_access=binding.visitor_access,
+            entities=sorted(definition.entities),
+            views=sorted(definition.views),
+        ))
+    return ProductsResponse(tenant_id=tenant_id, products=summaries)
+
+
+@app.post("/api/organizations/{tenant_id}/products", response_model=ProductSummary, status_code=201)
+def add_product(tenant_id: str, body: AddProductRequest, http: Request,
+                user: AuthUser = Depends(require_member)) -> ProductSummary:
+    """Add a product to this organization from a definition, with no code and no deployment."""
+    if tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="That organization is not available to you.")
+    require_org_admin(user)
+    rate_limits.enforce("write", http, identity=user.user_id)
+    directory = agent.directory
+    try:
+        store_definition(body.definition, definition_id=body.definition_id,
+                         version=body.definition_version)
+        directory.definitions.ensure_published(body.definition_id, body.definition_version)
+        binding = directory.bind_product(tenant_id, body.product_id, body.team_id,
+                                         body.definition_id, body.definition_version)
+    except (DefinitionError, RegistryError) as refused:
+        raise HTTPException(status_code=400, detail=str(refused)) from refused
+    # Whoever added the product can work in it straight away; a product nobody may open is not
+    # one anybody added on purpose.
+    grant_records(tenant_id, body.product_id, user.user_id, [], True)
+    definition = directory.definitions.load(body.definition_id, body.definition_version).definition
+    return ProductSummary(
+        product_id=binding.product_id, name=definition.identity.product_name,
+        definition_id=binding.definition_id, definition_version=binding.definition_version,
+        state=binding.state, visitor_access=binding.visitor_access,
+        entities=sorted(definition.entities), views=sorted(definition.views),
+    )
+
+
+class KeyedRecordCreate(BaseModel):
+    """A create the assistant proposed: the action it named and only the fields its key bound."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    action: str = Field(min_length=1, max_length=64)
+    fields: dict[str, Any] = Field(default_factory=dict)
+
+
+class KeyedRecordChange(BaseModel):
+    """A change the assistant proposed: the action it named and only the fields its key bound."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    action: str = Field(min_length=1, max_length=64)
+    changes: dict[str, Any] = Field(min_length=1)
+
+
+def _product_definition(user: AuthUser, product_id: str):
+    """The definition this product runs now. A product the caller may not reach is reported the
+    same way as one that does not exist."""
+    binding = agent.directory.product(user.tenant_id or "", product_id)
+    if binding is None:
+        raise HTTPException(status_code=404, detail="That product is not available to you.")
+    try:
+        return agent.directory.definitions.load(
+            binding.definition_id, binding.definition_version).definition
+    except (DefinitionError, RegistryError) as unavailable:
+        raise HTTPException(status_code=409, detail="This product is being changed.") from unavailable
+
+
+def _record_space(user: AuthUser) -> str:
+    """Whose records these are: a visitor's own demo instance, or the organization's own."""
+    context = getattr(user, "demo_context", None)
+    return getattr(context, "instance_id", None) or PRIMARY
+
+
+def _visible_record(definition, store: "RecordStore", grant: RecordGrant, scope_id: str,
+                    entity: str, record_id: str):
+    """The record as this caller sees it in one workspace, or None when they cannot see it."""
+    narrowed = dataclasses_replace(grant, scope_ids=frozenset({scope_id}), is_admin=False)
+    return DefinitionLookup(definition, store, narrowed.visible_scope_ids()).get(entity, record_id)
+
+
+class FieldShape(BaseModel):
+    """One field as a screen needs to show and edit it."""
+
+    name: str
+    label: str
+    type: str
+    required: bool
+    editable: bool
+    display: bool
+    values: list[str] = []
+    target: str | None = None
+
+
+class EntityShape(BaseModel):
+    name: str
+    label: str
+    plural: str
+    title_field: str
+    summary_fields: list[str] = []
+    fields: list[FieldShape] = []
+
+
+class ControlShape(BaseModel):
+    name: str
+    label: str
+
+
+class ViewShape(BaseModel):
+    name: str
+    label: str
+    kind: str
+    entity: str | None = None
+    shortcut: str | None = None
+    navigable: bool = True
+    columns: list[str] = []
+    controls: list[ControlShape] = []
+
+
+class ProductShape(BaseModel):
+    """Everything a screen needs to render a product it has never seen before.
+
+    The shape of a product, never its records: what its things are called, what fields they
+    carry, what screens it has and what sits on them. A client that can render this can render
+    any product the platform runs.
+    """
+
+    product_id: str
+    product_name: str
+    assistant_name: str
+    definition_id: str
+    definition_version: int
+    views: list[ViewShape]
+    entities: list[EntityShape]
+
+
+class RecordsResponse(BaseModel):
+    product_id: str
+    scope: str
+    records: dict[str, list[dict[str, Any]]]
+
+
+@app.get("/api/products/{product_id}/shape", response_model=ProductShape)
+def product_shape(product_id: str, user: AuthUser = Depends(require_auth)) -> ProductShape:
+    """How to render this product. Its records are asked for separately."""
+    binding = agent.directory.product(user.tenant_id or "", product_id)
+    definition = _product_definition(user, product_id)
+    return ProductShape(
+        product_id=product_id,
+        product_name=definition.identity.product_name,
+        assistant_name=definition.identity.assistant_name,
+        definition_id=binding.definition_id,
+        definition_version=binding.definition_version,
+        views=[
+            ViewShape(
+                name=name, label=view.label, kind=view.kind, entity=view.entity,
+                shortcut=view.shortcut, navigable=view.navigable, columns=list(view.columns),
+                controls=[ControlShape(name=key, label=control.label)
+                          for key, control in view.controls.items()],
+            )
+            for name, view in definition.views.items()
+        ],
+        entities=[
+            EntityShape(
+                name=name, label=entity.label, plural=entity.plural,
+                title_field=entity.title_field, summary_fields=list(entity.summary_fields),
+                fields=[
+                    FieldShape(
+                        name=field_name, label=spec.label or field_name.replace("_", " "),
+                        type=spec.type, required=spec.required, editable=spec.editable,
+                        display=spec.display, values=list(spec.values), target=spec.target,
+                    )
+                    for field_name, spec in entity.fields.items()
+                ],
+            )
+            for name, entity in definition.entities.items()
+        ],
+    )
+
+
+@app.get("/api/products/{product_id}/records", response_model=RecordsResponse)
+def read_product_records(product_id: str, workspace_scope_id: str | None = None,
+                         user: AuthUser = Depends(require_auth)) -> RecordsResponse:
+    """Every record of this product the caller may see, grouped by the kind of thing it is."""
+    definition = _product_definition(user, product_id)
+    grant = product_record_grant(user, product_id)
+    if workspace_scope_id is not None:
+        require_scope(workspace_scope_id, grant)
+        grant = dataclasses_replace(grant, scope_ids=frozenset({workspace_scope_id}), is_admin=False)
+    store = RecordStore(user.tenant_id or "", product_id, _record_space(user))
+    lookup = DefinitionLookup(definition, store, grant.visible_scope_ids())
+    return RecordsResponse(
+        product_id=product_id,
+        scope=lookup.scope_label,
+        records={
+            entity: [{"id": view.id, "title": view.title, **dict(view.fields)} for view in views]
+            for entity, views in lookup.records_from({}).items()
+        },
+    )
+
+
+@app.post("/api/products/{product_id}/records/{entity}")
+def create_product_record(product_id: str, entity: str, body: KeyedRecordCreate, http: Request,
+                          user: AuthUser = Depends(require_auth),
+                          x_execution_key: str = Header(max_length=200),
+                          x_session_id: str = Header(max_length=100)):
+    """Create one record of any product, under the key the assistant's proposal was given."""
+    rate_limits.enforce("write", http, identity=user.user_id)
+    definition = _product_definition(user, product_id)
+    if entity not in definition.entities:
+        raise HTTPException(status_code=404, detail="That product has no such records.")
+    fields = dict(body.fields)
+    store = RecordStore(user.tenant_id or "", product_id, _record_space(user))
+
+    def apply(connection, grant: RecordGrant, scope_id: str) -> RecordChange:
+        try:
+            record = store.create(definition, entity, fields, connection=connection)
+        except (RecordInvalid, StoreConflict, SpaceFull) as refused:
+            raise InvalidChange(str(refused)) from refused
+        return RecordChange(record.id, {"id": record.id, **dict(record.fields)})
+
+    return _keyed_record(x_execution_key, x_session_id, user, product_id, definition, store,
+                         {"action": body.action, "entity": entity, "fields": fields},
+                         apply, entity, created=True)
+
+
+@app.patch("/api/products/{product_id}/records/{entity}/{record_id}")
+def change_product_record(product_id: str, entity: str, record_id: str, body: KeyedRecordChange,
+                          http: Request, user: AuthUser = Depends(require_auth),
+                          x_execution_key: str = Header(max_length=200),
+                          x_session_id: str = Header(max_length=100)):
+    """Change one record of any product: exactly what the key bound, and nothing else."""
+    rate_limits.enforce("write", http, identity=user.user_id)
+    definition = _product_definition(user, product_id)
+    if entity not in definition.entities:
+        raise HTTPException(status_code=404, detail="That product has no such records.")
+    changes = dict(body.changes)
+    store = RecordStore(user.tenant_id or "", product_id, _record_space(user))
+
+    def apply(connection, grant: RecordGrant, scope_id: str) -> RecordChange:
+        # The record must be one this caller can see in the key's own workspace. One they cannot
+        # see is reported as missing, never as forbidden.
+        if _visible_record(definition, store, grant, scope_id, entity, record_id) is None:
+            raise RecordNotFound("That record is unavailable.")
+        try:
+            record = store.update(definition, entity, record_id, changes, connection=connection)
+        except RecordInvalid as invalid:
+            raise InvalidChange(str(invalid)) from invalid
+        return RecordChange(record.id, {"id": record.id, **dict(record.fields)})
+
+    return _keyed_record(x_execution_key, x_session_id, user, product_id, definition, store,
+                         {"action": body.action, "entity": entity, "target": record_id,
+                          "changes": changes},
+                         apply, entity)
+
+
+def _keyed_record(execution_key: str, session_id: str, user: AuthUser, product_id: str,
+                  definition, store: "RecordStore", change_set: dict, apply, entity: str,
+                  *, created: bool = False) -> JSONResponse:
+    """One keyed write on any product's records, answered with its receipt."""
+    if user.kind == "member":
+        idle_reset.touched(changed=True)
+
+    def reload(connection, grant: RecordGrant, scope_id: str, record_id: str) -> dict | None:
+        view = _visible_record(definition, store, grant, scope_id, entity, record_id)
+        return {"id": view.id, **dict(view.fields)} if view is not None else None
+
+    result = keyed_writes.write(
+        apply, execution_key=execution_key, principal=user, product_id=product_id,
+        session_id=session_id, change_set=change_set, reload=reload,
+    )
+    executed = result.outcome == "executed"
+    receipt = ExecutionReceipt(
+        outcome=result.outcome,
+        code=result.code,
+        speech=receipt_speech(
+            result.code, executed=executed, replay=result.replay, created=created,
+            record_id=result.record_id,
+            changes=_committed_values(change_set.get("changes") or change_set.get("fields"),
+                                      result.record),
+        ),
+        record=result.record,
+    )
+    pin = agent.sessions.pin_for(session_id) if session_id else None
+    telemetry = BackgroundTask(
+        turn_telemetry.record, deployment_id=deployment_id(), tenant_id=user.tenant_id or "",
+        product_id=product_id, definition_version=pin.definition_version if pin else None,
+        authority=engine_mode(),
+        counts={"receipt": "replayed" if result.replay else result.outcome,
+                "receipt_code": result.code},
+    )
+    return JSONResponse(status_code=200 if executed else 409,
+                        content=receipt.model_dump(mode="json"), background=telemetry)
 
 
 class VisitorSessionResponse(BaseModel):
@@ -877,6 +1242,11 @@ def _record_turn(request: TurnRequest, user: AuthUser, response: TurnResponse, m
         "stage": _turn_stage(authority, response),
         "dispatch": "keyed" if response.execution is not None else "none",
         "latency": turn_telemetry.latency_band(milliseconds),
+        # Which workflow the turn exercised, as the action's own name: metadata, never its payload.
+        # The acceptance report reads this to prove workflow coverage (5d plan, section 2.1a).
+        "action": turn_telemetry.action_name(
+            response.validated_action.type if response.validated_action else None
+        ),
     }
     if response._model_outcome is not None:
         counts["model"] = response._model_outcome

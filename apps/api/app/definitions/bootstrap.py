@@ -1,9 +1,14 @@
 """Development bootstrap: synthetic demo organizations declared by product packages.
 
-A product package may ship `seed/demo_organization.json`, describing a synthetic organization,
-team, members and product for demos and tests. Seeds load only when `PIXEL_DEMO_SEEDS=true`
-is set explicitly; when it is missing, nothing synthetic is ever created. Existing rows
-are left alone, so operator changes such as a version rollback survive restarts.
+A product package may ship `seed/demo_organization.json`, describing the synthetic organizations,
+teams, members and products its definition serves in demos and tests. A package may seed several
+organizations, and an organization several products, because that is the shape the platform is
+built for: one organization runs several products, and a definition serves several organizations.
+A seed only ever names its own package's definition; a package never binds another's.
+
+Seeds load only when `PIXEL_DEMO_SEEDS=true` is set explicitly; when it is missing, nothing
+synthetic is ever created. Existing rows are left alone, so operator changes such as a version
+rollback survive restarts.
 
 Demo *record* data is loaded by the application's startup instead (see `main.lifespan`), because
 this module must not depend on the record store. Either way it is deliberately not created on
@@ -34,17 +39,18 @@ class _SeedTeam(Strict):
     name: str
 
 
-class _SeedRecordGrant(Strict):
-    scope_ids: list[str] = []
-    admin: bool = False
-
-
 class _SeedMember(Strict):
     user_id: str
     role: str
     team: bool = False
-    # Transitional: a grant on the seeded product's legacy records (until step 3.5).
-    records: _SeedRecordGrant | None = None
+
+
+class _SeedGrant(Strict):
+    """One member's access to one product's records. Transitional, until step 3.5."""
+
+    user_id: str
+    scope_ids: list[str] = []
+    admin: bool = False
 
 
 class _SeedProduct(Strict):
@@ -52,15 +58,21 @@ class _SeedProduct(Strict):
     definition_version: int = Field(ge=1)
     knowledge_version: int = Field(default=1, ge=1)
     visitor_access: bool = False
-    # Transitional: this product owns the legacy record tables (until step 3.5).
+    # Transitional: this product owns the legacy record tables (until step 3.5). At most one
+    # product in the whole deployment may claim them.
     legacy_records: bool = False
+    grants: list[_SeedGrant] = []
 
 
 class DemoOrganizationSeed(Strict):
     organization: _SeedOrganization
     team: _SeedTeam
     members: list[_SeedMember] = []
-    product: _SeedProduct
+    products: list[_SeedProduct] = Field(min_length=1)
+
+
+class DemoSeedFile(Strict):
+    organizations: list[DemoOrganizationSeed] = Field(min_length=1)
 
 
 def publish_lineage(registry: DefinitionRegistry, definition_id: str, version: int):
@@ -84,8 +96,9 @@ def load_demo_seeds(source: DefinitionSource | None = None) -> None:
     for definition_id in source.packages():
         path = source.seed_path(definition_id)
         if path.is_file():
-            seed = DemoOrganizationSeed.model_validate(json.loads(path.read_text(encoding="utf-8")))
-            _apply(directory, definition_id, seed)
+            seed = DemoSeedFile.model_validate(json.loads(path.read_text(encoding="utf-8")))
+            for organization in seed.organizations:
+                _apply(directory, definition_id, organization)
 
 
 def _apply(directory: OrganizationDirectory, definition_id: str, seed: DemoOrganizationSeed) -> None:
@@ -97,20 +110,24 @@ def _apply(directory: OrganizationDirectory, definition_id: str, seed: DemoOrgan
     for member in seed.members:
         if directory.membership(tenant_id, member.user_id) is None:
             directory.add_member(tenant_id, member.user_id, member.role, team_id if member.team else None)
-    if directory.product(tenant_id, seed.product.product_id) is None:
-        publish_lineage(directory.definitions, definition_id, seed.product.definition_version)
+    for product in seed.products:
+        _apply_product(directory, definition_id, tenant_id, team_id, product)
+
+
+def _apply_product(directory: OrganizationDirectory, definition_id: str, tenant_id: str,
+                   team_id: str, product: _SeedProduct) -> None:
+    if directory.product(tenant_id, product.product_id) is None:
+        publish_lineage(directory.definitions, definition_id, product.definition_version)
         directory.bind_product(
             tenant_id,
-            seed.product.product_id,
+            product.product_id,
             team_id,
             definition_id,
-            seed.product.definition_version,
-            knowledge_version=seed.product.knowledge_version,
-            visitor_access=seed.product.visitor_access,
+            product.definition_version,
+            knowledge_version=product.knowledge_version,
+            visitor_access=product.visitor_access,
         )
-    product_id = seed.product.product_id
-    if seed.product.legacy_records:
-        designate_legacy_owner(tenant_id, product_id)
-    for member in seed.members:
-        if member.records is not None:
-            grant_records(tenant_id, product_id, member.user_id, member.records.scope_ids, member.records.admin)
+    if product.legacy_records:
+        designate_legacy_owner(tenant_id, product.product_id)
+    for grant in product.grants:
+        grant_records(tenant_id, product.product_id, grant.user_id, grant.scope_ids, grant.admin)

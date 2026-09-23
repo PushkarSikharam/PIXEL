@@ -29,7 +29,7 @@ DEFINITION_ID = "linear_simplified"
 # The version the demo seed binds for new sessions.
 SEEDED_VERSION = __import__("json").loads(
     (Path(__file__).resolve().parents[3] / "products" / DEFINITION_ID / "seed" / "demo_organization.json")
-    .read_text(encoding="utf-8"))["product"]["definition_version"]
+    .read_text(encoding="utf-8"))["organizations"][0]["products"][0]["definition_version"]
 ADMIN = AuthUser(kind="member", user_id="demo-admin", tenant_id="pixel-dev", role="org_admin")
 PLANNER = AuthUser(kind="member", user_id="demo-product-eng", tenant_id="pixel-dev", role="team_member",
                    team_id="planning-team")

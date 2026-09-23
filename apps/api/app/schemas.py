@@ -7,26 +7,6 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator
 from app.workspace_config import DEFAULT_WORKSPACE_SCOPE_ID
 
 
-AllowedActionType = Literal[
-    "OPEN_DASHBOARD",
-    "OPEN_ISSUES",
-    "OPEN_PROJECTS",
-    "OPEN_CYCLES",
-    "OPEN_TEAMS",
-    "OPEN_INTEGRATIONS",
-    "OPEN_SYSTEM_ARCHITECTURE",
-    "OPEN_DEMO_ISSUE",
-    "CREATE_DEMO_ISSUE",
-    "UPDATE_DEMO_ISSUE",
-    "FILTER_ISSUES_BY_ASSIGNEE",
-    "HIGHLIGHT_ASSIGNMENT_CONTROL",
-    "HIGHLIGHT_CREATE_TICKET_BUTTON",
-    "HIGHLIGHT_ADD_MEMBER_BUTTON",
-    "HIGHLIGHT_CYCLE_PROGRESS",
-    "OPEN_GITHUB_SETUP",
-    "HIGHLIGHT_GITHUB_CARD",
-    "HIGHLIGHT_SLACK_CARD",
-]
 
 
 class TurnRequest(BaseModel):
@@ -64,9 +44,18 @@ class ProposedAction(BaseModel):
 
 
 class ValidatedAction(BaseModel):
+    """An action a caller is actually sent.
+
+    The type names one action of the product that answered, and is produced only by that
+    product's translator from an action its definition declares and the validator accepted. That
+    is where the set of possible types is closed; a product added to Pixel brings its own, so no
+    list here could know them. What is checked here is the shape, so a malformed name cannot be
+    carried to a client whatever produced it.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
-    type: AllowedActionType
+    type: str = Field(pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
     payload: dict[str, Any] = Field(default_factory=dict)
 
 

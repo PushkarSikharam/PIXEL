@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import hashlib
 from contextlib import contextmanager
+from datetime import date, timedelta
 import re
 from pathlib import Path
 from typing import Any
@@ -114,36 +115,56 @@ SEED_TEAM: tuple[dict[str, Any], ...] = (
     },
 )
 
+def _window(starts_in: int, ends_in: int) -> dict[str, int]:
+    """A cycle's window, in days either side of the day a demo is seeded.
+
+    Calendar dates written into the seed went stale: a cycle that had ended a fortnight earlier
+    still called itself active with eight days left. The window is what is reviewed and approved;
+    `dated` turns it into dates when a demo actually starts.
+    """
+    return {"startsInDays": starts_in, "endsInDays": ends_in}
+
+
+def dated(cycle: dict[str, Any], today: date | None = None) -> dict[str, Any]:
+    """The cycle with its window materialised as calendar dates and days remaining."""
+    if "startsInDays" not in cycle:
+        return dict(cycle)
+    anchor = today or date.today()
+    materialised = {name: value for name, value in cycle.items()
+                    if name not in ("startsInDays", "endsInDays")}
+    materialised["startDate"] = str(anchor + timedelta(days=cycle["startsInDays"]))
+    materialised["endDate"] = str(anchor + timedelta(days=cycle["endsInDays"]))
+    materialised["daysLeft"] = max(0, cycle["endsInDays"])
+    return materialised
+
+
+def _counted(completed: int, in_progress: int, remaining: int) -> dict[str, int]:
+    """Progress is the share of planned work that is done; it is never typed in separately."""
+    planned = completed + in_progress + remaining
+    return {"completed": completed, "inProgress": in_progress, "remaining": remaining,
+            "progress": round(completed * 100 / planned) if planned else 0}
+
+
 SEED_CYCLES: tuple[dict[str, Any], ...] = (
     {
         "id": "CYC-14",
         "name": "Product Engineering Cycle 14",
         "projectId": "PRJ-101",
-        "daysLeft": 8,
-        "progress": 68,
-        "completed": 18,
-        "inProgress": 9,
-        "remaining": 11,
+        **_counted(18, 9, 11),
         "focus": ["Bug triage", "Cycle planning", "GitHub sync", "Assignment flow"],
         "status": "Active",
         "team": "Product Engineering",
-        "startDate": "2026-08-24",
-        "endDate": "2026-09-08",
+        **_window(-7, 8),
     },
     {
         "id": "CYC-21",
         "name": "Platform Cycle 21",
         "projectId": "PRJ-103",
-        "daysLeft": 6,
-        "progress": 42,
-        "completed": 7,
-        "inProgress": 6,
-        "remaining": 9,
+        **_counted(7, 6, 9),
         "focus": ["Capacity forecast", "Migration readiness", "Planning accuracy"],
         "status": "Active",
         "team": "Platform",
-        "startDate": "2026-08-31",
-        "endDate": "2026-09-14",
+        **_window(-9, 6),
     },
 )
 
@@ -309,7 +330,7 @@ class ProductDataStore:
             for member in SEED_TEAM:
                 self._upsert_member(connection, member)
             for cycle in SEED_CYCLES:
-                self._upsert_cycle(connection, cycle)
+                self._upsert_cycle(connection, dated(cycle))
             for issue in issues:
                 self._upsert_issue(connection, issue)
 

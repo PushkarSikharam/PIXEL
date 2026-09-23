@@ -702,6 +702,13 @@
   {
     "case": "create-without-owner",
     "turn": 0,
+    "field": "session_summary",
+    "kind": "behaviour",
+    "reason": "Both engines ask who should own the new ticket. The definition engine records that question as pending, so the next message is read as the owner's name and the create continues; the live engine keeps no pending question, and reads the answer as a new request."
+  },
+  {
+    "case": "create-without-owner",
+    "turn": 0,
     "field": "intent_trace",
     "kind": "coverage",
     "reason": "The live trace uses a label the definition does not declare (a goal such as 'Issue lookup' or 'Update issue' derived from its own action names, or the feature 'Dashboard'). A generic engine reads goals and features only from the definition."

@@ -15,6 +15,7 @@ import {
   demoWorkspaceScopes,
   integrations
 } from "@/lib/demo-data";
+import { cycleDaysLeft, cycleProgress } from "@/adapters/linear_simplified/cycle-health";
 import {
   ensureDemoLogin,
   applyKeyedChange,
@@ -1045,10 +1046,11 @@ function DashboardView({
   const inProgressIssues = issues.filter((issue) => issue.status === "In progress").length;
   const availableCapacity = Math.max(0, 100 - averageLoad);
   const cycleCompletion = activeCycle.completed + activeCycle.inProgress + activeCycle.remaining;
+  const activeCycleProgress = cycleProgress(activeCycle);
   const deliveryConfidence =
-    activeCycle.progress >= 65 && atRiskProjects === 0
+    activeCycleProgress >= 65 && atRiskProjects === 0
       ? "On track"
-      : activeCycle.progress >= 40
+      : activeCycleProgress >= 40
         ? "Watch closely"
         : "Needs attention";
 
@@ -1067,7 +1069,11 @@ function DashboardView({
         </div>
         <div className="metric-grid">
           <Metric label="Scoped issues" value={`${issues.length}`} delta="visible to this team" />
-          <Metric label="Cycle progress" value={`${activeCycle.progress}%`} delta={`${activeCycle.daysLeft} days left`} />
+          <Metric
+            label="Cycle progress"
+            value={`${activeCycleProgress}%`}
+            delta={`${cycleDaysLeft(activeCycle)} days left`}
+          />
           <Metric label="Active projects" value={`${projects.length}`} delta={`${atRiskProjects} at risk`} />
           <Metric label="Team workload" value={`${averageLoad}%`} delta={`${team.length} scoped members`} />
         </div>
@@ -1113,7 +1119,7 @@ function DashboardView({
             <span>Delivery confidence</span>
             <strong>{deliveryConfidence}</strong>
             <p>
-              {activeCycle.progress}% cycle progress across {cycleCompletion} planned work items.
+              {activeCycleProgress}% cycle progress across {cycleCompletion} planned work items.
             </p>
           </article>
           <article className="delivery-card">
@@ -1848,7 +1854,7 @@ function CyclesView({
                     </span>
                   </div>
                   <p className="cycle-meta-text">
-                    {cycle.startDate} to {cycle.endDate} - <strong>{cycle.daysLeft} days left</strong>
+                    {cycle.startDate} to {cycle.endDate} - <strong>{cycleDaysLeft(cycle)} days left</strong>
                   </p>
                 </div>
                 <span className="quiet-badge">{cycle.team}</span>
@@ -2440,7 +2446,7 @@ function CycleProgress({
         className={highlighted ? "progress-bar large highlighted-bar" : "progress-bar large"}
         data-testid="cycle-progress-bar"
       >
-        <span style={{ width: `${cycle.progress}%` }} />
+        <span style={{ width: `${cycleProgress(cycle)}%` }} />
       </div>
       {!compact && (
         <p className="body-copy">

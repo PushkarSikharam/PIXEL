@@ -1,15 +1,72 @@
 {
-  "organization": {"tenant_id": "pixel-dev", "name": "Pixel Development"},
-  "team": {"team_id": "planning-team", "name": "Planning"},
-  "members": [
-    {"user_id": "demo-admin", "role": "org_admin",
-     "records": {"scope_ids": ["workspace-product-eng", "workspace-platform"], "admin": true}},
-    {"user_id": "demo-product-eng", "role": "team_member", "team": true,
-     "records": {"scope_ids": ["workspace-product-eng"]}},
-    {"user_id": "demo-platform", "role": "team_member", "team": true,
-     "records": {"scope_ids": ["workspace-platform"]}},
-    {"user_id": "demo-visitor", "role": "team_member", "team": true,
-     "records": {"scope_ids": ["workspace-product-eng", "workspace-platform"]}}
-  ],
-  "product": {"product_id": "linear-demo", "definition_version": 5, "visitor_access": true, "legacy_records": true}
+  "organizations": [
+    {
+      "organization": {
+        "tenant_id": "pixel-dev",
+        "name": "Pixel Development"
+      },
+      "team": {
+        "team_id": "planning-team",
+        "name": "Planning"
+      },
+      "members": [
+        {
+          "user_id": "demo-admin",
+          "role": "org_admin"
+        },
+        {
+          "user_id": "demo-product-eng",
+          "role": "team_member",
+          "team": true
+        },
+        {
+          "user_id": "demo-platform",
+          "role": "team_member",
+          "team": true
+        },
+        {
+          "user_id": "demo-visitor",
+          "role": "team_member",
+          "team": true
+        }
+      ],
+      "products": [
+        {
+          "product_id": "linear-demo",
+          "definition_version": 6,
+          "visitor_access": true,
+          "legacy_records": true,
+          "grants": [
+            {
+              "user_id": "demo-admin",
+              "scope_ids": [
+                "workspace-product-eng",
+                "workspace-platform"
+              ],
+              "admin": true
+            },
+            {
+              "user_id": "demo-product-eng",
+              "scope_ids": [
+                "workspace-product-eng"
+              ]
+            },
+            {
+              "user_id": "demo-platform",
+              "scope_ids": [
+                "workspace-platform"
+              ]
+            },
+            {
+              "user_id": "demo-visitor",
+              "scope_ids": [
+                "workspace-product-eng",
+                "workspace-platform"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
 }

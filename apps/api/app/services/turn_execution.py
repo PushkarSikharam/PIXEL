@@ -119,13 +119,13 @@ class NewEngineTurns:
         if not self._sessions.activate_turn(request.session_id, request.turn_id, owner=owner, scope_id=scope_id):
             return _stale(request)
 
+        definition = self._directory.definitions.load(session_pin.definition_id,
+                                                      session_pin.definition_version).definition
         prepared = prepare_turn(self._directory, self._package_for, principal, grant, request.product_id,
-                                visible_data, scope_id)
+                                visible_data, scope_id, definition)
         if prepared is None:
             self._sessions.complete_turn(request.session_id, request.turn_id)
             return _denied(request, "no_engine_for_product")
-        definition = self._directory.definitions.load(session_pin.definition_id,
-                                                      session_pin.definition_version).definition
         engine, translator = assemble_engine(prepared, definition, session_pin)
 
         engine_pin = EnginePin(session_pin.definition_id, session_pin.definition_version,

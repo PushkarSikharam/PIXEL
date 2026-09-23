@@ -554,13 +554,26 @@ class DemoSeedTest(RegistryFixture):
     """Development bootstrap: synthetic organizations declared by product packages."""
 
     SEED = {
-        "organization": {"tenant_id": "sample-org", "name": "Sample Org"},
-        "team": {"team_id": "desk-team", "name": "Desk"},
-        "members": [
-            {"user_id": "sample-admin", "role": "org_admin"},
-            {"user_id": "sample-agent", "role": "team_member", "team": True},
-        ],
-        "product": {"product_id": "sample-desk", "definition_version": 1, "visitor_access": True},
+        "organizations": [
+            {
+                "organization": {"tenant_id": "sample-org", "name": "Sample Org"},
+                "team": {"team_id": "desk-team", "name": "Desk"},
+                "members": [
+                    {"user_id": "sample-admin", "role": "org_admin"},
+                    {"user_id": "sample-agent", "role": "team_member", "team": True},
+                ],
+                "products": [
+                    {"product_id": "sample-desk", "definition_version": 1, "visitor_access": True},
+                    {"product_id": "sample-desk-eu", "definition_version": 1},
+                ],
+            },
+            {
+                "organization": {"tenant_id": "other-org", "name": "Other Org"},
+                "team": {"team_id": "support-team", "name": "Support"},
+                "members": [{"user_id": "other-admin", "role": "org_admin"}],
+                "products": [{"product_id": "other-desk", "definition_version": 1}],
+            },
+        ]
     }
 
     def setUp(self):
@@ -570,6 +583,20 @@ class DemoSeedTest(RegistryFixture):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(self.SEED), encoding="utf-8")
         os.environ["PIXEL_DEMO_SEEDS"] = "true"
+
+    def test_one_organization_can_run_several_products_of_one_definition(self):
+        """The shape the platform exists for: several products per organization, and one
+        definition serving more than one organization."""
+        load_demo_seeds(self.files.source)
+        for tenant_id, product_id in (("sample-org", "sample-desk"), ("sample-org", "sample-desk-eu"),
+                                      ("other-org", "other-desk")):
+            with self.subTest(tenant_id=tenant_id, product_id=product_id):
+                binding = self.directory.product(tenant_id, product_id)
+                self.assertEqual((binding.tenant_id, binding.definition_id), (tenant_id, DEFINITION_ID))
+        # Nothing of one organization reaches the other.
+        self.assertIsNone(self.directory.product("other-org", "sample-desk"))
+        self.assertIsNone(self.directory.product("sample-org", "other-desk"))
+        self.assertIsNone(self.directory.membership("other-org", "sample-admin"))
 
     def test_seeds_create_an_organization_team_members_and_product(self):
         load_demo_seeds(self.files.source)
@@ -597,7 +624,7 @@ class DemoSeedTest(RegistryFixture):
 
     def test_invalid_seeds_are_rejected(self):
         seed = json.loads(json.dumps(self.SEED))
-        seed["organization"]["tenant_id"] = "Not A Slug"
+        seed["organizations"][0]["organization"]["tenant_id"] = "Not A Slug"
         self.files.source.seed_path(DEFINITION_ID).write_text(json.dumps(seed), encoding="utf-8")
         with self.assertRaises(ValidationError):
             load_demo_seeds(self.files.source)

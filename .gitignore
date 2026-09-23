@@ -25,3 +25,9 @@ playwright/.cache/
 tmp-*.png
 
 .vercel/
+
+# Local tooling: dev-server launch config, scratch worktrees, test caches.
+.claude/scheduled_tasks.lock
+.worktrees/
+.pytest_cache/
+playwright.local.config.ts

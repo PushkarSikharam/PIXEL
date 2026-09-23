@@ -308,7 +308,8 @@ class ShadowCacheAndPinningTest(unittest.TestCase):
             self.assertEqual(len(hermetic.runner.cache), 1)
             # The warm session is pinned to whatever version the seed binds.
             seeded = json.loads((REPO_ROOT / "products" / "linear_simplified" / "seed" / "demo_organization.json")
-                                .read_text(encoding="utf-8"))["product"]["definition_version"]
+                                .read_text(encoding="utf-8")
+                                )["organizations"][0]["products"][0]["definition_version"]
             hermetic.agent.directory.definitions.revoke("linear_simplified", seeded)
             request = hermetic.request("gate", 2, "Show me the cycles")
             visible = ProductDataStore().load(hermetic.grant.visible_scope_ids())

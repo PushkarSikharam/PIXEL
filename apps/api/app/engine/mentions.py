@@ -14,7 +14,7 @@ from app.engine.normalizer import contains_term
 # Words after which a name usually follows. Names that cannot be found must also be capitalized.
 NAME_CUES = frozenset({"for", "to"})
 # Words after which the rest of the message is a subject, never a name ("... about Login errors").
-SUBJECT_CUES = frozenset({"about"})
+SUBJECT_CUES = frozenset({"about", "called", "titled", "named", "regarding", "re"})
 # Common words that are never names, whatever their capitalization.
 COMMON_WORDS = frozenset({
     "a", "about", "all", "an", "and", "any", "are", "at", "can", "could", "demo", "do", "does",
@@ -44,6 +44,7 @@ class NameMention:
 
 def name_mentions(
     original: str, known_words: frozenset[str], *, subjects_are_names: bool = False,
+    first_word_is_name: bool = False,
 ) -> list[NameMention]:
     """Phrases that read like names of people who may not exist: capitalized words that are not
     the first word, not common or product words, and not part of a subject ("about ...").
@@ -64,7 +65,7 @@ def name_mentions(
             in_subject = True
         is_name = (
             not in_subject
-            and index > 0
+            and (index > 0 or first_word_is_name)
             and len(word) >= 2
             and word not in COMMON_WORDS
             and token.lower() not in COMMON_WORDS

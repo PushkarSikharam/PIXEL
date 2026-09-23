@@ -6,6 +6,8 @@ Adapter support, caller permissions, and visible records restrict the offered ac
 """
 from __future__ import annotations
 
+import re
+
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
@@ -57,12 +59,48 @@ NOT_NAMES = frozenset({
 })
 
 
+# Withdrawing whatever was just asked about. Checked against the corrected text too, so
+# "actually, never mind" is a withdrawal and never an answer.
+SET_ASIDE = re.compile(
+    r"^\s*(cancel|stop|never ?mind|forget it|forget that|leave it|skip it|no thanks|not now|"
+    r"dont bother|do not bother)\b", re.IGNORECASE)
+
+
+def is_set_aside(text: NormalizedMessage) -> bool:
+    return bool(SET_ASIDE.match(text.original) or SET_ASIDE.match(text.focused))
+
+
+# Ways a visitor ends or acknowledges a turn. Answered warmly, never with the fallback.
+THANKS_CUES = ("thanks", "thank you", "thankyou", "thx", "ty", "cheers", "appreciate it",
+               "that helps", "perfect", "great thanks")
+CLOSING_CUES = ("bye", "goodbye", "see you", "that is all", "thats all", "that will be all",
+                "nothing else", "im done", "i am done", "we are done", "were done")
+
+
+GUIDED_PATH_CUES = ("run the evaluator demo", "evaluator demo", "guided demo", "demo path",
+                    "demo script", "test script")
+NEXT_STEP_CUES = ("what should i try next", "what should we try next", "next step", "what next",
+                  "where should i start")
+VOICE_CUES = ("voice", "interrupt", "interruption", "stop speaking", "stopping", "listening",
+              "listen while", "live voice")
+
+# Every phrase the platform reads for itself. The normalizer keeps these words spelled exactly as
+# they are typed, so no word a product declares can pull one of them into a neighbouring spelling
+# and leave the platform unable to recognise its own question.
+PLATFORM_PHRASES: tuple[str, ...] = (
+    *sorted(GREETINGS), *IDENTITY_CUES, *CAPABILITY_CUES, *LAST_CHANGE_CUES, *INTRODUCTION_CUES,
+    *THANKS_CUES, *CLOSING_CUES, *GUIDED_PATH_CUES, *NEXT_STEP_CUES, *VOICE_CUES,
+)
+
+
 class Conversational(StrEnum):
     GREETING = "greeting"
     GREETING_NAMED = "greeting_named"
     IDENTITY = "identity"
     CAPABILITIES = "capabilities"
     LAST_CHANGE = "last_change"
+    THANKS = "thanks"
+    CLOSING = "closing"
     GUIDED_PATH = "guided_path"
     NEXT_STEP = "next_step"
     VOICE_INTERRUPTION = "voice_interruption"
@@ -98,6 +136,12 @@ def detect(text: NormalizedMessage, *, visitor_name: str | None = None) -> Conve
     if any(contains_term(whole, cue) for cue in LAST_CHANGE_CUES):
         return ConversationalTurn(Conversational.LAST_CHANGE, "last_change")
 
+    if any(contains_term(whole, cue) for cue in CLOSING_CUES):
+        return ConversationalTurn(Conversational.CLOSING, "conversation_ended")
+
+    if any(contains_term(whole, cue) for cue in THANKS_CUES):
+        return ConversationalTurn(Conversational.THANKS, "thanks")
+
     if _guided_path(whole):
         return ConversationalTurn(Conversational.GUIDED_PATH, "guided_path")
 
@@ -119,27 +163,15 @@ def detect(text: NormalizedMessage, *, visitor_name: str | None = None) -> Conve
 
 
 def _guided_path(whole: str) -> bool:
-    return any(contains_term(whole, cue) for cue in (
-        "run the evaluator demo", "evaluator demo", "guided demo", "demo path", "demo script",
-        "test script",
-    ))
+    return any(contains_term(whole, cue) for cue in GUIDED_PATH_CUES)
 
 
 def _next_step(whole: str) -> bool:
-    return any(contains_term(whole, cue) for cue in (
-        "what should i try next", "what should we try next", "next step", "what next",
-        "where should i start",
-    ))
+    return any(contains_term(whole, cue) for cue in NEXT_STEP_CUES)
 
 
 def _voice_interruption(whole: str) -> bool:
-    return (
-        "voice" in whole
-        and any(contains_term(whole, cue) for cue in (
-            "interrupt", "interruption", "stop speaking", "stopping", "listening",
-            "listen while", "live voice",
-        ))
-    )
+    return "voice" in whole and any(contains_term(whole, cue) for cue in VOICE_CUES)
 
 
 def _introduced_name(whole: str, original: str, *, greeted: bool = False) -> str | None:
@@ -296,15 +328,21 @@ def action_description(definition: ProductDefinition, key: str) -> str:
     entity = definition.entities[spec.entity]
     label = _plain_name(entity.label).lower()
     if spec.capability == Capability.OPEN_RECORD:
-        return f"open a {label}"
+        return f"open {_a(label)}"
     if spec.capability == Capability.FILTER_RECORDS:
         return f"list {_plain_name(entity.plural).lower()} by {_field_name(spec.by)}"
     if spec.capability == Capability.CREATE_RECORD:
-        return f"create a {label}"
+        return f"create {_a(label)}"
     if spec.capability == Capability.UPDATE_RECORD:
         fields = [_field_name(name) for name in sorted(spec.fields)]
-        return f"change a {label}'s {_spoken_list(fields, 'or')}"
+        return f"change {_a(label)}'s {_spoken_list(fields, 'or')}"
     raise ValueError(f'no platform description for {spec.capability}')
+
+
+def _a(noun: str) -> str:
+    """The noun with its article. A product names its own things, so the article follows the
+    label rather than being written into the sentence: "an invoice", never "a invoice"."""
+    return f"an {noun}" if noun[:1].lower() in "aeiou" else f"a {noun}"
 
 
 def _field_name(name: str | None) -> str:

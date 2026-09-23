@@ -138,3 +138,7 @@ class InMemoryLookup:
 
     def count(self, entity: str) -> int:
         return len(self._records(entity))
+
+    @property
+    def scope_label(self) -> str:
+        return ", ".join(sorted(self._visible))

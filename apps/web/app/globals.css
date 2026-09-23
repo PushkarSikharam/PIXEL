@@ -1210,7 +1210,11 @@ h3 {
 .conversation-actions {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
   gap: 8px;
+  min-width: 0;
 }
 
 .reset-button,
@@ -1498,6 +1502,7 @@ h3 {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 10px;
   margin: -2px 0 14px;
 }
@@ -1506,7 +1511,10 @@ h3 {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  min-width: 0;
+  /* The product's own name is never the thing that gets squeezed: a wide status badge makes the
+     controls beside it wrap instead. */
+  flex: 0 0 auto;
+  white-space: nowrap;
   color: #ffffff;
   font-size: 23px;
   font-weight: 760;

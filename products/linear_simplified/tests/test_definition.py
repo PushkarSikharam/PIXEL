@@ -31,7 +31,7 @@ from app.services import env as env_module  # noqa: E402
 DEFINITION_ID = "linear_simplified"
 # The version the demo seed binds (the product's current version) and the next, unpublished one.
 SEED = REPO_ROOT / "products" / DEFINITION_ID / "seed" / "demo_organization.json"
-CURRENT = json.loads(SEED.read_text(encoding="utf-8"))["product"]["definition_version"]
+CURRENT = json.loads(SEED.read_text(encoding="utf-8"))["organizations"][0]["products"][0]["definition_version"]
 NEXT = CURRENT + 1
 # The seeded development organization and its product running this definition.
 TENANT_ID, PRODUCT_ID = "pixel-dev", "linear-demo"

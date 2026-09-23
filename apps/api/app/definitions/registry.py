@@ -18,7 +18,7 @@ from typing import Protocol
 
 from app.db import get_connection, use_connection
 from app.definitions.compatibility import ChangeClass, classify
-from app.definitions.loader import DEFAULT_SOURCE, DefinitionSource, LoadedDefinition, load_definition
+from app.definitions.loader import DefinitionSource, LoadedDefinition, load_definition
 
 TRANSITIONS: dict[str, frozenset[str]] = {
     "draft": frozenset({"validated"}),
@@ -55,9 +55,17 @@ class DefinitionVersion:
         return self.ownership == "platform_shared" or self.owner_organization == tenant_id
 
 
+def default_source() -> DefinitionSource:
+    """Where this deployment's definitions live: the files this repository ships, and the ones
+    people added to Pixel. Files win, so a stored definition can never shadow a shipped one."""
+    from app.definitions.authoring import StoredDefinitionSource
+
+    return StoredDefinitionSource()
+
+
 class DefinitionRegistry:
-    def __init__(self, source: DefinitionSource = DEFAULT_SOURCE, connection=None) -> None:
-        self.source = source
+    def __init__(self, source: DefinitionSource | None = None, connection=None) -> None:
+        self.source = source if source is not None else default_source()
         # With a connection, lifecycle reads join the caller's transaction.
         self._connection = connection
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import re
 import secrets
 import smtplib
@@ -10,6 +11,8 @@ import ssl
 import time
 from datetime import datetime, timezone
 from email.message import EmailMessage
+from urllib import error as url_error
+from urllib import request as url_request
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response
@@ -63,6 +66,9 @@ def send_code(email: str, code: str, settings: tuple[str, ...]) -> None:
     if env_bool("PIXEL_BLOCK_EXTERNAL_HTTP", default=False):
         raise OSError("External delivery is disabled in this environment")
     _, host, username, password, sender = settings
+    if host == "smtp.resend.com" and password.startswith("re_"):
+        send_code_with_resend_api(email, code, password, sender)
+        return
     message = EmailMessage()
     message["From"], message["To"], message["Subject"] = sender, email, "Your Pixel sign-in code"
     message.set_content(f"Your Pixel code is {code}. It expires in 10 minutes. "
@@ -70,6 +76,32 @@ def send_code(email: str, code: str, settings: tuple[str, ...]) -> None:
     with smtplib.SMTP_SSL(host, 465, timeout=10, context=ssl.create_default_context()) as smtp:
         smtp.login(username, password)
         smtp.send_message(message)
+
+
+def send_code_with_resend_api(email: str, code: str, api_key: str, sender: str) -> None:
+    payload = json.dumps({
+        "from": sender,
+        "to": [email],
+        "subject": "Your Pixel sign-in code",
+        "text": (f"Your Pixel code is {code}. It expires in 10 minutes. "
+                 "Do not share this code. If you did not request it, ignore this email."),
+    }).encode("utf-8")
+    request = url_request.Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "User-Agent": "Pixel/1.0",
+        },
+        method="POST",
+    )
+    try:
+        with url_request.urlopen(request, timeout=10) as response:
+            if response.status >= 400:
+                raise OSError("Resend rejected the email")
+    except (url_error.HTTPError, url_error.URLError, TimeoutError) as exc:
+        raise OSError("Resend delivery failed") from exc
 
 
 @router.post("/email-code")

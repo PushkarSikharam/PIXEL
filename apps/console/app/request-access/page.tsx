@@ -9,6 +9,13 @@ import { demoCodeFor, normalizeEmail } from "@pixel-console/lib/mock-identity";
 type Stage = "form" | "verify" | "done";
 
 export default function RequestAccess() {
+  return <AuthCard title="Account access" description="Use your email to sign in. New accounts require registration to be enabled by the operator.">
+    <Link className="px-button" data-variant="primary" href="/sign-in">Sign in</Link>
+    <Link href="/demo">Visit demo</Link>
+  </AuthCard>;
+}
+
+function PrototypeRequestAccess() {
   const [stage, setStage] = useState<Stage>("form");
   const [email, setEmail] = useState("");
   const [organization, setOrganization] = useState("");

@@ -3,28 +3,31 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bot, RotateCcw, SendHorizonal } from "lucide-react";
+import { Bot, RotateCcw, SendHorizonal, PanelLeftClose, PanelLeftOpen, Volume2, VolumeX, Mic, Square } from "lucide-react";
 import { useConsole } from "@pixel-console/components/console-context";
+import { ProductKnowledge } from "@pixel-console/components/product-knowledge";
 import { Dialog } from "@pixel-console/components/overlays";
 import { useToast } from "@pixel-console/components/toast";
 import { Alert, Badge, Button, EmptyState, ErrorState, Input, LoadingRows, PageHead, Panel, PermissionDenied, StatusBadge } from "@pixel-console/components/ui";
 import { DEPLOYMENTS, RELEASES, productById, teamName } from "@pixel-console/lib/mock-data";
 import {
-  executeProductAction, productRecords, productShape, sendProductTurn, signIn, storedSession,
+  executeProductAction, productRecords, productShape, sendProductTurn, productSpeech, storedSession,
   type ApiActionShape, type ApiProductShape, type ApiRecords, type ApiSession, type ApiTurnResponse,
 } from "@pixel-console/lib/pixel-api";
 import type { Environment, Release } from "@pixel-console/lib/contracts";
+import { speechInputConstructor, type SpeechInput } from "@pixel-console/lib/speech-input";
 
 const ENVS: Environment[] = ["development", "staging", "production"];
 
 export default function ProductDetail() {
   const { productId } = useParams<{ productId: string }>();
   const c = useConsole();
+  useEffect(() => { c.selectProduct(productId); }, [productId, c.selectProduct]);
   const liveProduct = c.live ? c.visibleProducts.find((p) => p.id === productId) : null;
 
   if (c.live) {
     if (!liveProduct) return <PermissionDenied what="this product" />;
-    return <LiveProductWorkspace productId={productId} />;
+    return <LiveProductWorkspace key={`${c.organizationId}:${productId}`} productId={productId} />;
   }
 
   const product = productById(productId);
@@ -40,6 +43,9 @@ function LiveProductWorkspace({ productId }: { productId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeView, setActiveView] = useState<string | null>(null);
+  const [conversationEpoch, setConversationEpoch] = useState(0);
+  const [recordSelection, setRecordSelection] = useState<{ entity: string; id: string } | null>(null);
+  const [recordFilter, setRecordFilter] = useState<{ entity: string; field: string; value: unknown } | null>(null);
 
   async function load(currentSession = session) {
     if (!currentSession) return;
@@ -56,7 +62,8 @@ function LiveProductWorkspace({ productId }: { productId: string }) {
     let cancelled = false;
     (async () => {
       try {
-        const nextSession = storedSession() ?? await signIn("demo-admin");
+        const nextSession = storedSession();
+        if (!nextSession) throw new Error("Sign in to open this product.");
         if (cancelled) return;
         setSession(nextSession);
         await load(nextSession);
@@ -79,38 +86,59 @@ function LiveProductWorkspace({ productId }: { productId: string }) {
   const currentView = shape.views.find((view) => view.name === activeView) ?? shape.views[0];
   const currentEntity = currentView?.entity ? shape.entities.find((entity) => entity.name === currentView.entity) : null;
   const currentRecords = currentEntity ? records.records[currentEntity.name] ?? [] : [];
+  const filteredRecords = recordFilter && recordFilter.entity === currentEntity?.name
+    ? currentRecords.filter((row) => row[recordFilter.field] === recordFilter.value) : currentRecords;
+  const selectedRecord = recordSelection && recordSelection.entity === currentEntity?.name ? currentRecords.find((row) => row.id === recordSelection.id) : null;
+
+  function showAction(action: ApiActionShape, payload: Record<string, unknown>) {
+    const view = action.view ?? shape?.views.find((candidate) => candidate.entity === action.entity && candidate.navigable)?.name;
+    if (view) setActiveView(view);
+    setRecordSelection(action.entity && typeof payload.record_id === "string" ? { entity: action.entity, id: payload.record_id } : null);
+    setRecordFilter(action.capability === "FILTER_RECORDS" && action.entity && action.by ? { entity: action.entity, field: action.by, value: payload[action.by] } : null);
+  }
 
   return (
     <>
       <PageHead title={shape.product_name}
         description={`Definition ${shape.definition_id} v${shape.definition_version}. ${shape.entities.length} record types, ${shape.views.length} screens.`}
         actions={<StatusBadge status="active" />} />
-      <div className="px-grid-two">
+      <div className="px-product-workspace">
+        <LiveProductChat key={`${session.tenantId}:${productId}:${conversationEpoch}`} session={session} shape={shape} productId={productId}
+          onUiAction={showAction}
+          onRecordsChanged={async () => {
+            await load(session);
+            toast("ok", "Records refreshed.");
+          }} />
         <div className="px-stack">
           <Panel title="Screens" actions={<Badge>{records.scope}</Badge>}>
             <div className="px-row" role="tablist" aria-label="Product screens">
               {shape.views.filter((view) => view.navigable).map((view) => (
                 <Button key={view.name} size="sm" variant={view.name === activeView ? "primary" : "default"}
-                  onClick={() => setActiveView(view.name)}>{view.label}</Button>
+                  onClick={() => { setActiveView(view.name); setRecordSelection(null); setRecordFilter(null); }}>{view.label}</Button>
               ))}
             </div>
           </Panel>
           {currentEntity ? (
             <Panel title={currentView.label} actions={<Badge>{currentRecords.length} {currentRecords.length === 1 ? currentEntity.label : currentEntity.plural}</Badge>}>
-              <GenericRecordTable shape={shape} entity={currentEntity.name} rows={currentRecords}
+              {recordFilter ? <Button size="sm" onClick={() => setRecordFilter(null)}>Clear filter</Button> : null}
+              {selectedRecord ? <section aria-label="Selected record" className="px-stack">
+                <h2>{String(selectedRecord[currentEntity.title_field] ?? selectedRecord.id)}</h2>
+                <dl>{currentEntity.fields.filter((field) => field.display).map((field) => <div key={field.name}><dt>{field.label}</dt><dd>{renderValue(selectedRecord[field.name])}</dd></div>)}</dl>
+                <Button size="sm" onClick={() => setRecordSelection(null)}>Back to records</Button>
+              </section> : <GenericRecordTable shape={shape} entity={currentEntity.name} rows={filteredRecords}
                 columns={currentView.columns.length ? currentView.columns : currentEntity.summary_fields} />
+              }
             </Panel>
           ) : (
             <Panel title={currentView?.label ?? "Screen"}>
               <EmptyState title="No records on this screen">This view has no entity attached yet.</EmptyState>
             </Panel>
           )}
-        </div>
-        <LiveProductChat session={session} shape={shape} productId={productId}
-          onRecordsChanged={async () => {
-            await load(session);
-            toast("ok", "Records refreshed.");
+          <ProductKnowledge session={session} productId={productId} onPublished={() => {
+            setConversationEpoch((value) => value + 1);
+            toast("ok", "Source published. A new conversation will use this version.");
           }} />
+        </div>
       </div>
     </>
   );
@@ -135,7 +163,7 @@ function GenericRecordTable({ shape, entity, rows, columns }: {
         <tbody>
           {rows.map((row) => (
             <tr key={row.id}>
-              {visibleColumns.map((column) => <td key={column}>{renderValue(row[column] ?? row.title)}</td>)}
+              {visibleColumns.map((column) => <td key={column}>{renderValue(row[column])}</td>)}
             </tr>
           ))}
         </tbody>
@@ -144,24 +172,57 @@ function GenericRecordTable({ shape, entity, rows, columns }: {
   );
 }
 
-function LiveProductChat({ session, shape, productId, onRecordsChanged }: {
+function LiveProductChat({ session, shape, productId, onRecordsChanged, onUiAction }: {
   session: ApiSession;
   shape: ApiProductShape;
   productId: string;
   onRecordsChanged: () => Promise<void>;
+  onUiAction: (action: ApiActionShape, payload: Record<string, unknown>) => void;
 }) {
   const [messages, setMessages] = useState<Array<{ role: "visitor" | "agent"; text: string }>>([
     { role: "agent", text: `Welcome to ${shape.product_name}. I'm ${shape.assistant_name}.` },
   ]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [voice, setVoice] = useState(false);
+  const voiceEnabled = useRef(false);
+  const [voiceStatus, setVoiceStatus] = useState("Voice off");
+  const [listening, setListening] = useState(false);
+  const [micAvailable, setMicAvailable] = useState(false);
+  const recognition = useRef<SpeechInput | null>(null);
+  const alive = useRef(true);
+  const sending = useRef(false);
+  const request = useRef<AbortController | null>(null);
+  const speechRequest = useRef<AbortController | null>(null);
+  const playing = useRef<HTMLAudioElement | null>(null);
+  const audioUrl = useRef<string | null>(null);
+  const log = useRef<HTMLDivElement | null>(null);
   const turn = useRef(0);
-  const sessionId = useRef(`console-${productId}-${Date.now()}`);
+  const sessionId = useRef("");
+  function stopAudio() {
+    speechRequest.current?.abort();
+    playing.current?.pause();
+    playing.current = null;
+    if (audioUrl.current) URL.revokeObjectURL(audioUrl.current);
+    audioUrl.current = null;
+  }
+  useEffect(() => {
+    alive.current = true;
+    sessionId.current = crypto.randomUUID();
+    setMicAvailable(speechInputConstructor() !== null);
+    return () => { alive.current = false; request.current?.abort(); recognition.current?.abort(); stopAudio(); };
+  }, []);
+  useEffect(() => { log.current?.scrollTo({ top: log.current.scrollHeight }); }, [messages, busy]);
   const actions = useMemo(() => Object.fromEntries(shape.actions.map((action) => [action.client_type, action])), [shape.actions]);
 
-  async function send() {
-    const message = input.trim();
-    if (!message || busy) return;
+  async function send(spoken?: string) {
+    const message = (spoken ?? input).trim();
+    if (!message || sending.current) return;
+    sending.current = true;
+    stopAudio();
+    const controller = new AbortController();
+    request.current = controller;
     setInput("");
     setBusy(true);
     setMessages((all) => [...all, { role: "visitor", text: message }]);
@@ -172,39 +233,111 @@ function LiveProductChat({ session, shape, productId, onRecordsChanged }: {
         turnId: turn.current,
         productId,
         message,
+        signal: controller.signal,
       });
+      if (!alive.current || controller.signal.aborted) return;
+      if (response.session_id !== sessionId.current || response.turn_id !== turn.current) {
+        throw new Error("The reply did not match this conversation. Please retry.");
+      }
+      if (response.status === "stale" || response.status === "cancelled") return;
       setMessages((all) => [...all, { role: "agent", text: response.speech }]);
+      const action = response.status === "completed" && response.validated_action ? actions[response.validated_action.type] : null;
+      if (action && response.validated_action && !response.execution) onUiAction(action, response.validated_action.payload);
       const receipt = await maybeExecute(session, productId, response, actions);
+      if (!alive.current) return;
       if (receipt) {
         setMessages((all) => [...all, { role: "agent", text: receipt.speech }]);
         await onRecordsChanged();
+        if (action && receipt.outcome === "executed" && typeof receipt.record?.id === "string") {
+          onUiAction(action, { record_id: receipt.record.id });
+        }
+      }
+      if (voiceEnabled.current && alive.current) {
+        setVoiceStatus("Preparing audio");
+        const speechController = new AbortController();
+        speechRequest.current = speechController;
+        try {
+          const result = await productSpeech(session, productId, sessionId.current, receipt?.speech ?? response.speech, speechController.signal);
+          if (!alive.current || speechController.signal.aborted) return;
+          const url = URL.createObjectURL(result.audio);
+          audioUrl.current = url;
+          const audio = new Audio(url);
+          playing.current = audio;
+          audio.onended = () => { stopAudio(); if (alive.current) setVoiceStatus("Voice ready"); };
+          await audio.play();
+          setVoiceStatus(result.provider);
+        } catch (caught) {
+          if (alive.current && !speechController.signal.aborted) setVoiceStatus(caught instanceof Error ? caught.message : "Voice unavailable");
+        }
       }
     } catch (caught) {
-      setMessages((all) => [...all, { role: "agent", text: caught instanceof Error ? caught.message : "That request failed." }]);
+      if (alive.current && !controller.signal.aborted) setMessages((all) => [...all, { role: "agent", text: caught instanceof Error ? caught.message : "That request failed." }]);
     } finally {
-      setBusy(false);
+      sending.current = false;
+      if (alive.current) setBusy(false);
     }
   }
 
+  function microphone() {
+    if (listening) { recognition.current?.abort(); setListening(false); return; }
+    const Constructor = speechInputConstructor();
+    if (!Constructor || busy) return;
+    stopAudio();
+    const capture = new Constructor();
+    recognition.current = capture;
+    capture.lang = "en-US"; capture.continuous = false; capture.interimResults = false;
+    capture.onresult = (event) => {
+      if (!alive.current) return;
+      const transcript = event.results[0]?.[0]?.transcript?.trim();
+      if (transcript) { voiceEnabled.current = true; setVoice(true); void send(transcript); }
+    };
+    capture.onerror = (event) => { if (alive.current) setVoiceStatus(event.error === "not-allowed" ? "Microphone permission denied" : "Speech input unavailable. Please type your message."); };
+    capture.onend = () => { if (alive.current) setListening(false); };
+    try { capture.start(); setListening(true); }
+    catch { setVoiceStatus("Microphone unavailable. Please type your message."); }
+  }
+
   return (
-    <Panel title={<span className="px-row"><Bot aria-hidden size={16} />{shape.assistant_name}</span>}>
+    <aside className="px-product-assistant" aria-label={`${shape.assistant_name} product assistant`} data-collapsed={collapsed}>
+    <Panel title={<span className="px-row"><Bot aria-hidden size={16} />{collapsed ? null : shape.assistant_name}</span>}
+      actions={<Button aria-label={collapsed ? "Expand assistant" : "Collapse assistant"} title={collapsed ? "Expand assistant" : "Collapse assistant"}
+        variant="ghost" size="sm" onClick={() => setCollapsed(!collapsed)}>{collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</Button>}>
+      {!collapsed ? <>
+      <div className="px-small px-muted">{shape.product_name}</div>
       <div className="px-stack">
-        <div className="px-chat-log" aria-live="polite">
+        <div ref={log} className="px-chat-log" role="log" aria-live="polite" aria-label="Conversation">
           {messages.map((message, index) => (
             <div key={index} className="px-console-message" data-role={message.role}>
               <strong>{message.role === "visitor" ? "You" : shape.assistant_name}</strong>
               <p>{message.text}</p>
             </div>
           ))}
+          {busy ? <p className="px-muted" role="status">Thinking...</p> : null}
         </div>
         <form className="px-row" onSubmit={(event) => { event.preventDefault(); void send(); }}>
           <Input value={input} onChange={(event) => setInput(event.target.value)}
             placeholder={`Ask ${shape.assistant_name}`} aria-label={`Ask ${shape.assistant_name}`} />
-          <Button type="submit" variant="primary" loading={busy}><SendHorizonal aria-hidden />Send</Button>
+          <Button type="submit" variant="primary" loading={busy} disabled={!input.trim()} aria-label="Send message" title="Send message"><SendHorizonal aria-hidden /></Button>
         </form>
-        <Alert>Mutations are committed only when the backend returns an execution key for this product and turn.</Alert>
+        <div className="px-row">
+          <Button size="sm" variant="ghost" disabled={busy || !micAvailable} aria-label={listening ? "Stop microphone" : "Start microphone"}
+            title={!micAvailable ? "Speech input is not supported in this browser" : listening ? "Stop microphone" : "Start microphone"} onClick={microphone}>
+            {listening ? <Square aria-hidden /> : <Mic aria-hidden />}
+          </Button>
+          <Button size="sm" variant="ghost" aria-label={voice ? "Disable voice" : "Enable voice"} title={voice ? "Disable voice" : "Enable voice"}
+            aria-pressed={voice} onClick={() => { stopAudio(); voiceEnabled.current = !voice; setVoice(!voice); setVoiceStatus(voice ? "Voice off" : "Voice ready"); }}>
+            {voice ? <Volume2 aria-hidden /> : <VolumeX aria-hidden />}
+          </Button>
+          <span className="px-small" role="status">{voiceStatus}</span>
+          <Button size="sm" variant="ghost" disabled={busy} aria-label="New conversation" title="New conversation" onClick={() => {
+            stopAudio(); sessionId.current = crypto.randomUUID(); turn.current = 0;
+            setMessages([{ role: "agent", text: `Welcome to ${shape.product_name}. I'm ${shape.assistant_name}.` }]);
+          }}><RotateCcw aria-hidden /></Button>
+        </div>
       </div>
+      </> : null}
     </Panel>
+    </aside>
   );
 }
 
@@ -215,6 +348,7 @@ async function maybeExecute(
   actions: Record<string, ApiActionShape>,
 ) {
   if (!response.execution || !response.validated_action) return null;
+  if (response.status !== "completed" || response.execution.turn_id !== response.turn_id || response.execution.session_id !== response.session_id) return null;
   const action = actions[response.validated_action.type];
   if (!action?.entity) return null;
   if (action.capability !== "CREATE_RECORD" && action.capability !== "UPDATE_RECORD") return null;

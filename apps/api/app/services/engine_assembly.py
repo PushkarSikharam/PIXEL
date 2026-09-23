@@ -23,6 +23,7 @@ from app.engine.actions import RecordRef
 from app.engine.conversation import CapabilityPolicy
 from app.engine.conversation_engine import ConversationEngine
 from app.engine.knowledge import KnowledgeContext
+from app.product_knowledge import ApprovedKnowledge
 from app.engine.lookup import RecordView
 from app.engine.snapshot import LoadedRecordSource, TurnSnapshot
 
@@ -111,7 +112,12 @@ def assemble_engine(prepared: PreparedTurn, definition: Any, pin: Any) -> tuple[
         # available to a caller who passed the product gates.
         permitted=lambda key: True,
     )
-    knowledge = None
+    context = KnowledgeContext(
+        tenant_id=pin.tenant_id, product_id=pin.product_id, definition_id=pin.definition_id,
+        definition_version=pin.definition_version, definition_checksum=pin.definition_checksum,
+        knowledge_version=pin.knowledge_version, scope_label=prepared.scope_label or "all",
+    )
+    knowledge = ApprovedKnowledge(context)
     if package.knowledge_factory is not None:
         knowledge = package.knowledge_factory(KnowledgeContext(
             tenant_id=pin.tenant_id, product_id=pin.product_id, definition_id=pin.definition_id,

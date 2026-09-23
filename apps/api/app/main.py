@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from app.account_api import router as account_router
+from app.product_knowledge import router as knowledge_router
+from app.definitions.loader import parse_definition
+
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 import logging
@@ -293,6 +297,8 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+app.include_router(account_router)
+app.include_router(knowledge_router)
 
 
 @app.exception_handler(RecordConflict)
@@ -407,6 +413,7 @@ def demo_login(body: DemoLoginRequest, http: Request) -> DemoLoginResponse:
 
 
 class ProductSummary(BaseModel):
+    team_id: str = ""
     """One product of the caller's organization, as the console lists it."""
 
     product_id: str
@@ -447,17 +454,23 @@ def list_products(tenant_id: str, user: AuthUser = Depends(require_member)) -> P
         if binding.tenant_id != tenant_id:
             continue
         try:
+            authorize_product(user, binding.product_id, directory)
+        except AccessDenied:
+            continue
+        try:
             definition = directory.definitions.load(
                 binding.definition_id, binding.definition_version).definition
         except Exception:
             # A product whose definition cannot be read is listed plainly rather than hidden, so
             # an operator can see that it needs attention.
             summaries.append(ProductSummary(
+                team_id=binding.team_id,
                 product_id=binding.product_id, name=binding.product_id,
                 definition_id=binding.definition_id, definition_version=binding.definition_version,
                 state="unreadable", visitor_access=binding.visitor_access, entities=[], views=[]))
             continue
         summaries.append(ProductSummary(
+            team_id=binding.team_id,
             product_id=binding.product_id,
             name=definition.identity.product_name,
             definition_id=binding.definition_id,
@@ -483,6 +496,9 @@ def add_product(tenant_id: str, body: AddProductRequest, http: Request,
     rate_limits.enforce("write", http, identity=user.user_id)
     directory = agent.directory
     try:
+        identity = parse_definition(body.definition.encode("utf-8")).definition
+        if identity.ownership != "organization_private" or identity.owner_organization != tenant_id:
+            raise HTTPException(status_code=403, detail="Uploaded definitions must be private to your organization.")
         store_definition(body.definition, definition_id=body.definition_id,
                          version=body.definition_version)
         directory.definitions.ensure_published(body.definition_id, body.definition_version)
@@ -495,6 +511,7 @@ def add_product(tenant_id: str, body: AddProductRequest, http: Request,
     grant_records(tenant_id, body.product_id, user.user_id, [], True)
     definition = directory.definitions.load(body.definition_id, body.definition_version).definition
     return ProductSummary(
+        team_id=binding.team_id,
         product_id=binding.product_id, name=definition.identity.product_name,
         definition_id=binding.definition_id, definition_version=binding.definition_version,
         state=binding.state, visitor_access=binding.visitor_access,
@@ -592,6 +609,8 @@ class ActionShape(BaseModel):
     entity: str | None = None
     view: str | None = None
     fields: list[str] = []
+    by: str | None = None
+    control: str | None = None
 
 
 class ProductShape(BaseModel):
@@ -658,6 +677,7 @@ def product_shape(product_id: str, user: AuthUser = Depends(require_auth)) -> Pr
                 name=name, client_type=name.upper(), capability=str(action.capability),
                 description=action.description, entity=action.entity, view=action.view,
                 fields=list(action.fields),
+                by=action.by, control=action.control,
             )
             for name, action in definition.actions.items()
         ],
@@ -1191,9 +1211,12 @@ def synthesize_speech(body: SpeechRequest, http: Request,
         raise HTTPException(status_code=404, detail="This product is not available.")
     try:
         definition_id = _speech_definition(user, access, body.session_id)
+        speech_pin = agent.sessions.pin_for(body.session_id) if body.session_id else None
+        speech_version = speech_pin.definition_version if speech_pin else access.binding.definition_version
+        voice_style = agent.directory.definitions.load(definition_id, speech_version).definition.identity.voice_style
         speech = speech_service.synthesize(
             tenant=access.context,
-            voice_style=PRODUCTS_BY_ID[definition_id].voice_style,
+            voice_style=voice_style,
             user_id=user.user_id,
             session_id=body.session_id,
             text=body.text,

@@ -11,6 +11,7 @@
  */
 
 export interface ApiProduct {
+  team_id?: string;
   product_id: string;
   name: string;
   definition_id: string;
@@ -60,6 +61,8 @@ export interface ApiActionShape {
   entity: string | null;
   view: string | null;
   fields: string[];
+  by?: string | null;
+  control?: string | null;
 }
 
 export interface ApiProductShape {
@@ -103,11 +106,50 @@ export interface ApiSession {
 
 export class ApiError extends Error {}
 
+export interface ApiAccount {
+  user_id: string; email: string | null; tenant_id: string; organization_name: string;
+  role: "org_admin" | "team_admin" | "team_member"; team_id: string | null;
+  teams: Array<{ team_id: string; name: string }>;
+}
+
+export async function requestEmailCode(email: string): Promise<{ challenge_id: string }> {
+  return call("/account/email-code", { method: "POST", body: JSON.stringify({ email }) });
+}
+
+export async function verifyEmailCode(challengeId: string, code: string): Promise<ApiSession> {
+  const answer = await call<{ token: string; user_id: string; tenant_id: string }>(
+    "/account/verify-code", { method: "POST", body: JSON.stringify({ challenge_id: challengeId, code }) },
+  );
+  const session = { token: answer.token, userId: answer.user_id, tenantId: answer.tenant_id };
+  remember(session);
+  return session;
+}
+
+export async function currentAccount(session: ApiSession): Promise<ApiAccount> {
+  return call("/account/session", {}, session);
+}
+
+export interface ApiKnowledge { version: number; documents: Array<{ document_id: string; title: string; characters: number }> }
+export async function productKnowledge(session: ApiSession, productId: string): Promise<ApiKnowledge> {
+  return call(`/products/${encodeURIComponent(productId)}/knowledge`, {}, session);
+}
+export async function approveKnowledge(session: ApiSession, productId: string, title: string, text: string): Promise<void> {
+  await call(`/products/${encodeURIComponent(productId)}/knowledge`, {
+    method: "POST", body: JSON.stringify({ title, text, approved: true }),
+  }, session);
+}
+
+export async function endSession(): Promise<void> {
+  const session = storedSession();
+  if (session) await call("/account/logout", { method: "POST" }, session);
+  remember(null);
+}
+
 const TOKEN_KEY = "pixel.console.session";
 
 export function apiBaseUrl(): string | null {
   const configured = process.env.NEXT_PUBLIC_PIXEL_API_BASE_URL?.trim();
-  return configured ? configured.replace(/\/$/, "") : null;
+  return configured ? configured.replace(/\/$/, "") : "/api/agent";
 }
 
 /** Whether this console is pointed at a running Pixel. */
@@ -159,20 +201,6 @@ async function call<T>(path: string, init: RequestInit = {}, session?: ApiSessio
   return body ? (JSON.parse(body) as T) : ({} as T);
 }
 
-/**
- * Sign in for development. This is the API's own demo login, which is off unless a deployment
- * turns it on, and it is not how people will sign in to Pixel: real accounts arrive with the
- * identity work. It exists so the console can be driven against a running API today.
- */
-export async function signIn(userId: string): Promise<ApiSession> {
-  const answer = await call<{ token: string; user_id: string; tenant_id: string }>(
-    "/auth/demo-login", { method: "POST", body: JSON.stringify({ user_id: userId }) },
-  );
-  const session = { token: answer.token, userId: answer.user_id, tenantId: answer.tenant_id };
-  remember(session);
-  return session;
-}
-
 export function signOut(): void {
   remember(null);
 }
@@ -216,9 +244,11 @@ export async function sendProductTurn(session: ApiSession, input: {
   turnId: number;
   productId: string;
   message: string;
+  signal?: AbortSignal;
 }): Promise<ApiTurnResponse> {
   return call<ApiTurnResponse>("/turn", {
     method: "POST",
+    signal: input.signal,
     body: JSON.stringify({
       session_id: input.sessionId,
       turn_id: input.turnId,
@@ -229,6 +259,16 @@ export async function sendProductTurn(session: ApiSession, input: {
       workspace_scope_id: "primary",
     }),
   }, session);
+}
+
+export async function productSpeech(session: ApiSession, productId: string, sessionId: string, text: string, signal: AbortSignal) {
+  const response = await fetch(`${apiBaseUrl()}/speech`, {
+    method: "POST", signal,
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
+    body: JSON.stringify({ product_id: productId, session_id: sessionId, text }),
+  });
+  if (!response.ok) throw new ApiError(response.status === 429 ? "Voice limit reached. Text remains available." : "Voice is unavailable. Text remains available.");
+  return { audio: await response.blob(), provider: response.headers.get("X-TTS-Engine") ?? "Cloud voice" };
 }
 
 export async function executeProductAction(session: ApiSession, input: {

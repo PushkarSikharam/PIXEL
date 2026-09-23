@@ -20,6 +20,16 @@ function envCells(productId: string): Array<{ state: RasterState; name: string }
 
 export default function Overview() {
   const c = useConsole();
+  if (c.live) return <>
+    <PageHead title={c.account?.organization_name ?? "Overview"} actions={<Link className="px-button" data-variant="primary" href="/console/products/new">Add product</Link>} />
+    <Panel title="Your products">
+      {c.visibleProducts.length === 0 ? <p className="px-muted">No products yet.</p> : <div className="px-table-wrap"><table className="px-table">
+        <thead><tr><th>Product</th><th>Definition version</th><th>Status</th></tr></thead>
+        <tbody>{c.visibleProducts.map((p) => <tr key={p.id}><td><Link href={`/console/products/${encodeURIComponent(p.id)}`}>{p.name}</Link></td>
+          <td>{p.revision}</td><td><StatusBadge status={p.state} /></td></tr>)}</tbody>
+      </table></div>}
+    </Panel>
+  </>;
   const total = USAGE.reduce((sum, d) => sum + d.units, 0);
   const failed = DEPLOYMENTS.filter((d) => d.state === "failed" && c.visibleProducts.some((p) => p.id === d.productId));
   return (

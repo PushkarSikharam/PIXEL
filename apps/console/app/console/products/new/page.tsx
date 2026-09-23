@@ -12,11 +12,17 @@ import {
   initialOnboarding, publish, removeSource, setConfirmation, setDetails, starterDefinitionText,
   toggleAction, validate, type OnboardingState, type Step,
 } from "@pixel-console/lib/onboarding";
-import { addProduct, signIn, storedSession } from "@pixel-console/lib/pixel-api";
+import { addProduct, storedSession } from "@pixel-console/lib/pixel-api";
+import { ProductImport } from "@pixel-console/components/product-import";
 
 const VISIBLE_STEPS: Step[] = STEPS.filter((s) => s !== "published");
 
 export default function NewProduct() {
+  const c = useConsole();
+  return c.live ? <ProductImport /> : <PrototypeNewProduct />;
+}
+
+function PrototypeNewProduct() {
   const c = useConsole();
   const toast = useToast();
   const router = useRouter();
@@ -225,7 +231,8 @@ export default function NewProduct() {
                     setPublishing(true);
                     try {
                       if (c.live) {
-                        const session = storedSession() ?? await signIn("demo-admin");
+                        const session = storedSession();
+                        if (!session) throw new Error("Sign in to add a product.");
                         const definitionId = definitionIdFor(state);
                         const created = await addProduct(session, {
                           productId: state.slug,

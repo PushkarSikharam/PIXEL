@@ -297,10 +297,12 @@ class ProductEndpointsTest(AddedProductFixture):
         self.assertEqual(response.status_code, 401, response.text)
 
     def test_adding_a_product_makes_it_answer_straight_away(self):
+        definition = library_definition()
+        definition["definition"].update(ownership="organization_private", owner_organization=TENANT)
         response = self.client.post(f"/api/organizations/{TENANT}/products", headers=self.as_user(), json={
             "product_id": "added-through-the-api", "team_id": "planning-team",
             "definition_id": DEFINITION,
-            "definition": yaml.safe_dump(library_definition(), sort_keys=False),
+            "definition": yaml.safe_dump(definition, sort_keys=False),
         })
         self.assertEqual(response.status_code, 201, response.text)
         self.assertEqual(response.json()["name"], "Sample Library")
@@ -308,12 +310,14 @@ class ProductEndpointsTest(AddedProductFixture):
         self.assertIn("Sample Library", answered["speech"])
 
     def test_a_team_admin_may_add_a_product_for_their_team(self):
+        definition = library_definition()
+        definition["definition"].update(ownership="organization_private", owner_organization=TENANT)
         self.directory.add_member(TENANT, "team-owner", "team_admin", "planning-team")
         response = self.client.post(f"/api/organizations/{TENANT}/products",
                                     headers=self.as_user("team-owner"), json={
             "product_id": "added-by-team-owner", "team_id": "planning-team",
             "definition_id": DEFINITION,
-            "definition": yaml.safe_dump(library_definition(), sort_keys=False),
+            "definition": yaml.safe_dump(definition, sort_keys=False),
         })
         self.assertEqual(response.status_code, 201, response.text)
 

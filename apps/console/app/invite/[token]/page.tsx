@@ -40,5 +40,7 @@ function Invitation() {
 }
 
 export default function InvitePage() {
-  return <Suspense fallback={null}><Invitation /></Suspense>;
+  return <AuthCard title="Invitation unavailable" description="Invitation acceptance is not enabled. No membership has been changed.">
+    <Link className="px-button" href="/sign-in">Sign in</Link>
+  </AuthCard>;
 }

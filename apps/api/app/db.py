@@ -45,6 +45,37 @@ def migrate() -> None:
             """
             pragma journal_mode = wal;
 
+            create table if not exists email_accounts(
+              email text primary key,
+              user_id text not null unique,
+              tenant_id text not null references organizations(tenant_id),
+              created_at text not null
+            );
+            create table if not exists approved_documents(
+              tenant_id text not null,
+              product_id text not null,
+              definition_checksum text not null,
+              knowledge_version integer not null,
+              document_id text not null,
+              title text not null,
+              body text not null,
+              primary key (tenant_id, product_id, knowledge_version, document_id)
+            );
+            create table if not exists email_challenges(
+              challenge_id text primary key,
+              email text not null,
+              code_digest text not null,
+              expires_at real not null,
+              attempts integer not null default 0,
+              consumed integer not null default 0
+            );
+            create index if not exists email_challenge_expiry on email_challenges(expires_at);
+            create table if not exists email_login_limits(
+              bucket text primary key,
+              starts_at real not null,
+              attempts integer not null
+            );
+
             create table if not exists access_grants(
               user_id text primary key,
               scope_ids text not null,

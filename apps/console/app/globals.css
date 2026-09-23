@@ -305,3 +305,15 @@ code, .px-mono { font-family: var(--px-mono); font-size: var(--px-text-sm); }
 
 .px-spin { animation: px-rotate 1s linear infinite; }
 @keyframes px-rotate { to { transform: rotate(360deg); } }
+/* The assistant belongs to the active product, beside its work surface. */
+.px-product-workspace { display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); gap: 20px; align-items: start; }
+.px-product-workspace:has(.px-product-assistant[data-collapsed="true"]) { grid-template-columns: 112px minmax(0, 1fr); }
+.px-product-assistant { position: sticky; top: 16px; min-width: 0; }
+.px-product-assistant .px-chat-log { height: 400px; max-height: 50dvh; overflow: auto; overflow-wrap: anywhere; align-content: start; }
+.px-product-assistant form > input { min-width: 0; flex: 1; }
+.px-product-assistant .px-console-message p { white-space: pre-wrap; }
+@media (max-width: 1000px) {
+  .px-product-workspace, .px-product-workspace:has(.px-product-assistant[data-collapsed="true"]) { grid-template-columns: minmax(0, 1fr); }
+  .px-product-assistant { position: static; }
+  .px-product-assistant .px-chat-log { height: 260px; }
+}

@@ -11,10 +11,11 @@ import { teamName } from "@pixel-console/lib/mock-data";
 /** `?state=loading|empty|error|denied` shows each non-happy state of the catalogue. */
 function Catalogue() {
   const c = useConsole();
-  const demo = useSearchParams().get("state");
+  const queryState = useSearchParams().get("state");
+  const demo = c.live ? null : queryState;
   const [query, setQuery] = useState("");
   const [showArchived, setShowArchived] = useState(false);
-  const canCreate = c.persona.memberships.some((m) => m.role !== "team_member");
+  const canCreate = c.live ? c.account?.role === "org_admin" || c.account?.role === "team_admin" : c.persona.memberships.some((m) => m.role !== "team_member");
   const products = useMemo(() => c.visibleProducts
     .filter((p) => showArchived || p.state === "active")
     .filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase())), [c.visibleProducts, query, showArchived]);
@@ -51,9 +52,9 @@ function Catalogue() {
             <tbody>
               {products.map((p) => (
                 <tr key={p.id}>
-                  <td><Link href={`/console/products/${p.id}`}>{p.name}</Link><div className="px-small px-muted">{p.description}</div></td>
+                  <td><Link href={`/console/products/${encodeURIComponent(p.id)}`}>{p.name}</Link><div className="px-small px-muted">{p.description}</div></td>
                   <td className="px-mono">{p.slug}</td>
-                  <td>{teamName(p.teamId)}</td>
+                  <td>{c.live ? c.account?.teams.find((t) => t.team_id === p.teamId)?.name ?? p.teamId : teamName(p.teamId)}</td>
                   <td><StatusBadge status={p.state} /></td>
                   <td className="px-num">{p.revision}</td>
                 </tr>

@@ -30,6 +30,9 @@ logger = logging.getLogger(__name__)
 # Codes one address may ask for in an hour, and the ceiling for the whole deployment. The second
 # is deliberately far above the first: it is an abuse ceiling, never a queue everyone shares.
 ADDRESS_CODES_PER_HOUR = 5
+# What a brand new organization is called until somebody renames it.
+DEFAULT_ORGANIZATION_NAME = "My organization"
+DEFAULT_TEAM_ID, DEFAULT_TEAM_NAME = "default", "My team"
 DEPLOYMENT_CODES_PER_HOUR = 5000
 DEPLOYMENT_BUCKET = "deployment"
 router = APIRouter(prefix="/api/account", tags=["account"])
@@ -141,6 +144,13 @@ def request_code(body: EmailRequest, response: Response) -> dict:
     except (OSError, smtplib.SMTPException):
         with get_connection() as connection:
             connection.execute("update email_challenges set consumed=1 where challenge_id=?", (challenge_id,))
+            # A code that never arrived was not an attempt somebody made, so their own hourly
+            # allowance is given back: a failing mail server must not lock a person out of their
+            # own account. The deployment ceiling keeps its count, so repeated failures are still
+            # bounded overall rather than becoming a way to hammer the mail server for free.
+            connection.execute(
+                "update email_login_limits set attempts = max(attempts - 1, 0) where bucket = ?",
+                (_digest(settings[0], email),))
         raise HTTPException(503, "Email could not be delivered. Please try again later.") from None
     response.headers["Cache-Control"] = "no-store"
     return {"challenge_id": challenge_id, "expires_in": 600}
@@ -150,7 +160,7 @@ def request_code(body: EmailRequest, response: Response) -> dict:
 def verify_code(body: CodeRequest, response: Response) -> dict:
     settings = _settings()
     now = time.time()
-    account, registered = None, False
+    account, register_for = None, None
     with get_connection() as connection:
         connection.execute("begin immediate")
         row = connection.execute("select * from email_challenges where challenge_id=?", (body.challenge_id,)).fetchone()
@@ -160,20 +170,16 @@ def verify_code(body: CodeRequest, response: Response) -> dict:
                 connection.execute("update email_challenges set consumed=1 where challenge_id=?", (body.challenge_id,))
                 account = connection.execute("select * from email_accounts where email=?", (row["email"],)).fetchone()
                 if account is None and env_bool("PIXEL_SELF_SIGNUP_ENABLED", default=False):
-                    user_id, tenant_id = f"user-{uuid4().hex}", f"org-{uuid4().hex}"
-                    created = datetime.now(timezone.utc).isoformat()
-                    connection.execute("insert into organizations values (?, ?, 'active', ?)", (tenant_id, "My organization", created))
-                    connection.execute("insert into teams values (?, 'default', 'My team', 'active', ?)", (tenant_id, created))
-                    connection.execute("insert into memberships values (?, ?, 'org_admin', null)", (tenant_id, user_id))
-                    connection.execute("insert into email_accounts values (?, ?, ?, ?)", (row["email"], user_id, tenant_id, created))
-                    account, registered = {"user_id": user_id, "tenant_id": tenant_id}, True
+                    register_for = row["email"]
+    if register_for is not None:
+        account = _register(register_for)
     if account is None:
         raise HTTPException(401, "The code is invalid, expired, or this account has no access.")
-    if registered:
+    if register_for is not None:
         # A brand new organization gets the assistant for moving around the application, so the
         # first screen somebody sees already has one. It is not worth failing a sign-in over.
         try:
-            ensure_console_product(OrganizationDirectory(), account["tenant_id"], "default",
+            ensure_console_product(OrganizationDirectory(), account["tenant_id"], DEFAULT_TEAM_ID,
                                    (account["user_id"],))
         except Exception:  # noqa: BLE001 - never block somebody signing in
             logger.warning("console_product_not_created", extra={"tenant_id": account["tenant_id"]})
@@ -184,6 +190,29 @@ def verify_code(body: CodeRequest, response: Response) -> dict:
     response.headers["Cache-Control"] = "no-store"
     return {"token": create_token(account["user_id"], account["tenant_id"]),
             "user_id": account["user_id"], "tenant_id": account["tenant_id"]}
+
+
+def _register(email: str) -> dict:
+    """A first sign-in becomes an organization of one, built the way every organization is.
+
+    Made through the directory rather than by writing its rows, so a new organization is checked
+    and shaped exactly as any other, and cannot go quietly wrong the day a column moves. It is
+    created after the code has been settled, because the directory keeps its own transaction; a
+    failure here leaves a used code and no account, which is recoverable by asking for another.
+    """
+    user_id, tenant_id = f"user-{uuid4().hex}", f"org-{uuid4().hex}"
+    directory = OrganizationDirectory()
+    try:
+        directory.create_organization(tenant_id, DEFAULT_ORGANIZATION_NAME)
+        directory.create_team(tenant_id, DEFAULT_TEAM_ID, DEFAULT_TEAM_NAME)
+        directory.add_member(tenant_id, user_id, "org_admin")
+        with get_connection() as connection:
+            connection.execute("insert into email_accounts values (?, ?, ?, ?)",
+                               (email, user_id, tenant_id, datetime.now(timezone.utc).isoformat()))
+    except Exception:  # noqa: BLE001 - the caller is told plainly and can ask for another code
+        logger.warning("organization_not_created")
+        raise HTTPException(503, "Your workspace could not be created. Please try again.") from None
+    return {"user_id": user_id, "tenant_id": tenant_id}
 
 
 @router.get("/session")

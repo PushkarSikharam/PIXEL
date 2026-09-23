@@ -76,10 +76,13 @@ export interface ApiProductShape {
   actions: ApiActionShape[];
 }
 
+/** One record as a screen has it, including the version an edit must be made against. */
+export type ApiRecord = Record<string, unknown> & { id: string; title?: string; revision: number };
+
 export interface ApiRecords {
   product_id: string;
   scope: string;
-  records: Record<string, Array<Record<string, unknown> & { id: string; title?: string }>>;
+  records: Record<string, ApiRecord[]>;
 }
 
 export interface ApiTurnResponse {
@@ -104,7 +107,27 @@ export interface ApiSession {
   tenantId: string;
 }
 
-export class ApiError extends Error {}
+export class ApiError extends Error {
+  /** The refusal as the server sent it, when it was more than a sentence. */
+  readonly detail: unknown;
+
+  constructor(message: string, detail?: unknown) {
+    super(message);
+    this.detail = detail;
+  }
+}
+
+/**
+ * Somebody else changed the record first.
+ *
+ * The record as it stands now comes back with the refusal, so the person can be shown what
+ * changed and decide, rather than being told only that they were too late.
+ */
+export class RecordConflictError extends ApiError {
+  constructor(message: string, readonly current: ApiRecord | null) {
+    super(message);
+  }
+}
 
 export interface ApiAccount {
   user_id: string; email: string | null; tenant_id: string; organization_name: string;
@@ -192,13 +215,18 @@ async function call<T>(path: string, init: RequestInit = {}, session?: ApiSessio
   });
   const body = await response.text();
   if (!response.ok) {
-    let detail = body;
+    let detail: unknown = body;
     try {
-      detail = (JSON.parse(body) as { detail?: string }).detail ?? body;
+      detail = (JSON.parse(body) as { detail?: unknown }).detail ?? body;
     } catch {
       /* the body was not JSON; show it as it came */
     }
-    throw new ApiError(detail || `Request failed (${response.status})`);
+    if (detail && typeof detail === "object" && "message" in detail) {
+      const structured = detail as { message: string; record?: ApiRecord | null };
+      if (response.status === 409) throw new RecordConflictError(structured.message, structured.record ?? null);
+      throw new ApiError(structured.message, detail);
+    }
+    throw new ApiError(typeof detail === "string" && detail ? detail : `Request failed (${response.status})`, detail);
   }
   return body ? (JSON.parse(body) as T) : ({} as T);
 }
@@ -239,6 +267,35 @@ export async function productShape(session: ApiSession, productId: string): Prom
 
 export async function productRecords(session: ApiSession, productId: string): Promise<ApiRecords> {
   return call<ApiRecords>(`/products/${encodeURIComponent(productId)}/records`, {}, session);
+}
+
+/**
+ * Create one record from values the person typed.
+ *
+ * No execution key: nothing proposed this, so there is nothing to bind it to. The server decides
+ * whether they may put a record where this one lands, and the product's own definition decides
+ * whether the values are allowed.
+ */
+export async function createProductRecord(session: ApiSession, productId: string, entity: string,
+                                          fields: Record<string, unknown>): Promise<ApiRecord> {
+  return call<ApiRecord>(
+    `/products/${encodeURIComponent(productId)}/records/${encodeURIComponent(entity)}`,
+    { method: "POST", body: JSON.stringify({ fields }) }, session,
+  );
+}
+
+/**
+ * Change one record from values the person typed, against the version they were shown.
+ *
+ * Throws `RecordConflictError` when that version has moved on, carrying the record as it is now.
+ */
+export async function editProductRecord(session: ApiSession, productId: string, entity: string,
+                                        recordId: string, changes: Record<string, unknown>,
+                                        revision: number): Promise<ApiRecord> {
+  return call<ApiRecord>(
+    `/products/${encodeURIComponent(productId)}/records/${encodeURIComponent(entity)}/${encodeURIComponent(recordId)}`,
+    { method: "PUT", body: JSON.stringify({ changes, revision }) }, session,
+  );
 }
 
 export async function sendProductTurn(session: ApiSession, input: {
@@ -350,4 +407,18 @@ export async function productDraft(session: ApiSession, draft: {
       })),
     }),
   }, session);
+}
+
+/**
+ * End a conversation and withdraw anything it proposed but nobody carried out.
+ *
+ * Called when the assistant panel goes away - leaving a product, or switching to another - so a
+ * proposal made about one product cannot be presented after somebody has moved on from it.
+ */
+export async function closeConversation(session: ApiSession, sessionId: string): Promise<void> {
+  try {
+    await call(`/conversations/${encodeURIComponent(sessionId)}/close`, { method: "POST" }, session);
+  } catch {
+    /* The keys expire on their own; failing to tidy up is never worth an error on the way out. */
+  }
 }

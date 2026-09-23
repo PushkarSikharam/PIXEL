@@ -559,13 +559,27 @@ def add_product(tenant_id: str, body: AddProductRequest, http: Request,
     )
 
 
-class KeyedRecordCreate(BaseModel):
-    """A create the assistant proposed: the action it named and only the fields its key bound."""
+class RecordCreate(BaseModel):
+    """A record to create, either proposed by the assistant or filled in by the person.
+
+    A proposal names the action its key bound; a form does not, because nothing proposed it. The
+    two are told apart by the execution key, and the keyed path still refuses a body without the
+    action it was supposed to carry.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    action: str = Field(min_length=1, max_length=64)
+    action: str | None = Field(default=None, min_length=1, max_length=64)
     fields: dict[str, Any] = Field(default_factory=dict)
+
+
+class DirectRecordChange(BaseModel):
+    """An edit somebody made on a form, against the version of the record they were shown."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    changes: dict[str, Any] = Field(min_length=1)
+    revision: int = Field(ge=1)
 
 
 class KeyedRecordChange(BaseModel):
@@ -735,28 +749,51 @@ def read_product_records(product_id: str, workspace_scope_id: str | None = None,
         grant = dataclasses_replace(grant, scope_ids=frozenset({workspace_scope_id}), is_admin=False)
     store = RecordStore(user.tenant_id or "", product_id, _record_space(user))
     lookup = DefinitionLookup(definition, store, grant.visible_scope_ids())
+    # Which version of each record this is. Somebody editing one says which version they read,
+    # and an edit made against a version that has moved on is refused rather than silently
+    # overwriting whatever happened in between.
+    revisions = {(entity, record.id): record.revision
+                 for entity, records in store.all().items() for record in records}
     return RecordsResponse(
         product_id=product_id,
         scope=lookup.scope_label,
         records={
-            entity: [{"id": view.id, "title": view.title, **dict(view.fields)} for view in views]
+            entity: [{"id": view.id, "title": view.title,
+                      "revision": revisions.get((entity, view.id), 0), **dict(view.fields)}
+                     for view in views]
             for entity, views in lookup.records_from({}).items()
         },
     )
 
 
 @app.post("/api/products/{product_id}/records/{entity}")
-def create_product_record(product_id: str, entity: str, body: KeyedRecordCreate, http: Request,
+def create_product_record(product_id: str, entity: str, body: RecordCreate, http: Request,
                           user: AuthUser = Depends(require_auth),
-                          x_execution_key: str = Header(max_length=200),
-                          x_session_id: str = Header(max_length=100)):
-    """Create one record of any product, under the key the assistant's proposal was given."""
+                          x_execution_key: str | None = Header(default=None, max_length=200),
+                          x_session_id: str | None = Header(default=None, max_length=100)):
+    """Create one record of any product.
+
+    With an execution key this is the assistant's proposal being carried out, and the key decides
+    which change may be made and in whose workspace. Without one it is a person filling in a form,
+    where the values came from them directly and the only question is whether they may put a
+    record where this one would land. Both go through the same validation and the same store; what
+    differs is where the values came from, and only the keyed path can be replayed.
+    """
     rate_limits.enforce("write", http, identity=user.user_id)
     definition = _product_definition(user, product_id)
     if entity not in definition.entities:
         raise HTTPException(status_code=404, detail="That product has no such records.")
     fields = dict(body.fields)
     store = RecordStore(user.tenant_id or "", product_id, _record_space(user))
+
+    if x_execution_key is None:
+        return _direct_record(user, product_id, definition, store, entity,
+                              lambda connection: store.create(definition, entity, fields,
+                                                              connection=connection),
+                              created=True)
+
+    if not body.action:
+        raise HTTPException(status_code=422, detail="A keyed create names the action it carries out.")
 
     def apply(connection, grant: RecordGrant, scope_id: str) -> RecordChange:
         try:
@@ -765,9 +802,88 @@ def create_product_record(product_id: str, entity: str, body: KeyedRecordCreate,
             raise InvalidChange(str(refused)) from refused
         return RecordChange(record.id, {"id": record.id, **dict(record.fields)})
 
-    return _keyed_record(x_execution_key, x_session_id, user, product_id, definition, store,
+    return _keyed_record(x_execution_key, x_session_id or "", user, product_id, definition, store,
                          {"action": body.action, "entity": entity, "fields": fields},
                          apply, entity, created=True)
+
+
+@app.put("/api/products/{product_id}/records/{entity}/{record_id}")
+def edit_product_record(product_id: str, entity: str, record_id: str, body: DirectRecordChange,
+                        http: Request, user: AuthUser = Depends(require_auth)):
+    """Change one record of any product from a form the person filled in themselves.
+
+    The edit names the version of the record it was made against. If that version has moved on -
+    somebody else changed it, or the assistant did - the edit is refused and the record as it is
+    now goes back with the refusal, so the person decides what to do rather than losing somebody
+    else's work to a save button. Assistant changes never come through here; they use PATCH with
+    the key that bound them.
+    """
+    rate_limits.enforce("write", http, identity=user.user_id)
+    definition = _product_definition(user, product_id)
+    if entity not in definition.entities:
+        raise HTTPException(status_code=404, detail="That product has no such records.")
+    changes = dict(body.changes)
+    store = RecordStore(user.tenant_id or "", product_id, _record_space(user))
+    return _direct_record(user, product_id, definition, store, entity,
+                          lambda connection: store.update(definition, entity, record_id, changes,
+                                                          expected_revision=body.revision,
+                                                          connection=connection),
+                          target=record_id)
+
+
+def _direct_record(user: AuthUser, product_id: str, definition, store: "RecordStore", entity: str,
+                   change, *, created: bool = False, target: str | None = None) -> JSONResponse:
+    """One record written by the person themselves, inside their own reach.
+
+    A record is only written if the person can see it afterwards. That is the whole access rule:
+    creating a record somewhere they cannot reach, or moving one out of their reach, would be a
+    way of writing into a workspace that is not theirs, so the write is rolled back instead. The
+    check runs in the same transaction as the change, so nothing can move in between.
+    """
+    if user.kind == "member":
+        idle_reset.touched(changed=True)
+    grant = product_record_grant(user, product_id)
+    scope_ids = grant.visible_scope_ids()
+
+    def visible(record_id: str, connection):
+        """Read inside the write's own transaction, so a record just written is judged as it
+        will be once it is committed rather than as it was before it existed."""
+        return DefinitionLookup(definition, store, scope_ids,
+                                connection=connection).get(entity, record_id)
+
+    try:
+        with get_connection() as connection:
+            connection.execute("begin immediate")
+            if target is not None and visible(target, connection) is None:
+                raise RecordNotFound("That record is unavailable.")
+            record = change(connection)
+            if visible(record.id, connection) is None:
+                raise ScopeViolation("That record would be outside your workspace.")
+            content = {"id": record.id, "revision": record.revision, **dict(record.fields)}
+    except RecordInvalid as invalid:
+        raise HTTPException(status_code=422, detail=str(invalid)) from invalid
+    except SpaceFull as full:
+        raise HTTPException(status_code=409, detail=str(full)) from full
+    except StoreConflict as conflict:
+        raise HTTPException(status_code=409, detail=_conflict_detail(
+            str(conflict), definition, store, scope_ids, entity, target)) from conflict
+    except RecordNotFound as missing:
+        raise HTTPException(status_code=404, detail=str(missing)) from missing
+    except ScopeViolation as refused:
+        raise HTTPException(status_code=403, detail=str(refused)) from refused
+    return JSONResponse(status_code=201 if created else 200, content=content)
+
+
+def _conflict_detail(message: str, definition, store: "RecordStore", scope_ids, entity: str,
+                     record_id: str | None) -> dict:
+    """What a refused edit is told: why, and the record as it stands now if they may see it."""
+    current = DefinitionLookup(definition, store, scope_ids).get(entity, record_id or "")
+    if current is None:
+        return {"message": message, "record": None}
+    held = store.get(entity, current.id)
+    return {"message": message,
+            "record": {"id": current.id, "revision": held.revision if held else 0,
+                       **dict(current.fields)}}
 
 
 @app.patch("/api/products/{product_id}/records/{entity}/{record_id}")
@@ -1433,6 +1549,28 @@ def _answer_turn(request: TurnRequest, http: Request, background: BackgroundTask
     shadow.finish(admitted, request, response)
     shadow.counters.schedule(background.add_task)
     return response
+
+
+@app.post("/api/conversations/{session_id}/close", status_code=200)
+def close_conversation(session_id: str, user: AuthUser = Depends(require_auth)) -> dict:
+    """End a conversation and withdraw anything it proposed but nobody carried out.
+
+    Switching product, or leaving one, ends that conversation. A key it handed out and nobody
+    used is withdrawn here rather than left to expire, so a proposal made about one product can
+    never be presented after somebody has moved on from it.
+    """
+    if not agent.sessions.owns_session(
+        session_id, user.user_id, user.tenant_id, demo_context=user.demo_context
+    ):
+        raise HTTPException(status_code=404, detail="This conversation was not found.")
+    pin = agent.sessions.pin_for(session_id)
+    owner = principal_owner(user, pin.product_id) if pin is not None else None
+    withdrawn = 0
+    if owner is not None:
+        with get_connection() as connection:
+            connection.execute("begin immediate")
+            withdrawn = ExecutionLedger().cancel_session(connection, owner, session_id)
+    return {"session_id": session_id, "withdrawn": withdrawn}
 
 
 @app.post("/api/turn/{turn_id}/cancel", response_model=CancelTurnResponse)

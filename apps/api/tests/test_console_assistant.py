@@ -82,6 +82,35 @@ class MovingAroundTest(ConsoleAssistantFixture):
             self.assertNotIn(record_work, offered.lower(),
                              "moving around is all it does; it must not offer record work")
 
+    def test_it_says_how_many_products_the_organization_has(self):
+        """Asked a number, it answers with the number rather than opening a screen and leaving
+        somebody to count for themselves."""
+        counted = self.ask("how many products do i have")
+        self.assertRegex(counted["speech"], r"You have \d+ products?")
+        self.assertIn("Pixel", counted["speech"], "it names them, not only counts them")
+
+    def test_a_count_of_one_is_not_worded_as_many(self):
+        answered = self.ask("how many products do i have", session="one")
+        products = self.directory.active_products()
+        mine = [b for b in products if b.tenant_id == TENANT and b.product_id != self.console.product_id]
+        expected = f"You have {len(mine)} product" + ("s" if len(mine) != 1 else "")
+        self.assertIn(expected, answered["speech"])
+
+    def test_pixel_is_never_counted_among_somebodys_products(self):
+        """Pixel is where the products are, not one of them."""
+        counted = self.ask("how many products do i have", session="exclude")
+        self.assertNotIn(self.console.product_id, counted["speech"])
+
+    def test_it_says_how_many_people_are_here(self):
+        counted = self.ask("how many people are in this organization")
+        self.assertRegex(counted["speech"], r"You have \d+ (person|people)")
+
+    def test_it_counts_only_this_organization(self):
+        self.directory.create_organization("somebody-else", "Somebody Else")
+        self.directory.add_member("somebody-else", "their-admin", "org_admin")
+        counted = self.ask("how many people are in this organization", session="theirs")
+        self.assertNotIn("their-admin", counted["speech"])
+
     def test_it_never_answers_about_a_product_it_does_not_hold(self):
         answered = self.ask("how many deals are there")
         self.assertIsNone(self.action(answered))
@@ -128,12 +157,125 @@ class WhoGetsOneTest(ConsoleAssistantFixture):
                  "message": "take me to my products", "workspace_scope_id": "primary"}).json()
         self.assertEqual(theirs["status"], "denied")
 
-    def test_a_version_an_operator_moved_it_to_is_left_alone(self):
-        """Re-running setup must never undo a deliberate version change."""
-        bound = self.directory.product(TENANT, self.console.product_id)
+    def test_it_follows_the_platform_forward(self):
+        """Moving around Pixel is Pixel's own, so every organization gets the current one
+        rather than staying on whichever version existed when they signed up."""
+        newest = max(self.directory.definitions.source.versions(CONSOLE_DEFINITION))
+        self.assertGreater(newest, 1, "this only means anything with more than one version")
+        self.directory.definitions.ensure_published(CONSOLE_DEFINITION, 1)
+        self.directory.move_product_version(TENANT, self.console.product_id, 1)
         ensure_console_product(self.directory, TENANT, "planning-team", ("demo-admin",))
         self.assertEqual(self.directory.product(TENANT, self.console.product_id).definition_version,
+                         newest)
+
+    def test_a_customers_own_product_is_never_moved_this_way(self):
+        bound = self.directory.product(TENANT, "linear-demo")
+        ensure_console_product(self.directory, TENANT, "planning-team", ("demo-admin",))
+        self.assertEqual(self.directory.product(TENANT, "linear-demo").definition_version,
                          bound.definition_version)
+
+
+class AskingAboutPixelItselfTest(ConsoleAssistantFixture):
+    """What the application is, answered from approved text rather than from a list of buttons.
+
+    Somebody who asks how Pixel works is asking to understand it. Answering with the things they
+    could click instead tells them nothing, and inventing an explanation would be worse; the
+    platform ships documents about itself and quotes them.
+    """
+
+    def test_it_explains_how_the_application_works(self):
+        answer = self.ask("how does Pixel work")
+        self.assertIn("definition", answer["speech"].lower())
+        self.assertIn("product documentation", answer["speech"])
+
+    def test_it_explains_what_happens_before_a_record_changes(self):
+        answer = self.ask("how does Pixel keep my records safe")
+        self.assertIn("confirm", answer["speech"].lower())
+
+    def test_it_still_declines_what_it_has_no_text_for(self):
+        answer = self.ask("what is the weather today")
+        self.assertNotIn("product documentation", answer["speech"])
+        self.assertIsNone(self.action(answer))
+
+    def test_its_documents_belong_to_one_organization_and_one_version(self):
+        binding = self.directory.product(TENANT, self.console.product_id)
+        from app.engine.knowledge import KnowledgeContext
+        from app.product_knowledge import ApprovedKnowledge
+        context = KnowledgeContext(
+            tenant_id=TENANT, product_id=self.console.product_id,
+            definition_id=CONSOLE_DEFINITION, definition_version=binding.definition_version,
+            definition_checksum=binding.definition_checksum,
+            knowledge_version=binding.knowledge_version, scope_label="primary")
+        self.assertTrue(ApprovedKnowledge(context).search("how does Pixel work"))
+        from dataclasses import replace
+        for change in ({"tenant_id": "another"}, {"product_id": "another"},
+                       {"knowledge_version": 99}, {"definition_checksum": "f" * 64}):
+            self.assertEqual(ApprovedKnowledge(replace(context, **change)).search("definition"), [])
+
+
+class ShowingSomebodyRoundTest(ConsoleAssistantFixture):
+    """Somebody who has just arrived asks to be shown round, and gets a route rather than a
+    fallback. The route starts where the product's author declared first, which for Pixel is
+    adding a product: the reason somebody is here at all."""
+
+    def test_asking_to_be_shown_round_gives_a_route(self):
+        for phrase in ("show me around", "give me a guided tour", "walk me through Pixel"):
+            with self.subTest(phrase=phrase):
+                speech = self.ask(phrase, session=f"tour-{phrase}")["speech"]
+                self.assertIn("New product", speech)
+                self.assertIn("then", speech)
+
+    def test_the_route_only_names_places_that_exist(self):
+        speech = self.ask("show me around")["speech"]
+        labels = {view.label for view in
+                  self.directory.definitions.load(CONSOLE_DEFINITION,
+                                                  self.directory.product(TENANT, self.console.product_id)
+                                                  .definition_version).definition.views.values()}
+        named = [label for label in labels if f"open {label}" in speech]
+        self.assertTrue(named, speech)
+
+
+class ShippedDocumentsTest(ConsoleAssistantFixture):
+    """Publishing a package's own documents, on the same terms as text somebody approves."""
+
+    def binding(self):
+        return self.directory.product(TENANT, self.console.product_id)
+
+    def test_publishing_twice_does_not_add_a_version(self):
+        from app.definitions.shipped_knowledge import publish_shipped_documents
+        before = self.binding().knowledge_version
+        again = publish_shipped_documents(
+            self.directory.definitions.source, TENANT, self.console.product_id,
+            CONSOLE_DEFINITION, self.binding().definition_checksum, before)
+        self.assertEqual(again, before)
+        self.assertEqual(self.binding().knowledge_version, before)
+
+    def test_text_somebody_approved_is_never_replaced(self):
+        from app.db import get_connection
+        from app.definitions.shipped_knowledge import publish_shipped_documents
+        binding = self.binding()
+        with get_connection() as connection:
+            connection.execute("insert into approved_documents values (?, ?, ?, ?, ?, ?, ?)",
+                               (TENANT, self.console.product_id, binding.definition_checksum,
+                                binding.knowledge_version, "0123456789abcdef",
+                                "Our own note", "Something we wrote ourselves."))
+        unchanged = publish_shipped_documents(
+            self.directory.definitions.source, TENANT, self.console.product_id,
+            CONSOLE_DEFINITION, binding.definition_checksum, binding.knowledge_version)
+        self.assertEqual(unchanged, binding.knowledge_version)
+        with get_connection() as connection:
+            kept = connection.execute(
+                "select 1 from approved_documents where document_id=? and knowledge_version=?",
+                ("0123456789abcdef", binding.knowledge_version)).fetchone()
+        self.assertIsNotNone(kept)
+
+    def test_a_package_that_ships_no_documents_publishes_nothing(self):
+        from app.definitions.shipped_knowledge import publish_shipped_documents
+        binding = self.binding()
+        version = publish_shipped_documents(
+            self.directory.definitions.source, TENANT, self.console.product_id,
+            "linear_simplified", binding.definition_checksum, binding.knowledge_version)
+        self.assertEqual(version, binding.knowledge_version)
 
 
 if __name__ == "__main__":

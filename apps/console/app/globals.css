@@ -341,3 +341,16 @@ code, .px-mono { font-family: var(--px-mono); font-size: var(--px-text-sm); }
     grid-column: 1;
   }
 }
+
+/* Pixel's own assistant is marked apart from a product's, so somebody can see at a glance which
+   one they are talking to. */
+.px-product-assistant[data-scope="platform"] > .px-panel {
+  border-color: var(--px-accent, #2563eb);
+  box-shadow: inset 3px 0 0 0 var(--px-accent, #2563eb);
+}
+.px-product-assistant .px-chat-log { scroll-behavior: smooth; }
+@media (max-width: 1000px) {
+  /* On a narrow screen the assistant is a drawer above the page rather than a column beside it. */
+  .px-product-assistant { position: sticky; top: 0; z-index: 5; }
+  .px-product-assistant[data-collapsed="true"] .px-panel { padding: 8px 12px; }
+}

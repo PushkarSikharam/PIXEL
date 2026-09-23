@@ -78,7 +78,11 @@ CLOSING_CUES = ("bye", "goodbye", "see you", "that is all", "thats all", "that w
 
 
 GUIDED_PATH_CUES = ("run the evaluator demo", "evaluator demo", "guided demo", "demo path",
-                    "demo script", "test script")
+                    "demo script", "test script",
+                    # Asking to be shown round is the same request in ordinary words. Somebody
+                    # who has just arrived asks it this way, and a fallback is a poor welcome.
+                    "guided tour", "guide me", "show me around", "show me round",
+                    "walk me through", "take me through", "give me a tour", "a tour")
 NEXT_STEP_CUES = ("what should i try next", "what should we try next", "next step", "what next",
                   "where should i start")
 VOICE_CUES = ("voice", "interrupt", "interruption", "stop speaking", "stopping", "listening",
@@ -255,7 +259,10 @@ def offerable(
     """
     keys: list[str] = []
     descriptions: list[str] = []
-    for key, spec in sorted(definition.actions.items()):
+    # In the order the definition declares them. A product decides what matters most about
+    # itself, and an alphabetical list buries it: "audit" should not be offered before
+    # "add a product" because of its first letter.
+    for key, spec in definition.actions.items():
         if not policy.translatable(key):
             continue
         if not policy.permitted(key):
@@ -305,8 +312,16 @@ def guided_steps(offers: OfferableActions, definition: ProductDefinition) -> str
         else:
             step = action_description(definition, key)
         by_capability.setdefault(spec.capability, []).append(step)
+    # A route starts at the front door. Record screens make the most of a tour, so they fill it,
+    # but the place a product declares first is where its author means somebody to begin - and
+    # for a product whose screens are all dashboards it is the only route there is.
+    places = by_capability.get(Capability.NAVIGATE_VIEW, [])
+    first = next((action_description(definition, key) for key in offers.keys
+                  if definition.actions[key].capability == Capability.NAVIGATE_VIEW), None)
+    if first is not None and first not in places:
+        places = [first, *places]
     steps = [
-        *by_capability.get(Capability.NAVIGATE_VIEW, [])[:2],
+        *places[:3],
         *by_capability.get(Capability.CREATE_RECORD, [])[:1],
         *by_capability.get(Capability.HIGHLIGHT_CONTROL, [])[:1],
     ]

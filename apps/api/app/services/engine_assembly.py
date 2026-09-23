@@ -76,10 +76,17 @@ def prepare_turn(
 def _package(package_for: Callable[[str], Any], binding: Any, principal: Any, product_id: str,
              grant: Any, definition: Any):
     """The product's installed package, or one built from its definition when it has none."""
+    from app.definitions.console import configured_console
     from app.installed_products import PackageMissing
+    from app.services.console_records import console_package
     from app.services.generic_package import package_from
     from app.services.record_store import PRIMARY
 
+    console = configured_console()
+    if console is not None and binding.definition_id == console.definition_id and definition is not None:
+        # The application's own product answers about the application: the products this
+        # organization runs and the people in it, read from where they actually live.
+        return console_package(definition, principal.tenant_id, product_id)
     try:
         return package_for(binding.definition_id)
     except PackageMissing:

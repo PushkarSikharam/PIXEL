@@ -16,10 +16,14 @@ import yaml
 from pydantic import ValidationError
 
 from app.definitions.contract import ProductDefinition, Strict
-from app.definitions.safety import check_key
+from app.definitions.safety import check_key, check_text
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 MAX_DEFINITION_BYTES = 256_000
+MAX_DOCUMENT_BYTES = 32_000
+# Marks a document as the package's rather than one somebody approved. Text an administrator
+# approves is identified by a random hex id, so the two can never be confused for each other.
+SHIPPED_PREFIX = "package_"
 _VERSION_FILE = re.compile(r"v([1-9][0-9]{0,4})\.yaml")
 
 
@@ -45,6 +49,36 @@ class DefinitionSource:
 
     def package_path(self, definition_id: str) -> Path:
         return self.products_root / _checked_key(definition_id)
+
+    def knowledge_path(self, definition_id: str) -> Path:
+        return self.package_path(definition_id) / "knowledge"
+
+    def documents(self, definition_id: str) -> list[ShippedDocument]:
+        """The documents a product package ships, as approved text to publish when it is bound.
+
+        A package that ships none returns none, and that product simply cannot answer questions
+        about itself - which the platform says plainly rather than improvising. Each file is one
+        document: its first heading is the title and the rest is the body, so what gets quoted
+        back to somebody is a paragraph of prose and not a page of markup.
+
+        The same rules that guard definition text guard this, because it reaches a reply the same
+        way. A file that breaks them is skipped rather than published: shipped documents are read
+        at startup, and one bad paragraph must not stop an organization being set up.
+        """
+        directory = self.knowledge_path(definition_id)
+        if not directory.is_dir():
+            return []
+        found: list[ShippedDocument] = []
+        for path in sorted(directory.glob("*.md")):
+            if path.stat().st_size > MAX_DOCUMENT_BYTES:
+                continue
+            try:
+                document = _read_document(path)
+            except (OSError, UnicodeDecodeError, ValueError):
+                continue
+            if document is not None:
+                found.append(document)
+        return found
 
     def read(self, definition_id: str, version: int) -> bytes:
         """This version's text. A source that keeps definitions elsewhere overrides this."""
@@ -74,6 +108,31 @@ class DefinitionSource:
 
 
 DEFAULT_SOURCE = DefinitionSource()
+
+
+@dataclass(frozen=True)
+class ShippedDocument:
+    """One document a product package ships alongside its definition."""
+
+    document_id: str
+    title: str
+    body: str
+
+
+def _read_document(path: Path) -> ShippedDocument | None:
+    """One markdown file as a title and a single block of prose, or nothing if it is unusable."""
+    text = path.read_text(encoding="utf-8")
+    lines = [line.strip() for line in text.splitlines()]
+    title = next((line.removeprefix("#").strip() for line in lines if line.startswith("# ")), "")
+    body = " ".join(line for line in lines
+                    if line and not line.startswith("#"))
+    if not title or not body:
+        return None
+    # Checked here so that a document which could never be spoken is never stored.
+    check_text(title)
+    check_text(body)
+    return ShippedDocument(document_id=SHIPPED_PREFIX + path.stem.replace("-", "_"),
+                           title=title, body=body)
 
 
 @dataclass(frozen=True)

@@ -3,104 +3,104 @@ import Link from "next/link";
 import styles from "./page.module.css";
 
 export const metadata: Metadata = {
-  title: "Pixel | Product Architecture",
+  title: "Pixel | How Pixel works",
   description:
-    "A premium walkthrough of how Pixel turns visitor conversation into scoped workspace actions. Developed by PushkarSikharam."
+    "How Pixel turns a written description of a product into a running one: definitions, one engine, scoped records and changes nobody makes without confirming. Developed by PushkarSikharam."
 };
 
 const pillars = [
   {
     number: "01",
-    title: "Visitor asks naturally",
-    label: "Conversation entry",
+    title: "A product is described, not built",
+    label: "Definition",
     body:
-      "A visitor can type or speak in normal language: show sprint planning, open Maya's ticket, assign it to Noah, create work, or ask what a tool does."
+      "A definition says what a product keeps, what its screens are called, what can be done in it and the words people use for those things. Nothing else is needed to run it: no code, no deployment."
   },
   {
     number: "02",
-    title: "Edith understands the goal",
-    label: "Intent and context",
+    title: "The description is pinned",
+    label: "Version and checksum",
     body:
-      "The assistant normalizes messy language, uses recent context, resolves follow-ups like \"that ticket\", and asks a clarification question when the target is unclear."
+      "Every published version is immutable and carries a checksum. A running product is pinned to one version, so what it does cannot change underneath the people using it. Changing a product means publishing a new version."
   },
   {
     number: "03",
-    title: "Pixel checks the workspace",
-    label: "Project boundary",
+    title: "One engine answers every product",
+    label: "Conversation",
     body:
-      "Every request is checked against the active project workspace. Work from other projects stays hidden, and outside-product requests are refused instead of shown."
+      "The same engine reads the pinned definition, works out what was meant, and answers. Adding a product adds a definition; it never adds an assistant, a router or a set of rules of its own."
   },
   {
     number: "04",
-    title: "Only approved actions run",
-    label: "Controlled UI movement",
+    title: "Only records in reach are seen",
+    label: "Scope",
     body:
-      "Edith does not control the browser freely. Pixel allows a small set of safe product actions: open a view, focus an issue, highlight a control, or guide a creation flow."
+      "Which records a person can see is worked out from the definition, by following each record back to what it belongs to. A record that reaches nothing they hold is not filtered out of an answer; it is never loaded."
   },
   {
     number: "05",
-    title: "Saved Continuity",
-    label: "How work persists",
+    title: "Nothing changes without confirming",
+    label: "Proposal and receipt",
     body:
-      "Created tickets, projects, cycles and members are saved back into the active workspace. The conversation also remembers the last person, ticket, project and feature so the next request feels connected."
+      "A request that would change something is proposed and waits. The confirmation belongs to that one proposal, stops working when the conversation ends, and what is said afterwards is built from what actually committed."
   },
   {
     number: "06",
-    title: "Voice Feedback",
-    label: "How the demo speaks",
+    title: "Answers are quoted or declined",
+    label: "Approved text",
     body:
-      "Typed and spoken turns use the same control path. Edith can listen, think, speak through Microsoft voice and stop when the visitor interrupts."
+      "Questions are answered from text approved for that product at that version, quoted with its source. When there is nothing to answer from, the assistant says so rather than filling the gap."
   }
 ];
 
 const systemMap = [
   {
-    label: "Visitor",
+    label: "Person",
     title: "Typed or spoken request",
-    detail: "Natural language, interruptions, corrections and follow-ups enter through the same demo surface."
+    detail: "Ordinary language, follow-ups, corrections and interruptions all enter the same way, whether typed or spoken."
   },
   {
     label: "Edith",
-    title: "Conversation guide",
-    detail: "Understands intent, keeps context, asks clarifying questions and explains the next product move."
+    title: "One assistant, every product",
+    detail: "Reads the product's pinned definition, keeps the thread of the conversation, and asks when a request could mean more than one thing."
   },
   {
-    label: "Pixel Control Layer",
-    title: "Scope and action validation",
-    detail: "Checks project visibility, validates allowed actions, blocks off-limit data and rejects unsupported tools."
+    label: "Platform",
+    title: "Scope and authority",
+    detail: "Decides what this person may see and do, in this organization and this product. The definition describes; it never grants."
   },
   {
-    label: "Workspace",
-    title: "Product surface changes",
-    detail: "Dashboards, tickets, projects, cycles, teams and integrations update through approved actions only."
+    label: "Records",
+    title: "One store, kept apart",
+    detail: "Every product's records live under the organization, the product and the space they belong to, so two products in one account never meet."
   },
   {
-    label: "Memory",
-    title: "Saved demo state",
-    detail: "Created records, recent actions, last person and current ticket stay available for the next turn."
+    label: "Ledger",
+    title: "What was actually done",
+    detail: "Each carried-out change is recorded with what changed and who asked, and the reply afterwards is composed from that record."
   }
 ];
 
 const journeys = [
   {
-    title: "Guided Product Tour",
-    steps: ["Visitor asks about planning", "Edith opens the cycle view", "Pixel explains the current project work"]
+    title: "Adding your own product",
+    steps: ["Describe what it keeps", "Read the definition Pixel wrote", "Accept it, and it is running"]
   },
   {
-    title: "Scoped Ticket Work",
-    steps: ["Visitor asks for Maya's ticket", "Pixel confirms it belongs to the active workspace", "Edith opens the ticket and can guide assignment"]
+    title: "Asking about your records",
+    steps: ["Ask in your own words", "Pixel answers from what you can see", "Nothing outside your reach is loaded"]
   },
   {
-    title: "Creation Flow",
-    steps: ["Visitor asks to create work", "Pixel opens the correct form", "The new record joins the active workspace"]
+    title: "Creating and assigning",
+    steps: ["Ask for the change", "Pixel says what it is about to do", "It is carried out and recorded once you confirm"]
   },
   {
-    title: "Guardrail Moment",
-    steps: ["Visitor asks for an outside system", "Pixel keeps the demo in scope", "Edith explains the boundary without breaking flow"]
+    title: "Moving around Pixel",
+    steps: ["Ask to be taken somewhere", "Pixel opens it, or says plainly that it cannot", "Leaving a product is a move, not a refusal"]
   },
   {
-    title: "Saved Workspace Update",
-    steps: ["Visitor creates or edits work", "Pixel saves the change", "The update appears in activity and survives refresh"]
+    title: "Running several products",
+    steps: ["Each has its own definition", "Each has its own records and words", "Adding one changes nothing about the others"]
   }
 ];
 
@@ -108,37 +108,39 @@ export default function ArchitecturePage() {
   return (
     <main className={styles.page}>
       <header className={styles.topbar}>
-        <Link href="/" className={styles.brand} aria-label="Return to Pixel workspace">
+        <Link href="/console" className={styles.brand} aria-label="Return to your Pixel workspace">
           <span>P</span>
           <strong>Pixel</strong>
         </Link>
         <nav aria-label="Architecture navigation">
-          <Link href="/">Workspace</Link>
+          <Link href="/console">Your workspace</Link>
+          <Link href="/demo">Guided demo</Link>
           <a href="https://github.com/PushkarSikharam/Linear-Simplified">GitHub</a>
         </nav>
       </header>
 
       <section className={styles.hero}>
         <div className={styles.heroCopy}>
-          <p className={styles.kicker}>Product architecture</p>
-          <h1>How Pixel turns conversation into scoped product action.</h1>
+          <p className={styles.kicker}>How Pixel works</p>
+          <h1>A product is described once. Pixel runs it.</h1>
           <p>
-            Pixel is a voice-first product demo system. Edith listens to the visitor, understands the goal,
-            checks the active project boundary, then moves the workspace through approved product actions.
-            The result is a guided demo that feels live without exposing unrelated project data.
+            Pixel is a platform for running products through conversation. A product is described in a
+            definition that says what it keeps and what can be done in it; Pixel pins that description to a
+            version, gives the product records and screens, and answers for it with one engine. Several
+            products can run in one account, and none of them can reach into another.
           </p>
         </div>
         <aside className={styles.credit} aria-label="Developer credit">
           <span>Developed by</span>
           <a href="https://my-port-folio-1x8e.vercel.app/">PushkarSikharam</a>
-          <small>Adaptive product demo system</small>
+          <small>Definition-driven conversational platform</small>
         </aside>
       </section>
 
       <section className={styles.systemMap} aria-labelledby="map-title">
         <div className={styles.sectionIntro}>
           <p className={styles.kicker}>System map</p>
-          <h2 id="map-title">One controlled path from conversation to product movement.</h2>
+          <h2 id="map-title">One path, whichever product is being asked.</h2>
         </div>
         <div className={styles.mapRail}>
           {systemMap.map((item, index) => (
@@ -154,8 +156,8 @@ export default function ArchitecturePage() {
 
       <section className={styles.flow} aria-labelledby="flow-title">
         <div className={styles.sectionIntro}>
-          <p className={styles.kicker}>End-to-end flow</p>
-          <h2 id="flow-title">What happens after a visitor asks Edith something?</h2>
+          <p className={styles.kicker}>End to end</p>
+          <h2 id="flow-title">From a description of a product to a product people can use.</h2>
         </div>
         <div className={styles.timeline}>
           {pillars.map((pillar) => (
@@ -172,25 +174,25 @@ export default function ArchitecturePage() {
       <section className={styles.operatingModel} aria-labelledby="model-title">
         <div>
           <p className={styles.kicker}>Operating model</p>
-          <h2 id="model-title">The product separates conversation from authority.</h2>
+          <h2 id="model-title">Conversation and authority are kept apart.</h2>
         </div>
         <div className={styles.modelGrid}>
           <article>
-            <span>Human-facing layer</span>
-            <h3>Edith keeps the demo conversational.</h3>
+            <span>What a definition decides</span>
+            <h3>A product describes itself.</h3>
             <p>
-              The visitor can ask naturally, interrupt, correct themselves, ask follow-up questions and request
-              common project operations. Edith responds with short explanations, speaks through Microsoft voice,
-              and keeps the product moving.
+              A definition names what the product keeps, what its screens are called, what can be done in it,
+              and the words people use for all of that. It is read as untrusted input, checked before anything
+              runs on it, and it never writes the words the assistant says.
             </p>
           </article>
           <article>
-            <span>System-control layer</span>
+            <span>What the platform decides</span>
             <h3>Pixel decides what is allowed.</h3>
             <p>
-              Before the interface changes, Pixel checks whether the requested action belongs to the current
-              workspace and supported product surface. That is what prevents the demo from wandering into
-              unrelated projects or outside tools.
+              Who somebody is, which organization they belong to, which records are within their reach and
+              whether a change may be carried out are all settled by the platform, on the server, for every
+              product the same way. A product cannot widen any of it by describing itself differently.
             </p>
           </article>
         </div>
@@ -198,8 +200,8 @@ export default function ArchitecturePage() {
 
       <section className={styles.journeys} aria-labelledby="journey-title">
         <div className={styles.sectionIntro}>
-          <p className={styles.kicker}>Reviewer paths</p>
-          <h2 id="journey-title">Five moments that prove the system.</h2>
+          <p className={styles.kicker}>What it looks like</p>
+          <h2 id="journey-title">Five things you can do, in any product.</h2>
         </div>
         <div className={styles.journeyGrid}>
           {journeys.map((journey) => (
@@ -217,20 +219,20 @@ export default function ArchitecturePage() {
 
       <section className={styles.boundaries} aria-labelledby="boundaries-title">
         <div>
-          <p className={styles.kicker}>Current boundaries</p>
-          <h2 id="boundaries-title">Clear demo limits.</h2>
+          <p className={styles.kicker}>Where it stands</p>
+          <h2 id="boundaries-title">What is real, and what is not yet.</h2>
         </div>
         <div className={styles.boundaryList}>
-          <p><strong>Demo-ready:</strong> project scoping, safe actions, creation flows, saved state, guided GitHub and Slack flows, voice input, Microsoft voice output and interruption handling.</p>
-          <p><strong>Production gap:</strong> real identity, tenant permissions, audit logs, streaming voice, live third-party integrations and deeper AI reasoning would be needed before customer deployment.</p>
-          <p><strong>Positioning:</strong> this is a controlled product-demo agent. It is intentionally safer than an unrestricted autonomous browser agent.</p>
+          <p><strong>Working now:</strong> signing in by email, organizations with teams and roles, adding your own product from a description, immutable definition versions, records kept apart by organization and by product, scoped answers, confirmation before any change, a record of every change carried out, answers quoted from approved text, and voice.</p>
+          <p><strong>Not yet:</strong> billing and metering, encrypted backups with restores that are proven rather than assumed, retrieval that understands meaning rather than words, and hand-built screens for a product you describe yourself, which today gets its lists and its assistant rather than a bespoke interface.</p>
+          <p><strong>Where the line is:</strong> what a product describes and what a product is allowed to do are separate on purpose. A definition can be wrong, or written by somebody untrusted, without being able to reach past what the platform permits.</p>
         </div>
       </section>
 
       <footer className={styles.footer}>
-        <span>Pixel Product Architecture</span>
+        <span>How Pixel works</span>
         <span>Developed by <a href="https://github.com/PushkarSikharam">PushkarSikharam</a></span>
-        <Link href="/">Return to workspace</Link>
+        <Link href="/console">Return to your workspace</Link>
       </footer>
     </main>
   );

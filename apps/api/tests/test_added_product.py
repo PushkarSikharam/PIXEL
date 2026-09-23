@@ -236,6 +236,31 @@ class ChangingRecordsThroughTheChatTest(AddedProductFixture):
         self.assertEqual(tampered.status_code, 409, tampered.text)
         self.assertEqual(self.store.get("book", self.tide.id).fields["keeper"], self.rosa.id)
 
+    def test_leaving_a_conversation_withdraws_what_it_proposed(self):
+        """A change nobody carried out must not stay usable once somebody has moved on."""
+        self.add_product()
+        self.add_records()
+        self.ask(f"open {self.tide.id}", session="left")
+        proposed = self.ask("give it to Otto", session="left")
+        self.assertIsNotNone(proposed["execution"])
+        closed = self.client.post("/api/conversations/left/close", headers={
+            "Authorization": f"Bearer {create_token('demo-admin', TENANT)}"})
+        self.assertEqual(closed.status_code, 200, closed.text)
+        self.assertEqual(closed.json()["withdrawn"], 1)
+        refused = self.write(proposed, entity="book")
+        self.assertEqual(refused.status_code, 409, refused.text)
+        self.assertEqual(self.store.get("book", self.tide.id).fields["keeper"], self.rosa.id)
+
+    def test_closing_somebody_elses_conversation_is_not_possible(self):
+        self.add_product()
+        self.add_records()
+        self.ask("show me the books", session="mine")
+        self.directory.create_organization("somebody-else", "Somebody Else")
+        self.directory.add_member("somebody-else", "their-admin", "org_admin")
+        refused = self.client.post("/api/conversations/mine/close", headers={
+            "Authorization": f"Bearer {create_token('their-admin', 'somebody-else')}"})
+        self.assertEqual(refused.status_code, 404, refused.text)
+
     def test_a_write_without_a_key_is_not_accepted_at_all(self):
         self.add_product()
         self.add_records()
@@ -502,6 +527,111 @@ class StoredDefinitionsAreStillDefinitionsTest(AddedProductFixture):
         same = yaml.safe_dump(library_definition(), sort_keys=False)
         self.assertEqual(store_definition(same, definition_id=DEFINITION, version=1),
                          self.registry.get(DEFINITION, 1).checksum)
+
+
+class FillingInAFormTest(AddedProductFixture):
+    """Somebody adds and edits records themselves, without asking the assistant for them.
+
+    The keyed path exists because a change the assistant proposed was written by a model, so its
+    parameters have to be bound to a confirmation. A form has no such problem: the person typed
+    the values. What they still cannot do is write a record they would not be able to see, and
+    they cannot save over a version of a record that has moved on since they read it.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.add_product()
+        self.add_records()
+        self.headers = {"Authorization": f"Bearer {create_token('demo-admin', TENANT)}"}
+
+    def create(self, entity: str, **fields):
+        return self.client.post(f"/api/products/{PRODUCT}/records/{entity}",
+                                headers=self.headers, json={"fields": fields})
+
+    def edit(self, entity: str, record_id: str, revision: int, **changes):
+        return self.client.put(f"/api/products/{PRODUCT}/records/{entity}/{record_id}",
+                               headers=self.headers, json={"changes": changes, "revision": revision})
+
+    def read(self, entity: str, record_id: str) -> dict:
+        records = self.client.get(f"/api/products/{PRODUCT}/records", headers=self.headers)
+        self.assertEqual(records.status_code, 200, records.text)
+        found = [row for row in records.json()["records"][entity] if row["id"] == record_id]
+        self.assertEqual(len(found), 1, found)
+        return found[0]
+
+    def test_a_record_can_be_created_from_a_form_and_read_back(self):
+        created = self.create("book", title="Star Atlas", status="On shelf", keeper=self.rosa.id)
+        self.assertEqual(created.status_code, 201, created.text)
+        body = created.json()
+        self.assertEqual(body["title"], "Star Atlas")
+        self.assertEqual(body["revision"], 1)
+        self.assertEqual(self.read("book", body["id"])["title"], "Star Atlas")
+
+    def test_a_form_creates_without_any_execution_key(self):
+        """The point of the form path: nothing proposed this, so nothing needs to be bound."""
+        created = self.create("book", title="Rope Work", status="On shelf", keeper=self.otto.id)
+        self.assertEqual(created.status_code, 201, created.text)
+        self.assertNotIn("outcome", created.json())
+
+    def test_the_definition_decides_what_a_form_may_send(self):
+        self.assertEqual(self.create("book", title="No Keeper", status="On shelf").status_code, 422)
+        self.assertEqual(self.create("book", title="Odd", status="Lost",
+                                     keeper=self.rosa.id).status_code, 422)
+        self.assertEqual(self.create("book", title="Extra", status="On shelf",
+                                     keeper=self.rosa.id, shelf="A4").status_code, 422)
+        self.assertEqual(self.create("nothing", title="Nowhere").status_code, 404)
+
+    def test_a_reference_to_nothing_is_refused(self):
+        refused = self.create("book", title="Ghost", status="On shelf", keeper="nobody")
+        self.assertEqual(refused.status_code, 409, refused.text)
+
+    def test_an_edit_says_which_version_it_was_made_against(self):
+        current = self.read("book", self.tide.id)
+        changed = self.edit("book", self.tide.id, current["revision"], status="On loan")
+        self.assertEqual(changed.status_code, 200, changed.text)
+        self.assertEqual(changed.json()["status"], "On loan")
+        self.assertEqual(changed.json()["revision"], current["revision"] + 1)
+
+    def test_an_edit_against_a_version_that_moved_is_refused_and_shows_what_it_is_now(self):
+        stale = self.read("book", self.tide.id)["revision"]
+        self.store.update(self.definition, "book", self.tide.id, {"status": "On loan"})
+        refused = self.edit("book", self.tide.id, stale, status="On shelf")
+        self.assertEqual(refused.status_code, 409, refused.text)
+        detail = refused.json()["detail"]
+        self.assertEqual(detail["record"]["status"], "On loan")
+        self.assertGreater(detail["record"]["revision"], stale)
+        self.assertEqual(self.read("book", self.tide.id)["status"], "On loan")
+
+    def test_a_field_the_definition_holds_fixed_cannot_be_edited(self):
+        current = self.read("librarian", self.rosa.id)
+        refused = self.edit("librarian", self.rosa.id, current["revision"], name="Someone Else")
+        self.assertEqual(refused.status_code, 422, refused.text)
+
+    def test_a_record_outside_somebody_reach_is_neither_edited_nor_revealed(self):
+        """Another organization's member gets the same answer as for a product that is not there."""
+        self.directory.create_organization("somebody-else", "Somebody Else")
+        self.directory.add_member("somebody-else", "their-admin", "org_admin")
+        headers = {"Authorization": f"Bearer {create_token('their-admin', 'somebody-else')}"}
+        refused = self.client.put(f"/api/products/{PRODUCT}/records/book/{self.tide.id}",
+                                  headers=headers, json={"changes": {"status": "On loan"},
+                                                         "revision": 1})
+        self.assertEqual(refused.status_code, 404, refused.text)
+        self.assertEqual(self.read("book", self.tide.id)["status"], "On shelf")
+
+    def test_the_assistant_path_still_needs_its_action(self):
+        keyed = self.client.post(f"/api/products/{PRODUCT}/records/book", headers={
+            **self.headers, "X-Execution-Key": "not-a-key", "X-Session-Id": "s1",
+        }, json={"fields": {"title": "Keyless", "status": "On shelf", "keeper": self.rosa.id}})
+        self.assertEqual(keyed.status_code, 422, keyed.text)
+
+    def test_a_form_edit_cannot_be_sent_down_the_assistant_path(self):
+        """PUT is the person's own edit; PATCH stays the assistant's, with the key that bound it."""
+        current = self.read("book", self.tide.id)
+        patched = self.client.patch(
+            f"/api/products/{PRODUCT}/records/book/{self.tide.id}", headers=self.headers,
+            json={"action": "update_book", "changes": {"status": "On loan"}})
+        self.assertEqual(patched.status_code, 422, patched.text)
+        self.assertEqual(self.read("book", self.tide.id)["revision"], current["revision"])
 
 
 if __name__ == "__main__":

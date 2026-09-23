@@ -39,18 +39,21 @@ class DefinitionLookup:
     """
 
     def __init__(self, definition: ProductDefinition, store: RecordStore,
-                 visible_scope_ids: frozenset[str] | None) -> None:
+                 visible_scope_ids: frozenset[str] | None, *, connection=None) -> None:
         self._definition = definition
         self._store = store
         self._scope_ids = visible_scope_ids
         self._loaded: dict[str, tuple[RecordView, ...]] | None = None
+        # A write that must decide whether its own record is visible has to read inside its own
+        # transaction; anywhere else this is left unset and each read opens its own connection.
+        self._connection = connection
 
     # --- records ---
 
     def _all(self) -> Mapping[str, tuple[RecordView, ...]]:
         """Every record this caller may see, read once per turn."""
         if self._loaded is None:
-            stored = self._store.all()
+            stored = self._store.all(self._connection)
             index = {(entity, record.id): record.fields
                      for entity, records in stored.items() for record in records}
             anchors = self._anchor_scopes()
@@ -72,7 +75,7 @@ class DefinitionLookup:
         """Anchor record -> the scopes it belongs to, for this product and space."""
         if self._scope_ids is None:
             return {}
-        with use_connection() as connection:
+        with use_connection(self._connection) as connection:
             rows = connection.execute(
                 "select scope_id, anchor_id from record_scope_anchors where tenant_id = ? "
                 "and product_id = ? and space_id = ?", self._store.key,
@@ -168,7 +171,7 @@ class DefinitionLookup:
     def scope_label(self) -> str:
         if self._scope_ids is None:
             return self._definition.identity.product_name
-        with use_connection() as connection:
+        with use_connection(self._connection) as connection:
             rows = connection.execute(
                 "select scope_id, name from record_scopes where tenant_id = ? and product_id = ? "
                 "and space_id = ?", self._store.key,

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import {
   Activity, Boxes, Building2, ChevronsUpDown, ClipboardList, FlaskConical, Gauge, Hammer, LogOut,
-  Monitor, Moon, Rocket, Sun, UserCog, Users,
+  Monitor, Moon, Network, PlayCircle, Rocket, Sun, UserCog, Users,
 } from "lucide-react";
 import { useConsole } from "./console-context";
 import { Edith } from "./edith-shell";
@@ -16,25 +16,41 @@ import { endSession } from "@pixel-console/lib/pixel-api";
 import { ORGANIZATIONS, PERSONAS, productById, teamName } from "@pixel-console/lib/mock-data";
 import type { Environment } from "@pixel-console/lib/contracts";
 
+/**
+ * Where somebody can go, named for what they would find there.
+ *
+ * "Build", "Operate" and "Test" tell a first-time visitor nothing about what is behind them, and
+ * an item that leads to a screen saying "not connected yet" is worse than one that is not there.
+ * Anything still unconnected is marked `connected: false` and only shown while the console is
+ * running on its own sample data, where it is a design preview rather than a promise.
+ */
 const NAV = [
-  { section: "Workspace", items: [
+  { section: "Your workspace", items: [
     { href: "/console", label: "Overview", icon: Gauge },
     { href: "/console/products", label: "Products", icon: Boxes },
+    { href: "/console/products/new", label: "Add a product", icon: Hammer },
   ] },
-  { section: "Product", items: [
-    { href: "/console/products/new", label: "Build", icon: Hammer },
+  { section: "Your organization", items: [
+    { href: "/console/organization", label: "People", icon: Users },
+    { href: "/console/settings", label: "Settings", icon: Building2 },
+  ] },
+  { section: "Pixel", items: [
+    { href: "/demo", label: "Explore the demo", icon: PlayCircle, external: true },
+    { href: "/architecture", label: "How Pixel works", icon: Network, external: true },
+  ] },
+  { section: "Not connected yet", connected: false, items: [
     { href: "/console/test", label: "Test", icon: FlaskConical },
     { href: "/console/deploy", label: "Deploy", icon: Rocket },
-  ] },
-  { section: "Organization", items: [
     { href: "/console/operate", label: "Operate", icon: Activity },
     { href: "/console/audit", label: "Audit", icon: ClipboardList },
-    { href: "/console/organization", label: "Members", icon: Users },
-    { href: "/console/settings", label: "Settings", icon: Building2 },
   ] },
 ];
 
 const ENVIRONMENTS: Environment[] = ["development", "staging", "production"];
+
+// The parts of Pixel that really answer for a signed-in organization. Anywhere else is still a
+// design, and says so rather than showing somebody another organization's sample data.
+const CONNECTED_AREAS = ["/console", "/console/products", "/console/organization", "/console/settings"];
 
 export function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -68,10 +84,10 @@ export function Shell({ children }: { children: ReactNode }) {
           <div className="px-nav">
             <a href="/demo"><Monitor aria-hidden />Visit demo</a>
           </div>
-          {NAV.map((group) => (
+          {NAV.filter((group) => !c.live || group.connected !== false).map((group) => (
             <div key={group.section} className="px-nav">
               <div className="px-nav-section">{group.section}</div>
-              {group.items.filter((item) => !c.live || ["/console", "/console/products", "/console/products/new"].includes(item.href)).map((item) => {
+              {group.items.map((item) => {
                 const current = item.href === "/console" ? pathname === "/console" : pathname.startsWith(item.href);
                 return (
                   <Link key={item.href} href={item.href} aria-current={current ? "page" : undefined}
@@ -151,8 +167,12 @@ export function Shell({ children }: { children: ReactNode }) {
           {c.live && c.loading ? <LoadingRows rows={4} /> : c.live && !c.account ? <div className="px-stack">
             <h1>Your Pixel workspace</h1><Alert>{c.liveError ?? "Sign in to continue."}</Alert>
             <Link className="px-button" data-variant="primary" href="/sign-in">Sign in</Link>
-          </div> : c.live && !["/console", "/console/products"].includes(pathname) && !pathname.startsWith("/console/products/") ?
-            <Alert>This area is not connected to your workspace yet. No sample data is shown.</Alert> : children}
+          </div> : c.live && !CONNECTED_AREAS.some((area) =>
+            area === pathname || (area !== "/console" && pathname.startsWith(area + "/"))) ?
+            <Alert title="Not connected yet">
+              This part of Pixel is designed but not yet connected to your workspace, so nothing
+              here would be yours. <Link href="/console">Back to your workspace</Link>.
+            </Alert> : children}
         </main>
       </div>
       <Dialog open={pending !== undefined} onOpenChange={(open) => { if (!open) setPending(undefined); }}

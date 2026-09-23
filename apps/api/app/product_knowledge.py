@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from uuid import uuid4
 
@@ -77,25 +78,94 @@ def approve_document(product_id: str, body: ApprovedText, user: AuthUser = Depen
     return {"version": version + 1, "document_id": document_id}
 
 
+# Words that say how a question is asked rather than what it is about. They match every
+# document, so counting them would rank on question length instead of on subject.
+_ASKING_WORDS = frozenset({
+    "the", "and", "for", "with", "what", "whats", "how", "why", "who", "when", "where", "which",
+    "does", "did", "can", "could", "would", "should", "will", "you", "your", "our", "its",
+    "about", "this", "that", "these", "those", "are", "was", "were", "have", "has", "had",
+    "please", "tell", "explain", "there", "here", "any", "some", "into", "from", "just",
+})
+# A passage is quoted as an answer only when it is really about the question: two subject words
+# in common, or one that the document is titled after. One incidental word in common is how a
+# reader gets told about adding a product when they asked about something else entirely.
+MIN_MATCHED_TERMS = 2
+_TITLE_WEIGHT = 3.0
+
+
+def _subject_terms(text: str) -> set[str]:
+    """What a question is about, with plural and tense endings removed so they can match."""
+    return {_stem(word) for word in re.findall(r"\w{3,}", text.casefold())
+            if word not in _ASKING_WORDS}
+
+
+def _stem(word: str) -> str:
+    """A crude common-ending trim, so records matches record and lasts matches last.
+
+    Deliberately small and predictable rather than a real stemmer: a reply is quoted from the
+    document itself, so the only job here is to stop an ending difference hiding a match.
+    """
+    if len(word) > 4 and word.endswith("ies"):
+        return word[:-3] + "y"
+    if len(word) > 5 and word.endswith("ing"):
+        word = word[:-3]
+    elif len(word) > 4 and word.endswith("ed"):
+        word = word[:-2]
+    if len(word) > 3 and word.endswith("s") and not word.endswith("ss"):
+        word = word[:-1]
+    # A silent final e last of all, so change, changes and changed all end up the same. Trimming
+    # it only from some of them is how a word stops matching itself.
+    if len(word) > 3 and word.endswith("e"):
+        word = word[:-1]
+    return word
+
+
 class ApprovedKnowledge:
+    """This product's approved text, for one organization at one pinned version.
+
+    Ranking is plain and local: a word shared with fewer documents counts for more than one every
+    document uses, and a word in a document's title counts for more than one buried in its body.
+    Nothing is fetched, no model is consulted, and a question can only ever reach the rows the
+    context was built with.
+    """
+
     def __init__(self, context: KnowledgeContext):
         self.context = context
 
     def search(self, text: str, limit: int = 3) -> list[KnowledgePassage]:
         context = self.context
-        terms = set(re.findall(r"\w{3,}", text.casefold())) - {"the", "what", "how", "does", "can", "you", "about", "this", "that", "are"}
+        terms = _subject_terms(text)
         if not terms:
             return []
         with get_connection() as connection:
             rows = connection.execute("select document_id, title, body from approved_documents "
                                       "where tenant_id=? and product_id=? and knowledge_version=? and definition_checksum=?",
                                       (context.tenant_id, context.product_id, context.knowledge_version, context.definition_checksum)).fetchall()
+        chunks = [(row, start, row["body"][start:start + 1000])
+                  for row in rows for start in range(0, len(row["body"]), 900)]
+        # How many passages use each word, so that a word common to all of them cannot decide
+        # which one is the answer. Never zero, so a word every document shares still counts.
+        appearances: dict[str, int] = {}
+        for _, _, snippet in chunks:
+            for term in {_stem(word) for word in re.findall(r"\w{3,}", snippet.casefold())}:
+                appearances[term] = appearances.get(term, 0) + 1
+        total = max(len(chunks), 1)
         ranked = []
-        for row in rows:
-            for start in range(0, len(row["body"]), 900):
-                snippet = row["body"][start:start + 1000]
-                score = len(terms & set(re.findall(r"\w{3,}", (row["title"] + " " + snippet).casefold())))
-                if score:
-                    ranked.append((score, KnowledgePassage(title=row["title"], source=f"document:{row['document_id']}", snippet=snippet)))
-        ranked.sort(key=lambda item: item[0], reverse=True)
-        return [passage for _, passage in ranked[:max(0, min(limit, 5))]]
+        for row, start, snippet in chunks:
+            title_terms = {_stem(word) for word in re.findall(r"\w{3,}", row["title"].casefold())}
+            body_terms = {_stem(word) for word in re.findall(r"\w{3,}", snippet.casefold())}
+            matched = terms & (title_terms | body_terms)
+            if not matched:
+                continue
+            score = sum(
+                (1.0 + math.log((total + 1) / (appearances.get(term, 0) + 1)))
+                * (_TITLE_WEIGHT if term in title_terms else 1.0)
+                for term in matched
+            )
+            grounds = len(matched) >= MIN_MATCHED_TERMS or bool(matched & title_terms)
+            ranked.append((score, row["document_id"], start, KnowledgePassage(
+                title=row["title"], source=f"document:{row['document_id']}",
+                snippet=snippet, grounds_answer=grounds)))
+        # Ties are broken by document and position, so the same question always reads the same way.
+        ranked.sort(key=lambda item: (-item[0], item[1], item[2]))
+        return [passage for _, _, _, passage in ranked[:max(0, min(limit, 5))]]

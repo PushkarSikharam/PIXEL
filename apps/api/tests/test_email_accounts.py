@@ -1,13 +1,55 @@
 """Real sign-in never depends on a publicly selectable synthetic identity."""
 import os
+import unittest
 import yaml
-from unittest.mock import patch
+from unittest.mock import Mock, patch
+from urllib import error as url_error
 
 from test_engine_cutover import EngineCutoverFixture
 from app import account_api, db
 from library_fixtures import library_definition
 from app.definitions.authoring import store_definition
 from app.definitions.loader import DefinitionError
+
+
+class EmailDeliveryTransportTest(unittest.TestCase):
+    def test_resend_host_uses_https_api_not_smtp(self):
+        response = Mock()
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=None)
+        response.status = 200
+        with patch.object(account_api.url_request, "urlopen", return_value=response) as opened, \
+                patch.object(account_api.smtplib, "SMTP_SSL") as smtp:
+            account_api.send_code("owner@example.test", "12345678", (
+                "secret", "smtp.resend.com", "resend", "re_test_key", "onboarding@resend.dev",
+            ))
+        smtp.assert_not_called()
+        request = opened.call_args.args[0]
+        self.assertEqual(request.full_url, "https://api.resend.com/emails")
+        self.assertEqual(request.get_method(), "POST")
+        self.assertIn("Bearer re_test_key", request.headers["Authorization"])
+
+    def test_resend_api_failure_is_treated_as_delivery_failure(self):
+        with patch.object(account_api.url_request, "urlopen",
+                          side_effect=url_error.URLError("timeout")):
+            with self.assertRaises(OSError):
+                account_api.send_code("owner@example.test", "12345678", (
+                    "secret", "smtp.resend.com", "resend", "re_test_key", "onboarding@resend.dev",
+                ))
+
+    def test_non_resend_host_still_uses_smtp(self):
+        smtp = Mock()
+        smtp.__enter__ = Mock(return_value=smtp)
+        smtp.__exit__ = Mock(return_value=None)
+        with patch.object(account_api.smtplib, "SMTP_SSL", return_value=smtp) as smtp_ssl, \
+                patch.object(account_api.url_request, "urlopen") as opened:
+            account_api.send_code("owner@example.test", "12345678", (
+                "secret", "smtp.example.test", "user", "password", "noreply@example.test",
+            ))
+        opened.assert_not_called()
+        smtp_ssl.assert_called_once()
+        smtp.login.assert_called_once_with("user", "password")
+        smtp.send_message.assert_called_once()
 
 
 class EmailAccountsTest(EngineCutoverFixture):

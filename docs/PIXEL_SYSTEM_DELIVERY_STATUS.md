@@ -33,7 +33,9 @@ Do not enable the email flow without all of these server-side settings:
 
 - `PIXEL_AUTH_SECRET`: a stable random secret, not a browser environment variable.
 - `PIXEL_SMTP_HOST`, `PIXEL_SMTP_USER`, `PIXEL_SMTP_PASSWORD`, `PIXEL_EMAIL_FROM`:
-  an authenticated sender with TLS on port 465. Verify delivery with the mailbox provider.
+  an authenticated sender. Resend is delivered through its HTTPS API when the host is
+  `smtp.resend.com`; other SMTP hosts use TLS on port 465. Verify delivery with the mailbox
+  provider.
 - `PIXEL_EMAIL_LOGIN_ENABLED=true` after configuration and delivery validation.
 - `PIXEL_ENGINE_MODE=definition` after its cutover checks; customer sign-in refuses legacy mode.
 - `PIXEL_SELF_SIGNUP_ENABLED=true` only when new verified users may create organizations.

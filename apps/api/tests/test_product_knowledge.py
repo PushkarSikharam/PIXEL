@@ -73,6 +73,25 @@ class ProductKnowledgeTest(AddedProductFixture):
         products = self.client.get(f"/api/organizations/{TENANT}/products", headers=headers)
         self.assertNotIn(PRODUCT, [p["product_id"] for p in products.json()["products"]])
 
+    def test_the_document_a_question_is_about_outranks_one_that_merely_mentions_it(self):
+        """A word every document uses cannot decide which of them is the answer.
+
+        Ranking on how many distinct words two texts happen to share picks the longest document,
+        not the relevant one, so a question about renewals gets answered about loans in general.
+        """
+        self.publish(title="Loans", text="A book loan lasts fourteen days for every member.")
+        version = self.publish(title="Renewals",
+                               text="A loan renewal lasts seven days.").json()["version"]
+        found = ApprovedKnowledge(self.context(version)).search("how long is a renewal")
+        self.assertEqual(found[0].title, "Renewals")
+        self.assertTrue(found[0].grounds_answer)
+
+    def test_one_word_in_common_is_not_an_answer(self):
+        version = self.publish(title="Loans",
+                               text="A book loan lasts fourteen days.").json()["version"]
+        found = ApprovedKnowledge(self.context(version)).search("where do I park my car")
+        self.assertFalse([passage for passage in found if passage.grounds_answer])
+
     def test_empty_text_is_rejected_and_capacity_is_bounded(self):
         self.assertEqual(self.publish(text=" ").status_code, 422)
         for _ in range(4):

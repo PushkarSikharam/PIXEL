@@ -84,7 +84,8 @@ STAGE_TEMPLATES: Mapping[Stage, frozenset[str]] = {
                              "capabilities", "fallback",
                              "profile_acknowledged",
                              "guided_path", "next_step", "last_change", "nothing_changed",
-                             "people_count", "anchor_count", "conversation_ended", "thanks",
+                             "people_count", "people_count_here", "anchor_count",
+                             "anchor_count_here", "anchor_count_none", "conversation_ended", "thanks",
                              "voice_interruption", "next_step_here", "knowledge_unavailable"}),
     Stage.UNGROUNDED: frozenset({"knowledge_unavailable"}),
 }
@@ -141,15 +142,23 @@ PLATFORM_CONVERSATION_TEMPLATES: Mapping[tuple[Stage, str], str] = {
     (Stage.ANSWER, "capabilities"): "Here's what I can do in {product}: {capabilities}.",
     # Owner decision: the guided path is a conversational route, drawn from the caller's offers.
     (Stage.ANSWER, "guided_path"): "Here's a good way to explore {product}: {capabilities}.",
+    # A request nobody could place is the moment somebody most needs to know what is possible,
+    # so the answer offers the way out rather than ending the conversation.
     (Stage.ANSWER, "fallback"): (
-        "I'm not sure how to help with that in {product}. Ask what I can do to see the options."
+        "I'm not sure how to help with that in {product}. I can {capabilities}. "
+        "What would you like to do?"
     ),
     (Stage.ANSWER, "next_step"): "Ask what I can do in {product} to see where to go next.",
     (Stage.ANSWER, "next_step_here"): "From {view}, you could {capabilities}.",
     (Stage.ANSWER, "last_change"): "The most recent change: {changes}.",
     (Stage.ANSWER, "nothing_changed"): "Nothing has changed in this conversation yet.",
     (Stage.ANSWER, "people_count"): "{scope} has {count} {label}.",
+    (Stage.ANSWER, "people_count_here"): "You have {count} {label}.",
     (Stage.ANSWER, "anchor_count"): "{scope} has {count} visible {label}: {records}.",
+    # When there is no narrower place than the product itself, naming it twice reads as though
+    # somewhere else were meant. The plain form is what a person would say.
+    (Stage.ANSWER, "anchor_count_here"): "You have {count} {label}: {records}.",
+    (Stage.ANSWER, "anchor_count_none"): "You don't have any {label} yet.",
     (Stage.ANSWER, "conversation_ended"): "Okay, we can stop here. Come back whenever you like.",
     (Stage.ANSWER, "thanks"): "Happy to help. Anything else you would like to see in {product}?",
     # Voice is a platform feature, so its behaviour is the platform's to describe.
@@ -295,6 +304,14 @@ class ResponseComposer:
     def capabilities(self, offers: OfferableActions) -> Reply:
         """What this caller can actually do, from the filtered offers; never a product's claim."""
         return self._offer_reply("capabilities", offers)
+
+    def unplaceable(self, offers: OfferableActions) -> Reply:
+        """A request this product could not place, answered with what it can do instead.
+
+        A reply that only says it did not understand leaves somebody with nowhere to go. The
+        options are the caller's own offers, so this can never promise something they cannot do.
+        """
+        return self._offer_reply("fallback", offers)
 
     def guided_path(self, offers: OfferableActions) -> Reply:
         """Where to start, drawn from the same filtered offers as the capability reply."""

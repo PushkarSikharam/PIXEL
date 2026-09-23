@@ -473,7 +473,7 @@ test("opens the system architecture from Edith chat", async ({ page }) => {
 
   await expect(page).toHaveURL(/\/architecture$/);
   await expect(page.getByRole("heading", {
-    name: "How Pixel turns conversation into scoped product action."
+    name: "A product is described once. Pixel runs it."
   })).toBeVisible();
 });
 

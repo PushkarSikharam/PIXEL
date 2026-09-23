@@ -28,9 +28,10 @@ test("email sign-in never uses a shared demo identity", async ({ page }) => {
   await page.getByRole("button", { name: "Email me a code" }).click();
   await page.getByLabel("One-time code").fill("12345678");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Private workspace", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Welcome to Pixel", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Organization: Private workspace/ })).toBeVisible();
   expect(requests.some((path) => path.includes("demo-login"))).toBe(false);
-  await expect(page.getByText("No products yet.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "No products yet", exact: true })).toBeVisible();
 });
 
 for (const mobile of [false, true]) {
@@ -80,7 +81,7 @@ for (const mobile of [false, true]) {
       return route.fulfill({ status: 404, json: { detail: "Unexpected test request" } });
     });
     await page.goto("/console/products/alpha");
-    const assistant = page.getByRole("complementary", { name: "Edith product assistant" });
+    const assistant = page.getByRole("complementary", { name: /^Edith, answering for / });
     await expect(assistant).toBeVisible();
     expect(speechCalls).toBe(0);
     await assistant.getByLabel("Ask Edith").fill("Tell me about alpha");
@@ -112,7 +113,7 @@ for (const mobile of [false, true]) {
     expect(speechCalls).toBe(0);
     await assistant.getByRole("button", { name: "Start microphone" }).click();
     await expect(assistant.getByText("A spoken question", { exact: true })).toBeVisible();
-    await expect(assistant.getByText("Voice is unavailable. Text remains available.")).toBeVisible();
+    await expect(assistant.getByText("Voice is unavailable. Text remains available.").first()).toBeVisible();
     expect(speechCalls).toBe(1);
     await assistant.getByLabel("Ask Edith").fill("Leave product");
     await assistant.getByRole("button", { name: "Send message" }).click();

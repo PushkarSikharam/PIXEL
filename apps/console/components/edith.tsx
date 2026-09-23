@@ -17,32 +17,25 @@ import { useRouter } from "next/navigation";
 import { Bot, RotateCcw, SendHorizonal, PanelLeftClose, PanelLeftOpen, Volume2, VolumeX, Mic, Square } from "lucide-react";
 import { Button, Input, Panel } from "@pixel-console/components/ui";
 import {
-  executeProductAction, sendProductTurn, productSpeech,
+  closeConversation, executeProductAction, sendProductTurn, productSpeech,
   type ApiActionShape, type ApiProductShape, type ApiSession, type ApiTurnResponse,
 } from "@pixel-console/lib/pixel-api";
 import { speechInputConstructor, type SpeechInput } from "@pixel-console/lib/speech-input";
+import { CONSOLE_ROUTES } from "@pixel-console/lib/console-routes";
 
 /**
- * Where each screen of the application lives. Which URL shows which screen is the client's own
- * business; whether somebody may go there is decided by the backend, which only names a screen
- * the caller is allowed to reach.
+ * Things worth suggesting, by where the assistant is answering from. Each one is a message
+ * somebody could have typed, so a chip can never ask for something the assistant cannot do.
  */
-const CONSOLE_ROUTES: Record<string, string> = {
-  overview: "/console",
-  products: "/console/products",
-  members: "/console/organization",
-  audit: "/console/audit",
-  settings: "/console/settings",
-  build: "/console/products/new",
-  test: "/console/test",
-  deploy: "/console/deploy",
-  operate: "/console/operate",
-};
+const PLATFORM_PROMPTS = ["Add a product", "How many products do I have?", "Show me the demo", "How does Pixel work?"];
+const PRODUCT_PROMPTS = ["What can you do?", "Take me back to my products"];
 
-export function EdithPanel({ session, shape, productId, onRecordsChanged, onUiAction }: {
+export function EdithPanel({ session, shape, productId, scope = "product", onRecordsChanged, onUiAction }: {
   session: ApiSession;
   shape: ApiProductShape;
   productId: string;
+  /** Whether this panel is answering for Pixel itself or for a product inside it. */
+  scope?: "platform" | "product";
   onRecordsChanged?: () => Promise<void>;
   onUiAction?: (action: ApiActionShape, payload: Record<string, unknown>) => void;
 }) {
@@ -79,7 +72,16 @@ export function EdithPanel({ session, shape, productId, onRecordsChanged, onUiAc
     alive.current = true;
     sessionId.current = crypto.randomUUID();
     setMicAvailable(speechInputConstructor() !== null);
-    return () => { alive.current = false; request.current?.abort(); recognition.current?.abort(); stopAudio(); };
+    const ending = sessionId.current;
+    return () => {
+      alive.current = false;
+      request.current?.abort();
+      recognition.current?.abort();
+      stopAudio();
+      // Leaving takes the conversation with it, including anything it proposed and nobody did.
+      void closeConversation(session, ending);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => { log.current?.scrollTo({ top: log.current.scrollHeight }); }, [messages, busy]);
   const actions = useMemo(() => Object.fromEntries(shape.actions.map((action) => [action.client_type, action])), [shape.actions]);
@@ -175,12 +177,18 @@ export function EdithPanel({ session, shape, productId, onRecordsChanged, onUiAc
   }
 
   return (
-    <aside className="px-product-assistant" aria-label={`${shape.assistant_name} product assistant`} data-collapsed={collapsed}>
+    <aside className="px-product-assistant" data-scope={scope} data-collapsed={collapsed}
+      aria-label={scope === "platform"
+        ? `${shape.assistant_name}, your assistant across Pixel`
+        : `${shape.assistant_name}, answering for ${shape.product_name}`}>
     <Panel title={<span className="px-row"><Bot aria-hidden size={16} />{collapsed ? null : shape.assistant_name}</span>}
       actions={<Button aria-label={collapsed ? "Expand assistant" : "Collapse assistant"} title={collapsed ? "Expand assistant" : "Collapse assistant"}
         variant="ghost" size="sm" onClick={() => setCollapsed(!collapsed)}>{collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</Button>}>
       {!collapsed ? <>
-      <div className="px-small px-muted">{shape.product_name}</div>
+      <div className="px-row px-small px-muted" style={{ justifyContent: "space-between" }}>
+        <span>{scope === "platform" ? "Across Pixel" : shape.product_name}</span>
+        <span role="status">{busy ? "Thinking" : voice ? voiceStatus : "Ready"}</span>
+      </div>
       <div className="px-stack">
         <div ref={log} className="px-chat-log" role="log" aria-live="polite" aria-label="Conversation">
           {messages.map((message, index) => (
@@ -191,6 +199,13 @@ export function EdithPanel({ session, shape, productId, onRecordsChanged, onUiAc
           ))}
           {busy ? <p className="px-muted" role="status">Thinking...</p> : null}
         </div>
+        {messages.length <= 1 ? (
+          <div className="px-row" style={{ flexWrap: "wrap", gap: 6 }}>
+            {(scope === "platform" ? PLATFORM_PROMPTS : PRODUCT_PROMPTS).map((prompt) => (
+              <Button key={prompt} size="sm" disabled={busy} onClick={() => void send(prompt)}>{prompt}</Button>
+            ))}
+          </div>
+        ) : null}
         <form className="px-row" onSubmit={(event) => { event.preventDefault(); void send(); }}>
           <Input value={input} onChange={(event) => setInput(event.target.value)}
             placeholder={`Ask ${shape.assistant_name}`} aria-label={`Ask ${shape.assistant_name}`} />

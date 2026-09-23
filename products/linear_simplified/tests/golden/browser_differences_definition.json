@@ -856,7 +856,7 @@
     "kind": "wording",
     "reason": "The platform lists what this caller can actually do, from the definition's filtered offers and in plain words, where the recorded reply was product-written. Owner decision (5d plan revision 2, section 5): names are spoken plainly.",
     "recorded": "I can guide this Pixel demo through Product Engineering Workspace: planning, issues, projects, teams, and integrations. I can open views, find tickets, update issue fields, create demo records, and block work outside this scope.",
-    "current": "Here's what I can do in Pixel: create a ticket, change a ticket's assignee, priority or status, open a ticket, list tickets by assignee, show the system architecture and open Cycles."
+    "current": "Here's what I can do in Pixel: create a ticket, change a ticket's assignee, priority or status, open a ticket, list tickets by assignee, open Dashboard and open Issues."
   },
   {
     "case": "count-team-members",
@@ -955,7 +955,7 @@
     "kind": "wording",
     "reason": "Both open the Dashboard. The recorded reply was a scripted path naming Maya, Noah and Salesforce; the platform offers a conversational route through what this caller can do, ending with the guardrail, so it never names people or products another workspace or tenant cannot see. Owner decision (5d plan revision 2, section 5): a conversational guided path.",
     "recorded": "Here is a clean guided path: start with sprint planning, open Maya's ticket, assign it to Noah, create a ticket for a new teammate, then try Salesforce to prove guardrails.",
-    "current": "Here's a good way to explore Pixel: open Cycles, then open Integrations, then create a ticket, then find Add member in Teams, then ask me for something outside Pixel to see how I stay in scope. I'll open Dashboard."
+    "current": "Here's a good way to explore Pixel: open Dashboard, then open Issues, then open Projects, then create a ticket, then find Assignee in Issue Detail, then ask me for something outside Pixel to see how I stay in scope. I'll open Dashboard."
   },
   {
     "case": "architecture",

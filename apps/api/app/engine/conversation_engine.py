@@ -513,7 +513,8 @@ class ConversationEngine:
             if grounding.is_grounded and reply.template_key != KNOWLEDGE_UNAVAILABLE_KEY:
                 return TurnStage.KNOWLEDGE, reply, grounding.passages, True
             return TurnStage.UNGROUNDED, reply, (), True
-        return TurnStage.FALLBACK, composer.answer("fallback"), (), True
+        offers = offerable(self._definition, self._snapshot, self._policy)
+        return TurnStage.FALLBACK, composer.unplaceable(offers), (), True
 
     def _platform_conversation(
         self, text: NormalizedMessage, context: TurnContext, memory: ConversationMemory,
@@ -635,9 +636,16 @@ class ConversationEngine:
         records = self._snapshot.records.get(entity_key, ())
         label = (entity.label if len(records) == 1 else entity.plural).lower()
         scope = self._snapshot.scope_label or SCOPE_NAME
+        # A product with no narrower place inside it is simply "here", so the count is worded
+        # without repeating the product's own name back at the person who asked.
+        here = scope == self._definition.identity.product_name
         if key == "people_count":
-            return composer.answer(key, scope=scope, count=str(len(records)), label=label)
-        return composer.answer(key, scope=scope, count=str(len(records)), label=label,
+            return composer.answer("people_count_here" if here else key,
+                                   scope=scope, count=str(len(records)), label=label)
+        if here and not records:
+            return composer.answer("anchor_count_none", scope=scope, count="0", label=label)
+        return composer.answer("anchor_count_here" if here else key,
+                               scope=scope, count=str(len(records)), label=label,
                                records=_listed([record.title or record.id for record in records]))
 
     def _found_reply(self, composer: ResponseComposer, action: GenericAction,

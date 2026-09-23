@@ -1,0 +1,188 @@
+# Product Definition: Pixel's own console.
+#
+# Pixel is a place a person moves around in, so the ways of moving around it are described here
+# rather than decided in the browser. One engine then answers both "open my products" and
+# whatever the product they are inside is asked, and the assistant is the same assistant in both.
+#
+# This definition navigates and nothing else. It declares no action that reads or changes a
+# record, because the things Pixel keeps - organizations, products, members - are the platform's
+# own and are not served through a product's record store. An assistant that offered to count
+# them here would be offering something it cannot do.
+#
+# v2 closes the gaps a review found against the guided demo, which was the more capable
+# assistant. v1 is published and unchanged. v2 adds, and changes nothing else:
+#   - the demo, which v1 could not reach at all: "open demo", "show me the demo" and the rest;
+#   - the system architecture as a place with a page behind it, rather than a promise;
+#   - greetings somebody actually types: "hii ther", "helo", "hey there";
+#   - "add a product" going to where a product is added, instead of the list of them, and that
+#     place named for what it is rather than for the step it belongs to;
+#   - "go back", "get started" and "what is Pixel";
+#   - a fallback that offers what to do next instead of ending the conversation.
+
+definition:
+  definition_id: pixel_console
+  version: 2
+  ownership: platform_shared
+
+identity:
+  product_name: Pixel
+  assistant_name: Edith
+  persona: >-
+    A calm guide to Pixel itself, who takes someone to the part of it they asked for and says
+    plainly when something is not hers to do.
+  voice_style: >-
+    You are Edith, a soft-spoken, warm and natural conversational assistant for Pixel. Speak
+    clearly and unhurriedly.
+  greeting: Welcome to {product}. I'm {assistant}.
+
+vocabulary:
+  terms: [architecture, audit, build, demo, deploy, home, member, members, operate, overview,
+          people, product, products, settings, test, workspace]
+  corrections:
+    prodcut: product
+    prodcuts: products
+    setings: settings
+    hii: hi
+    hiii: hi
+    hai: hi
+    helo: hello
+    hellow: hello
+    ther: there
+    thier: there
+    architecure: architecture
+    arcitecture: architecture
+    demmo: demo
+    prodcts: products
+  negatable_terms: [audit, members, products, settings]
+  correction_markers: [actually, instead, rather, i mean, sorry]
+
+# The contract asks every product to declare what it keeps. Pixel keeps products, and they are
+# named here so its screens can be described; no action reads or changes them.
+entities:
+  product:
+    label: Product
+    plural: Products
+    id: { strategy: slug, from_field: name }
+    title_field: name
+    fields:
+      name: { type: text, required: true, min: 1, max: 120, editable: false }
+
+scope:
+  anchor: product
+  paths:
+    product: []
+
+views:
+  overview:
+    label: Overview
+    kind: dashboard
+    shortcut: O
+  products:
+    label: Products
+    kind: list
+    entity: product
+    shortcut: P
+    columns: [name]
+  members:
+    label: Members
+    kind: dashboard
+    shortcut: M
+  audit:
+    label: Audit
+    kind: dashboard
+    shortcut: A
+  settings:
+    label: Settings
+    kind: dashboard
+    shortcut: S
+  build:
+    label: New product
+    kind: dashboard
+    shortcut: B
+  test:
+    label: Test
+    kind: dashboard
+    shortcut: T
+  deploy:
+    label: Deploy
+    kind: dashboard
+    shortcut: D
+  operate:
+    label: Operate
+    kind: dashboard
+    shortcut: E
+  demo:
+    label: Demo
+    kind: dashboard
+    shortcut: G
+
+# Declared in the order somebody new to Pixel needs them, because this is the order the
+# assistant offers them in: what to do first comes first, and the machinery of running a
+# product comes after.
+actions:
+  open_build: { capability: NAVIGATE_VIEW, view: build, description: Add a product. }
+  open_products: { capability: NAVIGATE_VIEW, view: products, description: Open your products. }
+  open_demo: { capability: NAVIGATE_VIEW, view: demo, description: Open the guided demo. }
+  open_architecture: { capability: NAVIGATE_VIEW, view: architecture, description: Open the system architecture. }
+  open_overview: { capability: NAVIGATE_VIEW, view: overview, description: Open the overview. }
+  open_members: { capability: NAVIGATE_VIEW, view: members, description: Open the people in this organization. }
+  open_settings: { capability: NAVIGATE_VIEW, view: settings, description: Open the settings. }
+  open_test: { capability: NAVIGATE_VIEW, view: test, description: Open the test area. }
+  open_deploy: { capability: NAVIGATE_VIEW, view: deploy, description: Open the deploy area. }
+  open_operate: { capability: NAVIGATE_VIEW, view: operate, description: Open the operate area. }
+  open_audit: { capability: NAVIGATE_VIEW, view: audit, description: Open the audit log. }
+
+intents:
+  - action: open_build
+    response: view_opened
+    match: [[add, create, make, new, start, set up, onboard, import],
+            [product, products, my product, our product]]
+  - action: open_demo
+    response: view_opened
+    match: [[demo, demo mode, guided demo, the demo, try it, example, sample product]]
+  - action: open_architecture
+    match: [[architecture, system architecture, technical architecture, architecture page,
+             architecture diagram]]
+  - action: open_products
+    response: view_opened
+    match: [[product, products, my products, all products, out of this, out of here, leave this,
+             back to products, take me out, exit this product, another product, switch product]]
+  - action: open_overview
+    response: view_opened
+    match: [[overview, home, dashboard, start, workspace, go back, back, get started,
+             where do i start, what do i do]]
+  - action: open_members
+    response: view_opened
+    match: [[member, members, people, team members, who is in]]
+  - action: open_audit
+    response: view_opened
+    match: [[audit, audit log, history, what happened]]
+  - action: open_settings
+    response: view_opened
+    match: [[setting, settings, preferences, configuration]]
+  - action: open_build
+    response: view_opened
+    match: [[build, new product, definition, definitions]]
+  - action: open_test
+    response: view_opened
+    match: [[test, playground, try it]]
+  - action: open_deploy
+    response: view_opened
+    match: [[deploy, deployment, deployments, release, releases, publish]]
+  - action: open_operate
+    response: view_opened
+    match: [[operate, usage, spending, budget, health]]
+
+guardrails:
+  - topic: destructive_change
+    response: destructive_refused
+    match: [[delete, erase, wipe, remove all, delete all]]
+
+responses:
+  view_opened: "I'll take you to {view}."
+  destructive_refused: "I can't delete or erase anything here."
+  # A dead end is the one answer that helps nobody. When Pixel cannot place a request, it says
+  # what it can do next instead of stopping the conversation.
+  fallback: >-
+    I can help you add a product, open your products, show you the demo, open the system
+    architecture, or take you to members and settings. What would you like to do?

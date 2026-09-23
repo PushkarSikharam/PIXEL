@@ -41,10 +41,11 @@ export function Edith() {
   if (surface) {
     return (
       <EdithPanel key={`product:${surface.productId}`} session={session} shape={surface.shape}
-        productId={surface.productId} onRecordsChanged={surface.reloadRecords}
+        productId={surface.productId} scope="product" onRecordsChanged={surface.reloadRecords}
         onUiAction={surface.showAction} />
     );
   }
   if (!consoleProductId || !consoleShape) return null;
-  return <EdithPanel key="pixel" session={session} shape={consoleShape} productId={consoleProductId} />;
+  return <EdithPanel key="pixel" session={session} shape={consoleShape}
+    productId={consoleProductId} scope="platform" />;
 }

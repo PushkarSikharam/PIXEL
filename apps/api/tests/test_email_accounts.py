@@ -130,15 +130,26 @@ class EmailAccountsTest(EngineCutoverFixture):
             connection.execute("update email_challenges set expires_at=0")
         self.assertEqual(self.client.post("/api/account/verify-code", json=second).status_code, 401)
 
-    def test_limit_and_delivery_failure_are_fail_closed(self):
+    def test_a_delivery_failure_says_nothing_and_leaves_no_usable_challenge(self):
+        """The transport's own words never reach the caller, and a code that was not delivered
+        can never be used. The person's allowance survives it: a mail server we cannot reach is
+        our failure, not theirs, and locking them out for it would be the worse outcome. The
+        deployment ceiling still counts every attempt, so failures stay bounded overall."""
         self.mail.side_effect = OSError("private transport error")
-        for _ in range(5):
+        for _ in range(6):
             result = self.client.post("/api/account/email-code", json={"email": "owner@example.test"})
             self.assertEqual(result.status_code, 503)
             self.assertNotIn("private", result.text)
-        self.assertEqual(self.client.post("/api/account/email-code", json={"email": "owner@example.test"}).status_code, 429)
         with db.get_connection() as connection:
-            self.assertEqual(connection.execute("select count(*) from email_challenges where consumed=0").fetchone()[0], 0)
+            self.assertEqual(connection.execute(
+                "select count(*) from email_challenges where consumed=0").fetchone()[0], 0)
+            charged = connection.execute(
+                "select attempts from email_login_limits where bucket = ?",
+                (account_api.DEPLOYMENT_BUCKET,)).fetchone()
+            self.assertGreaterEqual(charged[0], 6, "the deployment ceiling still counts them")
+        self.mail.side_effect = None
+        self.assertEqual(self.client.post("/api/account/email-code",
+                                          json={"email": "owner@example.test"}).status_code, 200)
 
     def test_logout_revokes_only_current_session(self):
         first, second = self.login(), self.login()
@@ -219,6 +230,15 @@ class SignInLimitsTest(EmailAccountsTest):
         self.assertEqual(exhausted.status_code, 429, exhausted.text)
         # Everybody else is unaffected, which is the whole point.
         self.assertEqual(self.request_code("somebody@example.test").status_code, 200)
+
+    def test_a_code_that_never_arrived_is_not_charged_to_the_person(self):
+        """A failing mail server must not lock somebody out of their own account."""
+        self.mail.side_effect = OSError("smtp is down")
+        for _ in range(account_api.ADDRESS_CODES_PER_HOUR + 2):
+            self.assertEqual(self.request_code("unlucky@example.test").status_code, 503)
+        self.mail.side_effect = None
+        self.assertEqual(self.request_code("unlucky@example.test").status_code, 200,
+                         "the allowance survives a delivery failure")
 
     def test_the_deployment_ceiling_is_far_above_one_persons_share(self):
         """A ceiling one attacker could exhaust would lock every customer out of signing in."""

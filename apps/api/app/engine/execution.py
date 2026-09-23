@@ -362,6 +362,22 @@ class ExecutionLedger:
              ActionState.DISPATCHED.value, turn_id),
         ).rowcount
 
+    def cancel_session(self, connection, owner: ExecutionOwner, session_id: str) -> int:
+        """Somebody left this conversation: every key of it that was never used.
+
+        A proposal nobody carried out should not stay usable once its conversation is over. The
+        owner is matched as well as the session, so ending a conversation can only ever cancel
+        keys that were this caller's to use.
+        """
+        return connection.execute(
+            f"""
+            update action_executions set state = ?, result_code = ?, reason = ?, settled_at = ?
+            where session_id = ? and {_OWNER_MATCH} and state = ?
+            """,
+            (ActionState.CANCELLED.value, USER_CANCELLED, "conversation_ended", _now(),
+             session_id, *owner.values(), ActionState.DISPATCHED.value),
+        ).rowcount
+
     def cancel_instance(self, connection, owner: ExecutionOwner) -> int:
         """In the private-reset transaction: every unused key of the old generation."""
         return connection.execute(

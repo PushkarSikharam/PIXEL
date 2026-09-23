@@ -28,6 +28,9 @@ PLATFORM_VIEWS = frozenset({"architecture"})
 RESPONSE_PLACEHOLDERS = frozenset({
     "product", "assistant", "scope", "view", "visitor",
     "person", "record_id", "record_title", "records",
+    # What the thing being counted is called, singular or plural to match the count. It comes
+    # from the definition's own labels, so a product can word its counts in its own terms.
+    "label",
     "field", "value", "changes", "count",
 })
 

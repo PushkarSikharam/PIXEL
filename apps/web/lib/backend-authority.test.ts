@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 // Every visitor message reaches /api/turn before the browser executes anything, and the browser
 // never writes its own assistant reply (5c plan, sections 2.3 and 9).
-const PAGE = readFileSync(join(__dirname, "..", "app", "page.tsx"), "utf8");
+const PAGE = readFileSync(join(__dirname, "..", "app", "(demo)", "demo", "page.tsx"), "utf8");
 
 function sendMessageBody(): string {
   const start = PAGE.indexOf("async function sendMessage(");

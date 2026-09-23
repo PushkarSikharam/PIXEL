@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
 import type { ReactNode } from "react";
-import { ToastProvider } from "@/components/toast";
+import { ToastProvider } from "@pixel-console/components/toast";
 import "./globals.css";
 
 export const metadata: Metadata = {

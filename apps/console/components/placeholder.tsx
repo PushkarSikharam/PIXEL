@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { Construction } from "lucide-react";
 import { useConsole } from "./console-context";
 import { PageHead, PermissionDenied } from "./ui";
-import type { Permission } from "@/lib/contracts";
+import type { Permission } from "@pixel-console/lib/contracts";
 
 /** A section that exists in the navigation now and is built in a later SaaS phase. */
 export function SectionPlaceholder({ title, description, permission, phase, children }: {

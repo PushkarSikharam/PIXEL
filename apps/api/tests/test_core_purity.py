@@ -36,8 +36,8 @@ KNOWN_PRODUCT_COUPLING = {
     "apps/api/app/services/product_data_store.py": "3.5",
     "apps/api/app/workspace_config.py": "3.5",
     # Web app: browser decisions leave in 3.3, rendering moves to adapters in 3.6.
-    "apps/web/app/architecture/page.tsx": "3.6",
-    "apps/web/app/page.tsx": "3.3 and 3.6",
+    "apps/web/app/(demo)/architecture/page.tsx": "3.6",
+    "apps/web/app/(demo)/demo/page.tsx": "3.3 and 3.6",
     "apps/web/lib/action-executor.ts": "3.6",
     "apps/web/lib/agent-api.ts": "3.6",
     "apps/web/lib/demo-data.ts": "3.6",
@@ -56,7 +56,7 @@ class CorePurityTest(unittest.TestCase):
     def test_core_files_are_scanned(self):
         scanned = {relative(path) for path in core_files()}
         self.assertIn("apps/api/app/definitions/contract.py", scanned)
-        self.assertIn("apps/web/app/page.tsx", scanned)
+        self.assertIn("apps/web/app/(demo)/demo/page.tsx", scanned)
 
     def test_new_core_code_is_product_neutral(self):
         coupled = {

@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { AuthCard, PrototypeNote } from "@/components/auth-card";
-import { Alert, Button, Field, Input } from "@/components/ui";
+import { AuthCard, PrototypeNote } from "@pixel-console/components/auth-card";
+import { Alert, Button, Field, Input } from "@pixel-console/components/ui";
 import {
   CODE_LENGTH, SIGN_IN_MESSAGES, demoCodeFor, normalizeEmail, startChallenge, verifyChallenge,
   type Challenge, type SignInError,
-} from "@/lib/mock-identity";
+} from "@pixel-console/lib/mock-identity";
 
 function Verify() {
   const router = useRouter();

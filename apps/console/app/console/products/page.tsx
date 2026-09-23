@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
-import { useConsole } from "@/components/console-context";
-import { Button, EmptyState, ErrorState, Input, LoadingRows, PageHead, PermissionDenied, StatusBadge } from "@/components/ui";
-import { teamName } from "@/lib/mock-data";
+import { useConsole } from "@pixel-console/components/console-context";
+import { Button, EmptyState, ErrorState, Input, LoadingRows, PageHead, PermissionDenied, StatusBadge } from "@pixel-console/components/ui";
+import { teamName } from "@pixel-console/lib/mock-data";
 
 /** `?state=loading|empty|error|denied` shows each non-happy state of the catalogue. */
 function Catalogue() {

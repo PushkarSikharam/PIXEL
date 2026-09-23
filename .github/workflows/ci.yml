@@ -92,6 +92,8 @@ jobs:
         run: npm run lint:web
       - name: Unit tests (including the provider-boundary check)
         run: npm run test:web
+      - name: Console design and permission tests
+        run: npm run test:console
       - name: Production build
         run: npm run build:web
 

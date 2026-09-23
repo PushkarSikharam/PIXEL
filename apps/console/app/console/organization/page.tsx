@@ -2,13 +2,13 @@
 
 import { useState } from "react";
 import { MoreHorizontal, UserPlus } from "lucide-react";
-import { useConsole } from "@/components/console-context";
-import { Dialog, Menu } from "@/components/overlays";
-import { useToast } from "@/components/toast";
-import { Button, Field, Input, PageHead, Panel, PermissionDenied, StatusBadge } from "@/components/ui";
-import { INVITATIONS, MEMBERS, TEAMS, teamName } from "@/lib/mock-data";
-import type { Member, Role } from "@/lib/contracts";
-import { normalizeEmail } from "@/lib/mock-identity";
+import { useConsole } from "@pixel-console/components/console-context";
+import { Dialog, Menu } from "@pixel-console/components/overlays";
+import { useToast } from "@pixel-console/components/toast";
+import { Button, Field, Input, PageHead, Panel, PermissionDenied, StatusBadge } from "@pixel-console/components/ui";
+import { INVITATIONS, MEMBERS, TEAMS, teamName } from "@pixel-console/lib/mock-data";
+import type { Member, Role } from "@pixel-console/lib/contracts";
+import { normalizeEmail } from "@pixel-console/lib/mock-identity";
 
 const ROLE_LABEL: Record<Role, string> = { org_admin: "Organization admin", team_admin: "Team admin", team_member: "Team member" };
 

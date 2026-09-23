@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { AuthCard, PrototypeNote } from "@/components/auth-card";
-import { Alert } from "@/components/ui";
-import { DEMO_INVITATIONS, invitationStatus } from "@/lib/mock-identity";
+import { AuthCard, PrototypeNote } from "@pixel-console/components/auth-card";
+import { Alert } from "@pixel-console/components/ui";
+import { DEMO_INVITATIONS, invitationStatus } from "@pixel-console/lib/mock-identity";
 
 function Invitation() {
   const { token } = useParams<{ token: string }>();

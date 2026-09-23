@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { AuthCard, PrototypeNote } from "@/components/auth-card";
-import { Button, Field, Input } from "@/components/ui";
-import { normalizeEmail, SIGN_IN_MESSAGES } from "@/lib/mock-identity";
+import { AuthCard, PrototypeNote } from "@pixel-console/components/auth-card";
+import { Button, Field, Input } from "@pixel-console/components/ui";
+import { normalizeEmail, SIGN_IN_MESSAGES } from "@pixel-console/lib/mock-identity";
 
 export default function SignIn() {
   const router = useRouter();

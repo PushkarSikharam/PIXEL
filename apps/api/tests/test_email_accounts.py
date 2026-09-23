@@ -28,6 +28,7 @@ class EmailDeliveryTransportTest(unittest.TestCase):
         self.assertEqual(request.full_url, "https://api.resend.com/emails")
         self.assertEqual(request.get_method(), "POST")
         self.assertIn("Bearer re_test_key", request.headers["Authorization"])
+        self.assertEqual(request.headers["User-agent"], "Pixel/1.0")
 
     def test_resend_api_failure_is_treated_as_delivery_failure(self):
         with patch.object(account_api.url_request, "urlopen",

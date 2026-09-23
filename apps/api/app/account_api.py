@@ -92,6 +92,7 @@ def send_code_with_resend_api(email: str, code: str, api_key: str, sender: str) 
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
+            "User-Agent": "Pixel/1.0",
         },
         method="POST",
     )

@@ -167,6 +167,7 @@ const connectedIntegrationCount = integrations.filter((integration) => integrati
 type TurnStatus = "Ready" | "Thinking" | "Interrupted" | "Action blocked" | "Service unavailable";
 const issueStatuses = ["Todo", "In progress", "Review", "Done"] as const;
 const priorities = ["Low", "Medium", "High"] as const;
+const experienceStorageKey = "pixel_experience_mode";
 
 export default function Home() {
   const router = useRouter();
@@ -219,6 +220,12 @@ export default function Home() {
   const [dataError, setDataError] = useState<string | null>(null);
   const [serviceError, setServiceError] = useState<string | null>(null);
   const [agentServiceStatus, setAgentServiceStatus] = useState<AgentServiceStatus>("checking");
+
+  useEffect(() => {
+    if (window.sessionStorage.getItem(experienceStorageKey) === "demo") {
+      setExperience("demo");
+    }
+  }, []);
 
   useEffect(() => {
     if (!latestEvent) return;
@@ -793,8 +800,13 @@ export default function Home() {
     }
   }
 
+  function showExperience(next: "system" | "demo") {
+    window.sessionStorage.setItem(experienceStorageKey, next);
+    setExperience(next);
+  }
+
   if (experience === "system") {
-    return <PixelSystemHome onEnterDemo={() => setExperience("demo")} />;
+    return <PixelSystemHome onEnterDemo={() => showExperience("demo")} />;
   }
 
   return (
@@ -825,7 +837,7 @@ export default function Home() {
         <nav className="nav-list">
           <button
             className="nav-item system-nav-item"
-            onClick={() => setExperience("system")}
+            onClick={() => showExperience("system")}
             type="button"
           >
             <span className="nav-shortcut">P</span>
@@ -960,6 +972,7 @@ function PixelSystemHome({ onEnterDemo }: { onEnterDemo: () => void }) {
           </div>
           <div className="system-actions">
             <Link href="/architecture">Architecture</Link>
+            <Link href="/console">Console</Link>
             <button className="secondary-button compact" onClick={onEnterDemo} type="button">
               Visit demo
             </button>
@@ -975,8 +988,11 @@ function PixelSystemHome({ onEnterDemo }: { onEnterDemo: () => void }) {
               and operate inside that product without leaking across tenants, products or scopes.
             </p>
             <div className="system-cta-row">
-              <button className="primary-system-button" onClick={onEnterDemo} type="button">
-                Visit live demo
+              <Link className="primary-system-button" href="/console">
+                Open Pixel Console
+              </Link>
+              <button className="secondary-button compact" data-testid="visit-demo" onClick={onEnterDemo} type="button">
+                Visit demo
               </button>
               <Link className="system-text-link" href="/architecture">
                 View system architecture
@@ -1026,7 +1042,7 @@ function PixelSystemHome({ onEnterDemo }: { onEnterDemo: () => void }) {
             enforcing boundaries and explaining what happened.
           </p>
         </div>
-        <button className="primary-system-button" onClick={onEnterDemo} type="button">
+        <button className="secondary-button compact" onClick={onEnterDemo} type="button">
           Enter demo workspace
         </button>
       </section>

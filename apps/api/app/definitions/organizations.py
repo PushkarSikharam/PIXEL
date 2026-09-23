@@ -129,6 +129,16 @@ class OrganizationDirectory:
             )
         return self.membership(tenant_id, user_id)
 
+    def set_member_role(self, tenant_id: str, user_id: str, role: str, team_id: str | None = None) -> Membership:
+        self._require(role, MEMBER_ROLES, "role")
+        if (role in TEAM_ROLES) != (team_id is not None):
+            raise RegistryError("team roles, and only team roles, belong to a team")
+        if team_id is not None and self.team(tenant_id, team_id) is None:
+            raise RegistryError(f"team {team_id} does not exist in {tenant_id}")
+        self._update("memberships", "role = ?, team_id = ?", (role, team_id),
+                     "tenant_id = ? and user_id = ?", (tenant_id, user_id))
+        return self.membership(tenant_id, user_id)
+
     def membership(self, tenant_id: str, user_id: str) -> Membership | None:
         with use_connection(self._connection) as connection:
             row = connection.execute(

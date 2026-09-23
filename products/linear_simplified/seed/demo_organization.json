@@ -16,7 +16,7 @@
         },
         {
           "user_id": "demo-product-eng",
-          "role": "team_member",
+          "role": "team_admin",
           "team": true
         },
         {

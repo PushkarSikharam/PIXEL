@@ -354,6 +354,9 @@ button {
 }
 
 .primary-system-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 44px;
   padding: 0 18px;
   border: 1px solid #111827;
@@ -361,6 +364,7 @@ button {
   background: #111827;
   color: #ffffff;
   font-weight: 800;
+  text-decoration: none;
   box-shadow: 0 12px 24px rgba(17, 24, 39, 0.16);
 }
 
@@ -481,6 +485,208 @@ button {
   display: grid;
   gap: 8px;
   max-width: 720px;
+}
+
+.system-console-page {
+  min-height: 100vh;
+  padding: 22px;
+  background: #f4f6f9;
+}
+
+.console-header {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  width: min(1480px, 100%);
+  margin: 0 auto 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: var(--shadow-soft);
+}
+
+.console-header h1,
+.console-header p,
+.console-card h2,
+.console-card p {
+  margin: 0;
+}
+
+.console-header p,
+.console-card p,
+.console-capabilities {
+  color: var(--muted);
+}
+
+.console-header-actions,
+.console-product-head,
+.console-action-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.console-header-actions {
+  justify-content: flex-end;
+}
+
+.console-layout {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr) 380px;
+  gap: 16px;
+  width: min(1480px, 100%);
+  margin: 0 auto;
+  align-items: start;
+}
+
+.console-sidebar,
+.console-main,
+.console-chat {
+  display: grid;
+  gap: 14px;
+}
+
+.console-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: var(--shadow-soft);
+}
+
+.console-product-list {
+  display: grid;
+  gap: 8px;
+}
+
+.console-product-list button,
+.console-action-strip button {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f8fafc;
+  color: var(--text);
+}
+
+.console-product-list button {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 10px;
+  text-align: left;
+}
+
+.console-product-list button span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.console-product-list button.selected,
+.console-action-strip button.selected {
+  border-color: var(--accent);
+  background: #eff6ff;
+  color: var(--accent-dark);
+}
+
+.console-form,
+.console-chat-form {
+  display: grid;
+  gap: 10px;
+}
+
+.console-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.console-form input,
+.console-chat-form input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text);
+}
+
+.console-product-head {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.console-action-strip button {
+  min-height: 34px;
+  padding: 0 10px;
+  font-weight: 700;
+}
+
+.console-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.console-table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.console-table-wrap th,
+.console-table-wrap td {
+  padding: 9px 11px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.console-table-wrap th {
+  background: #f8fafc;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.console-table-wrap tr:last-child td {
+  border-bottom: 0;
+}
+
+.console-chat-log {
+  display: grid;
+  gap: 10px;
+  min-height: 240px;
+  max-height: 480px;
+  overflow-y: auto;
+}
+
+.console-chat-message {
+  display: grid;
+  gap: 5px;
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.console-chat-message[data-role="visitor"] {
+  border-color: transparent;
+  background: #eff6ff;
+}
+
+.console-error {
+  width: min(1480px, 100%);
+  margin: 0 auto 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--danger);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--danger);
 }
 
 .activity-popup {
@@ -2188,6 +2394,14 @@ h3 {
 }
 
 @media (max-width: 1180px) {
+  .console-layout {
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+
+  .console-chat {
+    grid-column: 1 / -1;
+  }
+
   .system-hero-grid,
   .system-pillar-grid {
     grid-template-columns: 1fr 1fr;
@@ -2257,6 +2471,15 @@ h3 {
 }
 
 @media (max-width: 820px) {
+  .console-header,
+  .console-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .console-header-actions {
+    justify-content: flex-start;
+  }
+
   .system-hero,
   .system-section,
   .system-demo-band {

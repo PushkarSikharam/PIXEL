@@ -18,7 +18,7 @@ import {
   type ProductShape,
 } from "@/lib/pixel-console-api";
 
-type ChatMessage = { role: "visitor" | "edith"; text: string };
+type ChatMessage = { role: "visitor" | "assistant"; text: string };
 
 export default function PixelConsolePage() {
   const [session, setSession] = useState<ConsoleSession | null>(null);
@@ -62,7 +62,7 @@ export default function PixelConsolePage() {
     setRecords(nextRecords);
     setActiveView((current) => current ?? nextShape.views.find((view) => view.navigable)?.name ?? nextShape.views[0]?.name ?? null);
     setMessages((current) => current.length ? current : [
-      { role: "edith", text: `Welcome to ${nextShape.product_name}. I'm ${nextShape.assistant_name}.` },
+      { role: "assistant", text: `Welcome to ${nextShape.product_name}. I'm ${nextShape.assistant_name}.` },
     ]);
   }
 
@@ -113,14 +113,14 @@ export default function PixelConsolePage() {
         productId: selectedProductId,
         message: text,
       });
-      setMessages((current) => [...current, { role: "edith", text: response.speech }]);
+      setMessages((current) => [...current, { role: "assistant", text: response.speech }]);
       const receipt = await executeAction(session, selectedProductId, response, shape);
       if (receipt) {
-        setMessages((current) => [...current, { role: "edith", text: receipt.speech }]);
+        setMessages((current) => [...current, { role: "assistant", text: receipt.speech }]);
         await refreshProduct(selectedProductId, session);
       }
     } catch (caught) {
-      setMessages((current) => [...current, { role: "edith", text: caught instanceof Error ? caught.message : "That request failed." }]);
+      setMessages((current) => [...current, { role: "assistant", text: caught instanceof Error ? caught.message : "That request failed." }]);
     } finally {
       setBusy(false);
     }
@@ -137,7 +137,7 @@ export default function PixelConsolePage() {
         <Link className="system-text-link" href="/">Pixel System</Link>
         <div>
           <h1>Pixel Console</h1>
-          <p>Add a product, open its generated screens, and ask Edith inside that product scope.</p>
+          <p>Add a product, open its generated screens, and chat inside that product scope.</p>
         </div>
         <div className="console-header-actions">
           <Link className="secondary-button compact" href="/">Home</Link>
@@ -198,7 +198,7 @@ export default function PixelConsolePage() {
                     ))}
                   </div>
                 </div>
-                {actionNames.length ? <p className="console-capabilities">Edith can: {actionNames.join("; ")}.</p> : null}
+                {actionNames.length ? <p className="console-capabilities">Available actions: {actionNames.join("; ")}.</p> : null}
               </section>
 
               <section className="console-card">
@@ -211,11 +211,11 @@ export default function PixelConsolePage() {
 
         <aside className="console-chat">
           <section className="console-card">
-            <h2>{shape?.assistant_name ?? "Edith"}</h2>
+            <h2>{shape?.assistant_name ?? "Assistant"}</h2>
             <div className="console-chat-log" aria-live="polite">
               {messages.map((message, index) => (
                 <div className="console-chat-message" data-role={message.role} key={`${message.role}-${index}`}>
-                  <strong>{message.role === "visitor" ? "You" : shape?.assistant_name ?? "Edith"}</strong>
+                  <strong>{message.role === "visitor" ? "You" : shape?.assistant_name ?? "Assistant"}</strong>
                   <p>{message.text}</p>
                 </div>
               ))}
@@ -237,7 +237,7 @@ function GenericTable({ entity, rows }: {
   rows: Array<Record<string, unknown> & { id: string; title?: string }>;
 }) {
   if (!entity) return <p>No entity is attached to this screen.</p>;
-  if (!rows.length) return <p>No {entity.plural.toLowerCase()} yet. Ask Edith to create one.</p>;
+  if (!rows.length) return <p>No {entity.plural.toLowerCase()} yet. Ask the assistant to create one.</p>;
   const fields = ["id", entity.title_field, ...entity.summary_fields].filter((field, index, all) => all.indexOf(field) === index);
   return (
     <div className="console-table-wrap">

@@ -581,6 +581,16 @@ class ViewShape(BaseModel):
     controls: list[ControlShape] = []
 
 
+class ActionShape(BaseModel):
+    name: str
+    client_type: str
+    capability: str
+    description: str
+    entity: str | None = None
+    view: str | None = None
+    fields: list[str] = []
+
+
 class ProductShape(BaseModel):
     """Everything a screen needs to render a product it has never seen before.
 
@@ -596,6 +606,7 @@ class ProductShape(BaseModel):
     definition_version: int
     views: list[ViewShape]
     entities: list[EntityShape]
+    actions: list[ActionShape]
 
 
 class RecordsResponse(BaseModel):
@@ -638,6 +649,14 @@ def product_shape(product_id: str, user: AuthUser = Depends(require_auth)) -> Pr
                 ],
             )
             for name, entity in definition.entities.items()
+        ],
+        actions=[
+            ActionShape(
+                name=name, client_type=name.upper(), capability=str(action.capability),
+                description=action.description, entity=action.entity, view=action.view,
+                fields=list(action.fields),
+            )
+            for name, action in definition.actions.items()
         ],
     )
 

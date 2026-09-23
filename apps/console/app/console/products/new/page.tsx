@@ -8,9 +8,11 @@ import { useToast } from "@/components/toast";
 import { Alert, Badge, Button, Field, Input, PageHead, Panel, PermissionDenied } from "@/components/ui";
 import { TEAMS } from "@/lib/mock-data";
 import {
-  STEP_LABELS, STEPS, acceptUnderstanding, addSource, canEnter, completeAnalysis, goTo, initialOnboarding,
-  publish, removeSource, setConfirmation, setDetails, toggleAction, validate, type OnboardingState, type Step,
+  STEP_LABELS, STEPS, acceptUnderstanding, addSource, canEnter, completeAnalysis, definitionIdFor, goTo,
+  initialOnboarding, publish, removeSource, setConfirmation, setDetails, starterDefinitionText,
+  toggleAction, validate, type OnboardingState, type Step,
 } from "@/lib/onboarding";
+import { addProduct, signIn, storedSession } from "@/lib/pixel-api";
 
 const VISIBLE_STEPS: Step[] = STEPS.filter((s) => s !== "published");
 
@@ -23,8 +25,10 @@ export default function NewProduct() {
   const [state, setState] = useState<OnboardingState>(() => initialOnboarding(teams[0]?.id ?? ""));
   const [sourceName, setSourceName] = useState("");
   const [sourceKind, setSourceKind] = useState<"document" | "openapi" | "url">("document");
+  const [publishing, setPublishing] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
   const { setActiveWork } = c;
+  const liveTeamId = c.live ? "planning-team" : null;
 
   // A started draft is unsaved work: switching product would discard it.
   useEffect(() => {
@@ -42,7 +46,7 @@ export default function NewProduct() {
     toast("warn", "The onboarding draft was discarded.");
   }, [c.discardEpoch, teams, toast]);
 
-  if (teams.length === 0) return <PermissionDenied what="product creation in any team" />;
+  if (teams.length === 0 && !c.live) return <PermissionDenied what="product creation in any team" />;
 
   const slugError = state.slug && !/^[a-z0-9][a-z0-9-]{1,62}$/.test(state.slug)
     ? "Use 2 to 63 lowercase letters, digits or hyphens, starting with a letter or digit." : null;
@@ -86,8 +90,10 @@ export default function NewProduct() {
                     onChange={(e) => setState((s) => setDetails(s, s.name, e.target.value.toLowerCase()))} />
                 )}</Field>
                 <Field label="Owning team">{(f) => (
-                  <select id={f.id} className="px-select" value={state.teamId} onChange={(e) => setState((s) => ({ ...s, teamId: e.target.value }))}>
-                    {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  <select id={f.id} className="px-select" value={liveTeamId ?? state.teamId} disabled={Boolean(liveTeamId)}
+                    onChange={(e) => setState((s) => ({ ...s, teamId: e.target.value }))}>
+                    {liveTeamId ? <option value={liveTeamId}>Planning team</option>
+                      : teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
                 )}</Field>
                 <div className="px-row"><Button type="submit" variant="primary" disabled={!canEnter(state, "sources")}>Continue</Button></div>
@@ -215,11 +221,35 @@ export default function NewProduct() {
                 <p>Publishing creates immutable release v1 of <strong>{state.name}</strong>. It is not deployed anywhere until you deploy it to an environment.</p>
                 <div className="px-row">
                   <Button onClick={() => setState((s) => goTo(s, "actions"))}>Back</Button>
-                  <Button variant="primary" onClick={() => {
-                    setState((s) => publish(s));
-                    setActiveWork(null);
-                    toast("ok", `${state.name} v1 published (prototype: nothing was stored).`);
-                    router.push("/console/products");
+                  <Button variant="primary" loading={publishing} onClick={async () => {
+                    setPublishing(true);
+                    try {
+                      if (c.live) {
+                        const session = storedSession() ?? await signIn("demo-admin");
+                        const definitionId = definitionIdFor(state);
+                        const created = await addProduct(session, {
+                          productId: state.slug,
+                          teamId: liveTeamId ?? state.teamId,
+                          definitionId,
+                          definition: starterDefinitionText(state),
+                          version: 1,
+                        });
+                        c.reloadProducts();
+                        setState((s) => publish(s));
+                        setActiveWork(null);
+                        toast("ok", `${created.name} v1 published.`);
+                        router.push(`/console/products/${created.product_id}`);
+                        return;
+                      }
+                      setState((s) => publish(s));
+                      setActiveWork(null);
+                      toast("ok", `${state.name} v1 published (prototype: nothing was stored).`);
+                      router.push("/console/products");
+                    } catch (error) {
+                      toast("danger", error instanceof Error ? error.message : "Product could not be published.");
+                    } finally {
+                      setPublishing(false);
+                    }
                   }}>Publish v1</Button>
                 </div>
               </div>

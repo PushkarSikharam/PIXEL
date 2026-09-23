@@ -141,3 +141,88 @@ export function publish(state: OnboardingState): OnboardingState {
   if (!canEnter(state, "published")) throw new Error("cannot_publish");
   return { ...state, step: "published" };
 }
+
+export function definitionIdFor(state: Pick<OnboardingState, "slug">): string {
+  return `${state.slug.replace(/-/g, "_")}_product`;
+}
+
+export function starterDefinitionText(state: Pick<OnboardingState, "name" | "slug">): string {
+  const definitionId = definitionIdFor(state);
+  const productName = state.name.trim() || "Added Product";
+  return JSON.stringify({
+    definition: { definition_id: definitionId, version: 1, ownership: "platform_shared" },
+    identity: {
+      product_name: productName,
+      assistant_name: "Edith",
+      persona: `A concise guide for ${productName}.`,
+      voice_style: "Calm, clear and professional.",
+      greeting: "Welcome to {product}. I'm {assistant}.",
+    },
+    vocabulary: {
+      terms: ["book", "books", "catalogue", "loan", "loans", "librarian", "librarians", "shelf", "borrowed"],
+      corrections: { boook: "book", libarian: "librarian" },
+      correction_markers: ["actually", "instead"],
+      negatable_terms: ["book", "books", "librarian", "librarians"],
+    },
+    entities: {
+      book: {
+        label: "Book", plural: "Books",
+        id: { strategy: "prefix", prefix: "BK" },
+        title_field: "title",
+        summary_fields: ["status"],
+        fields: {
+          title: { type: "text", required: true, max: 200 },
+          status: { type: "enum", required: true, values: ["On shelf", "On loan"], default: "On shelf" },
+          keeper: { type: "ref", target: "librarian", required: true },
+        },
+      },
+      librarian: {
+        label: "Librarian", plural: "Librarians",
+        id: { strategy: "slug", from_field: "name" },
+        title_field: "name",
+        fields: {
+          name: { type: "text", required: true, editable: false },
+          books: { type: "refs", target: "book" },
+        },
+      },
+    },
+    people: { entity: "librarian", assigned_by: ["book.keeper"], match_on: ["name"] },
+    scope: { anchor: "book", paths: { book: [], librarian: ["books"] } },
+    views: {
+      catalogue: { label: "Catalogue", kind: "list", entity: "book", columns: ["title", "status"] },
+      librarians: { label: "Librarians", kind: "list", entity: "librarian", columns: ["name"] },
+    },
+    actions: {
+      open_catalogue: { capability: "NAVIGATE_VIEW", view: "catalogue", description: "Open the catalogue." },
+      open_librarians: { capability: "NAVIGATE_VIEW", view: "librarians", description: "Open the librarian directory." },
+      open_book: { capability: "OPEN_RECORD", entity: "book", description: "Open one book." },
+      books_by_keeper: { capability: "FILTER_RECORDS", entity: "book", by: "keeper", description: "Show every book one librarian keeps." },
+      add_book: { capability: "CREATE_RECORD", entity: "book", fields: ["title", "status", "keeper"], description: "Add a book." },
+      reassign_book: { capability: "UPDATE_RECORD", entity: "book", fields: ["keeper", "status"], description: "Change who keeps a book, or whether it is out." },
+      add_librarian: { capability: "CREATE_RECORD", entity: "librarian", fields: ["name"], description: "Add a librarian." },
+    },
+    intents: [
+      { action: "open_catalogue", response: "anchor_count", match: [["how many", "count", "number of"], ["book", "books"]] },
+      { action: "open_catalogue", response: "view_opened", match: [["book", "books", "catalogue", "shelf"]] },
+      { action: "open_librarians", response: "view_opened", match: [["librarian", "librarians"]] },
+      { action: "books_by_keeper", requires: ["person"], response: "records_filtered", match: [["kept by", "for"], ["books"]] },
+      { action: "open_book", requires: ["record"], response: "record_opened", match: [["open", "show", "pull up"]] },
+      { action: "add_book", requires: ["person"], response: "record_created", match: [["add", "create", "new"], ["book"]] },
+      { action: "add_librarian", response: "record_created", match: [["add", "create", "new"], ["librarian"]] },
+      { action: "reassign_book", requires: ["record"], response: "record_updated", match: [["give", "hand", "keeper", "assign", "on loan", "on shelf"]] },
+    ],
+    guardrails: [
+      { topic: "destructive_change", response: "destructive_refused", match: [["delete", "erase", "wipe", "remove all"]] },
+    ],
+    responses: {
+      view_opened: "I'll open {view}.",
+      anchor_count: "{scope} has {count} visible books: {records}.",
+      record_opened: "I'll open {record_id}.",
+      records_filtered: "I found {count} books kept by {person}.",
+      destructive_refused: "I can't delete or erase anything here.",
+      record_created: "I'll add the book.",
+      record_updated: "I'll update {record_id}: {changes}.",
+      clarify_create: "What would you like to add?",
+    },
+  }, null, 2);
+}

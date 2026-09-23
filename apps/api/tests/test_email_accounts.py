@@ -13,6 +13,12 @@ from app.definitions.loader import DefinitionError
 
 
 class EmailDeliveryTransportTest(unittest.TestCase):
+    def setUp(self):
+        super().setUp()
+        external_allowed = patch.dict(os.environ, {"PIXEL_BLOCK_EXTERNAL_HTTP": "false"})
+        external_allowed.start()
+        self.addCleanup(external_allowed.stop)
+
     def test_resend_host_uses_https_api_not_smtp(self):
         response = Mock()
         response.__enter__ = Mock(return_value=response)

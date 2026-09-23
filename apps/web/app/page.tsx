@@ -170,6 +170,7 @@ const priorities = ["Low", "Medium", "High"] as const;
 
 export default function Home() {
   const router = useRouter();
+  const [experience, setExperience] = useState<"system" | "demo">("system");
   const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
   const activeTurnIdRef = useRef<number | null>(null);
   const nextTurnIdRef = useRef(1);
@@ -792,6 +793,10 @@ export default function Home() {
     }
   }
 
+  if (experience === "system") {
+    return <PixelSystemHome onEnterDemo={() => setExperience("demo")} />;
+  }
+
   return (
     <main className={isAssistantCollapsed ? "app-shell assistant-collapsed" : "app-shell"}>
       {dataError && (
@@ -818,6 +823,14 @@ export default function Home() {
         </div>
 
         <nav className="nav-list">
+          <button
+            className="nav-item system-nav-item"
+            onClick={() => setExperience("system")}
+            type="button"
+          >
+            <span className="nav-shortcut">P</span>
+            <span>Pixel System</span>
+          </button>
           {navItems.map((item) => (
             <button
               className={item.id === currentPage ? "nav-item active" : "nav-item"}
@@ -912,6 +925,111 @@ export default function Home() {
           />
         )}
       </aside>
+    </main>
+  );
+}
+
+function PixelSystemHome({ onEnterDemo }: { onEnterDemo: () => void }) {
+  const platformPillars = [
+    {
+      title: "Product definitions",
+      body: "Each product declares its records, screens, actions, vocabulary and guardrails. Pixel runs from that contract."
+    },
+    {
+      title: "Scoped workspaces",
+      body: "Organizations, products and record scopes stay isolated. Edith answers inside the selected product only."
+    },
+    {
+      title: "Safe execution",
+      body: "Creates and updates require backend-issued execution keys, committed receipts and no duplicate writes."
+    },
+    {
+      title: "Guided demos",
+      body: "A customer can still enter a controlled demo to understand how Pixel behaves before configuring a product."
+    }
+  ];
+  const flow = ["Sign in", "Add product", "Review definition", "Open product", "Ask Edith", "Commit safe changes"];
+
+  return (
+    <main className="pixel-system">
+      <section className="system-hero" aria-labelledby="pixel-system-title">
+        <nav className="system-topbar" aria-label="Pixel system navigation">
+          <div className="system-brand">
+            <span className="system-mark">P</span>
+            <span>Pixel</span>
+          </div>
+          <div className="system-actions">
+            <Link href="/architecture">Architecture</Link>
+            <button className="secondary-button compact" onClick={onEnterDemo} type="button">
+              Visit demo
+            </button>
+          </div>
+        </nav>
+
+        <div className="system-hero-grid">
+          <div className="system-hero-copy">
+            <p className="section-kicker">Pixel System</p>
+            <h1 id="pixel-system-title">A product-specific AI workspace for demos, records and safe actions.</h1>
+            <p>
+              Pixel lets a team add a product, define what Edith is allowed to know and do,
+              and operate inside that product without leaking across tenants, products or scopes.
+            </p>
+            <div className="system-cta-row">
+              <button className="primary-system-button" onClick={onEnterDemo} type="button">
+                Visit live demo
+              </button>
+              <Link className="system-text-link" href="/architecture">
+                View system architecture
+              </Link>
+            </div>
+          </div>
+
+          <div className="system-console-preview" aria-label="Pixel product flow preview">
+            <div className="preview-header">
+              <span className="status-dot" />
+              <strong>Product runtime</strong>
+              <span>Definition driven</span>
+            </div>
+            <ol className="system-flow">
+              {flow.map((step, index) => (
+                <li key={step}>
+                  <span>{index + 1}</span>
+                  <strong>{step}</strong>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </div>
+      </section>
+
+      <section className="system-section" aria-labelledby="system-capabilities">
+        <div className="system-section-head">
+          <p className="section-kicker">Current platform</p>
+          <h2 id="system-capabilities">What Pixel is built to prove</h2>
+        </div>
+        <div className="system-pillar-grid">
+          {platformPillars.map((pillar) => (
+            <article className="system-pillar" key={pillar.title}>
+              <h3>{pillar.title}</h3>
+              <p>{pillar.body}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="system-demo-band" aria-labelledby="demo-entry-title">
+        <div>
+          <p className="section-kicker">Interactive proof</p>
+          <h2 id="demo-entry-title">Open the guided demo</h2>
+          <p>
+            The demo shows Edith navigating a product workspace, creating records, assigning work,
+            enforcing boundaries and explaining what happened.
+          </p>
+        </div>
+        <button className="primary-system-button" onClick={onEnterDemo} type="button">
+          Enter demo workspace
+        </button>
+      </section>
     </main>
   );
 }

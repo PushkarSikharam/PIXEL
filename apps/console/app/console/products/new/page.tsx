@@ -3,16 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, FileText, Globe, Link2, Loader2, Trash2 } from "lucide-react";
-import { useConsole } from "@/components/console-context";
-import { useToast } from "@/components/toast";
-import { Alert, Badge, Button, Field, Input, PageHead, Panel, PermissionDenied } from "@/components/ui";
-import { TEAMS } from "@/lib/mock-data";
+import { useConsole } from "@pixel-console/components/console-context";
+import { useToast } from "@pixel-console/components/toast";
+import { Alert, Badge, Button, Field, Input, PageHead, Panel, PermissionDenied } from "@pixel-console/components/ui";
+import { TEAMS } from "@pixel-console/lib/mock-data";
 import {
   STEP_LABELS, STEPS, acceptUnderstanding, addSource, canEnter, completeAnalysis, definitionIdFor, goTo,
   initialOnboarding, publish, removeSource, setConfirmation, setDetails, starterDefinitionText,
   toggleAction, validate, type OnboardingState, type Step,
-} from "@/lib/onboarding";
-import { addProduct, signIn, storedSession } from "@/lib/pixel-api";
+} from "@pixel-console/lib/onboarding";
+import { addProduct, signIn, storedSession } from "@pixel-console/lib/pixel-api";
 
 const VISIBLE_STEPS: Step[] = STEPS.filter((s) => s !== "published");
 

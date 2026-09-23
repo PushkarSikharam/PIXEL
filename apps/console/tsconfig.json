@@ -19,6 +19,7 @@
     "incremental": true,
     "baseUrl": ".",
     "paths": {
+      "@pixel-console/*": ["./*"],
       "@/*": [
         "./*"
       ]

@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { Dialog, Menu } from "@/components/overlays";
-import { useToast } from "@/components/toast";
+import { Dialog, Menu } from "@pixel-console/components/overlays";
+import { useToast } from "@pixel-console/components/toast";
 import {
   Alert, Badge, Button, EmptyState, ErrorState, Field, Input, LoadingRows, PageHead, Panel,
   PermissionDenied, StatusBadge, StatusRaster,
-} from "@/components/ui";
+} from "@pixel-console/components/ui";
 
 const TOKENS = ["--px-bg", "--px-surface", "--px-surface-2", "--px-border", "--px-border-strong", "--px-text",
   "--px-text-2", "--px-text-3", "--px-accent", "--px-accent-soft", "--px-ok", "--px-ok-soft", "--px-warn",

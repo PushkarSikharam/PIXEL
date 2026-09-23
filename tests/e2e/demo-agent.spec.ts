@@ -33,8 +33,7 @@ test("live readiness blocks partial demo behavior and recovers cleanly", async (
     body: JSON.stringify({ status: "unavailable" })
   }));
 
-  await page.goto("/");
-  await page.getByTestId("visit-demo").click();
+  await page.goto("/demo");
   await expect(page.getByTestId("service-readiness")).toContainText("Service unavailable");
   await expect(page.getByTestId("chat-input")).toBeDisabled();
   await expect(page.getByTestId("chat-send")).toBeDisabled();
@@ -173,8 +172,7 @@ test("a throttled sign-in says to wait rather than reporting an outage", async (
     headers: { "Retry-After": "5" },
     body: JSON.stringify({ detail: "Too many requests. Please wait a moment and try again." })
   }));
-  await page.goto("/");
-  await page.getByTestId("visit-demo").click();
+  await page.goto("/demo");
 
   await expect(page.getByTestId("service-readiness")).toContainText("Too many visitors are starting sessions");
   await expect(page.getByTestId("service-readiness").getByRole("button", { name: "Retry" })).toBeVisible();

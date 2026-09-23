@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { AuthCard } from "@/components/auth-card";
-import { Alert } from "@/components/ui";
+import { AuthCard } from "@pixel-console/components/auth-card";
+import { Alert } from "@pixel-console/components/ui";
 
 export const metadata = { title: "Session ended" };
 

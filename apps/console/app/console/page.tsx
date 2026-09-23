@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
-import { useConsole } from "@/components/console-context";
-import { Alert, Badge, PageHead, Panel, StatusBadge, StatusRaster, type RasterState } from "@/components/ui";
-import { DEPLOYMENTS, RELEASES, USAGE, teamName } from "@/lib/mock-data";
-import type { Environment } from "@/lib/contracts";
+import { useConsole } from "@pixel-console/components/console-context";
+import { Alert, Badge, PageHead, Panel, StatusBadge, StatusRaster, type RasterState } from "@pixel-console/components/ui";
+import { DEPLOYMENTS, RELEASES, USAGE, teamName } from "@pixel-console/lib/mock-data";
+import type { Environment } from "@pixel-console/lib/contracts";
 
 const ENVS: Environment[] = ["development", "staging", "production"];
 

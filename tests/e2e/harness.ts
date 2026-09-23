@@ -139,8 +139,7 @@ export async function openApp(page: Page) {
   const dataLoaded = page.waitForResponse(
     (resp) => new URL(resp.url()).pathname === "/api/agent/demo-data" && resp.status() === 200
   );
-  await page.goto("/");
-  await page.getByTestId("visit-demo").click();
+  await page.goto("/demo");
   await authDone;
   await dataLoaded;
   await expect(page.getByTestId("current-view-title")).toHaveText("Dashboard");

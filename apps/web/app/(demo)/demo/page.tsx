@@ -171,7 +171,7 @@ const experienceStorageKey = "pixel_experience_mode";
 
 export default function Home() {
   const router = useRouter();
-  const [experience, setExperience] = useState<"system" | "demo">("system");
+  const [experience, setExperience] = useState<"system" | "demo">("demo");
   const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
   const activeTurnIdRef = useRef<number | null>(null);
   const nextTurnIdRef = useRef(1);
@@ -801,6 +801,10 @@ export default function Home() {
   }
 
   function showExperience(next: "system" | "demo") {
+    if (next === "system") {
+      window.location.assign("/");
+      return;
+    }
     window.sessionStorage.setItem(experienceStorageKey, next);
     setExperience(next);
   }

@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { AuthCard, PrototypeNote } from "@/components/auth-card";
-import { Alert, Button, Field, Input } from "@/components/ui";
-import { demoCodeFor, normalizeEmail } from "@/lib/mock-identity";
+import { AuthCard, PrototypeNote } from "@pixel-console/components/auth-card";
+import { Alert, Button, Field, Input } from "@pixel-console/components/ui";
+import { demoCodeFor, normalizeEmail } from "@pixel-console/lib/mock-identity";
 
 type Stage = "form" | "verify" | "done";
 

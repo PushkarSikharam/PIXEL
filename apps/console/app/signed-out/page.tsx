@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AuthCard } from "@/components/auth-card";
+import { AuthCard } from "@pixel-console/components/auth-card";
 
 export const metadata = { title: "Signed out" };
 

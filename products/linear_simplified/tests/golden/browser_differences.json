@@ -531,5 +531,563 @@
     "current": "Thanks, that helps. What would you like to explore first: planning, tickets, projects, teams, or integrations?",
     "kind": "behaviour",
     "reason": "The visitor described themselves, which is context rather than a request. The browser used to read \"an engineering\" as a name (\"Nice to meet you, An Engineering\"); the backend now acknowledges the context and asks what to explore, staying on the same view."
+  },
+  {
+    "case": "nav-sprint-planning",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "nav-week-by-week",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "nav-issues",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "nav-roadmap",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "nav-team-workload",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "nav-integrations",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "typo-cycles",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "typo-ticket",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "correction-clause",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "correction-negation",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "person-ticket",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "person-all-tickets",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "person-follow-up",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "person-follow-up",
+    "turn": 1,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "current-ticket",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "current-ticket",
+    "turn": 1,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "assignment-workflow",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "update-reassign",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "update-reassign",
+    "turn": 1,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "update-priority",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "update-priority",
+    "turn": 1,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "update-status",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "update-status",
+    "turn": 1,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "update-outside-person",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "update-outside-person",
+    "turn": 1,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "update-unknown-person",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "update-unknown-person",
+    "turn": 1,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "update-without-target",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "create-known-owner",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "create-unknown-owner",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "create-without-owner",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "create-workflow-question",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "create-open-and-assign",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "create-start-assigned",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "member-add-named",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "member-add-unnamed",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "clarify-vague-create",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "clarify-vague-assign",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "clarify-open-all",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "github-explain",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "github-setup",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "slack",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "guardrail-crm",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "guardrail-email",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "guardrail-destructive",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "scope-broad-request",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "scope-outside-person",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "scope-platform-outside-person",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "scope-platform-own-person",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "greeting",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "greeting-with-name",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "identity",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "capabilities",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "count-team-members",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "count-projects",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "next-step",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "what-changed",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "what-changed",
+    "turn": 1,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "guided-path",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "voice-question",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "prospect-profile",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
+  },
+  {
+    "case": "unknown-person-tickets",
+    "turn": 0,
+    "field": "path",
+    "recorded": "/",
+    "current": "/demo",
+    "kind": "behaviour",
+    "reason": "The live homepage now serves the designed Pixel console; the unchanged guided demo is explicitly mounted at /demo."
   }
 ]

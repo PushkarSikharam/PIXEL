@@ -1,10 +1,10 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { Environment, Permission } from "@/lib/contracts";
-import { DIRECTORY, ORGANIZATIONS, PERSONAS, PRODUCTS, productById } from "@/lib/mock-data";
-import { authorize, type Resource } from "@/lib/permissions";
-import { isLive, listProducts, signIn, storedSession, type ApiProduct, type ApiSession } from "@/lib/pixel-api";
+import type { Environment, Permission } from "@pixel-console/lib/contracts";
+import { DIRECTORY, ORGANIZATIONS, PERSONAS, PRODUCTS, productById } from "@pixel-console/lib/mock-data";
+import { authorize, type Resource } from "@pixel-console/lib/permissions";
+import { isLive, listProducts, signIn, storedSession, type ApiProduct, type ApiSession } from "@pixel-console/lib/pixel-api";
 
 /**
  * The signed-in context of the mocked console: who is acting, in which organization, on which

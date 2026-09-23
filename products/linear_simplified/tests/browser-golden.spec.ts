@@ -72,7 +72,7 @@ for (const goldenCase of cases) {
     const snapshots: TurnSnapshot[] = [];
     for (const message of goldenCase.turns) {
       snapshots.push(await runTurn(page, message));
-      if (snapshots.at(-1)?.path !== "/") break;
+      if (snapshots.at(-1)?.path !== "/demo") break;
     }
     captured[goldenCase.id] = snapshots;
 
@@ -145,13 +145,13 @@ async function runTurn(page: Page, message: string): Promise<TurnSnapshot> {
 
   await sendChat(page, message);
   await expect
-    .poll(async () => new URL(page.url()).pathname !== "/" || (await agentReplies(page).count()) > repliesBefore)
+    .poll(async () => new URL(page.url()).pathname !== "/demo" || (await agentReplies(page).count()) > repliesBefore)
     .toBe(true);
   await page.waitForLoadState("networkidle");
   page.off("request", countTurns);
 
   const path = new URL(page.url()).pathname;
-  const onApp = path === "/";
+  const onApp = path === "/demo";
   return {
     message,
     handled_by: backendTurns > 0 ? "backend" : "browser",

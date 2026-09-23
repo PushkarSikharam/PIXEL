@@ -4,16 +4,16 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Bot, RotateCcw, SendHorizonal } from "lucide-react";
-import { useConsole } from "@/components/console-context";
-import { Dialog } from "@/components/overlays";
-import { useToast } from "@/components/toast";
-import { Alert, Badge, Button, EmptyState, ErrorState, Input, LoadingRows, PageHead, Panel, PermissionDenied, StatusBadge } from "@/components/ui";
-import { DEPLOYMENTS, RELEASES, productById, teamName } from "@/lib/mock-data";
+import { useConsole } from "@pixel-console/components/console-context";
+import { Dialog } from "@pixel-console/components/overlays";
+import { useToast } from "@pixel-console/components/toast";
+import { Alert, Badge, Button, EmptyState, ErrorState, Input, LoadingRows, PageHead, Panel, PermissionDenied, StatusBadge } from "@pixel-console/components/ui";
+import { DEPLOYMENTS, RELEASES, productById, teamName } from "@pixel-console/lib/mock-data";
 import {
   executeProductAction, productRecords, productShape, sendProductTurn, signIn, storedSession,
   type ApiActionShape, type ApiProductShape, type ApiRecords, type ApiSession, type ApiTurnResponse,
-} from "@/lib/pixel-api";
-import type { Environment, Release } from "@/lib/contracts";
+} from "@pixel-console/lib/pixel-api";
+import type { Environment, Release } from "@pixel-console/lib/contracts";
 
 const ENVS: Environment[] = ["development", "staging", "production"];
 

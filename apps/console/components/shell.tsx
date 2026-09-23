@@ -11,8 +11,8 @@ import { useConsole } from "./console-context";
 import { Dialog } from "./overlays";
 import { Menu } from "./overlays";
 import { Button } from "./ui";
-import { ORGANIZATIONS, PERSONAS, productById, teamName } from "@/lib/mock-data";
-import type { Environment } from "@/lib/contracts";
+import { ORGANIZATIONS, PERSONAS, productById, teamName } from "@pixel-console/lib/mock-data";
+import type { Environment } from "@pixel-console/lib/contracts";
 
 const NAV = [
   { section: "Workspace", items: [
@@ -20,7 +20,7 @@ const NAV = [
     { href: "/console/products", label: "Products", icon: Boxes },
   ] },
   { section: "Product", items: [
-    { href: "/console/build", label: "Build", icon: Hammer },
+    { href: "/console/products/new", label: "Build", icon: Hammer },
     { href: "/console/test", label: "Test", icon: FlaskConical },
     { href: "/console/deploy", label: "Deploy", icon: Rocket },
   ] },
@@ -58,6 +58,9 @@ export function Shell({ children }: { children: ReactNode }) {
           Pixel
         </div>
         <nav aria-label="Primary">
+          <div className="px-nav">
+            <a href="/demo"><Monitor aria-hidden />Visit demo</a>
+          </div>
           {NAV.map((group) => (
             <div key={group.section} className="px-nav">
               <div className="px-nav-section">{group.section}</div>
@@ -78,6 +81,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </nav>
       </aside>
       <div>
+        {!c.live && <div className="px-mode-banner" role="status">Design preview with sample data. Individual sign-in is not available yet.</div>}
         {c.activeWork ? (
           <div className="px-mode-banner" role="status">
             Unsaved work: {c.activeWork}. Switching product will discard it and reset the Edith conversation.

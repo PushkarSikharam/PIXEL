@@ -1,4 +1,4 @@
-import { SectionPlaceholder } from "@/components/placeholder";
+import { SectionPlaceholder } from "@pixel-console/components/placeholder";
 
 export default function Page() {
   return <SectionPlaceholder title="Test" permission="playground.use" phase="SaaS Phase 7"

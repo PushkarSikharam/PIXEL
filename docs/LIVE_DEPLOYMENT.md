@@ -5,6 +5,22 @@ service runs FastAPI and owns authentication, records, conversation state, usage
 paid-provider calls. The browser reaches the API only through the same-origin `/api/agent/*`
 rewrite.
 
+## Public UI routes
+
+The Vercel project still builds `apps/web`. Its system route group reuses the
+original `apps/console` pages, fonts, components and styles through a dedicated
+import alias. Do not replace those pages with a second console implementation.
+
+- `/` redirects to `/console`, the designed Pixel workspace.
+- `/console/*` serves the existing console screens.
+- `/demo` serves the isolated guided demo, including its chat and voice panel.
+- The console's "Visit demo" link crosses to the demo's separate root layout.
+
+The console currently labels its sample-data preview explicitly. Its prototype
+email screens are not production authentication. Keep shared demo administrator
+login blocked; publishing the design does not authorize shared workspace access.
+The live backend demo remains available separately at `/demo`.
+
 ## API service
 
 Deploy the repository with `Dockerfile.api`. `railway.json` configures the container and the

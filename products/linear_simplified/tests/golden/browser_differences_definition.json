@@ -955,7 +955,7 @@
     "kind": "wording",
     "reason": "Both open the Dashboard. The recorded reply was a scripted path naming Maya, Noah and Salesforce; the platform offers a conversational route through what this caller can do, ending with the guardrail, so it never names people or products another workspace or tenant cannot see. Owner decision (5d plan revision 2, section 5): a conversational guided path.",
     "recorded": "Here is a clean guided path: start with sprint planning, open Maya's ticket, assign it to Noah, create a ticket for a new teammate, then try Salesforce to prove guardrails.",
-    "current": "Here's a good way to explore Pixel: open Cycles, then open Integrations, then create a ticket, then find Add member in Teams, then ask me for something outside Pixel to see how I stay in scope. I'll open Dashboard."
+    "current": "Here's a good way to explore Pixel: open Dashboard, then open Issues, then open Projects, then create a ticket, then find Assignee in Issue Detail, then ask me for something outside Pixel to see how I stay in scope. I'll open Dashboard."
   },
   {
     "case": "architecture",

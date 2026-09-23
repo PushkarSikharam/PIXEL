@@ -15,6 +15,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from test_engine_cutover import EngineCutoverFixture  # noqa: E402
 
+from app.engine.conversation import Conversational, detect  # noqa: E402
+from app.engine.normalizer import NormalizedMessage  # noqa: E402
+
 PLATFORM = "workspace-platform"
 
 
@@ -157,6 +160,34 @@ class DefinitionAuthorityConversationTest(EngineCutoverFixture):
             self.assertEqual(self.action(body), ("HIGHLIGHT_ADD_MEMBER_BUTTON", {"name": "Jen"}), message)
             self.assertNotIn("LIN-142", body["speech"], message)
             self.assertIsNone(body["execution"], message)
+
+    # One message per kind of turn the platform answers itself. Every kind is listed, so a new
+    # one cannot be added without saying here what a visitor types to reach it.
+    PLATFORM_TURNS = {
+        Conversational.GREETING: "hello",
+        Conversational.GREETING_NAMED: "hello",
+        Conversational.IDENTITY: "who are you",
+        Conversational.CAPABILITIES: "what can you do",
+        Conversational.LAST_CHANGE: "what changed",
+        Conversational.THANKS: "thanks",
+        Conversational.CLOSING: "that is all",
+        Conversational.GUIDED_PATH: "run the guided demo",
+        Conversational.NEXT_STEP: "what should i try next",
+        Conversational.VOICE_INTERRUPTION: "can i interrupt the voice",
+    }
+
+    def test_every_turn_the_platform_answers_itself_is_answered(self):
+        """A reply the platform builds must carry every value its wording needs. Reaching one
+        without them raised, and the visitor got a server error instead of an answer."""
+        self.assertEqual(set(self.PLATFORM_TURNS), set(Conversational), "every kind needs a message")
+        for index, (kind, message) in enumerate(self.PLATFORM_TURNS.items()):
+            with self.subTest(kind=kind):
+                normalized = NormalizedMessage(original=message, full=message, focused=message)
+                detected = detect(normalized, visitor_name="Priya" if "named" in kind else None)
+                self.assertIsNotNone(detected, message)
+                self.assertEqual(detected.kind, kind, message)
+                body = self.say(message, session=f"platform-{index}")
+                self.assertTrue(body["speech"].strip(), message)
 
     def test_what_we_just_changed_is_read_from_the_ledger_not_documentation(self):
         for index, question in enumerate(("What did we just change?", "what have we changed",
@@ -337,6 +368,18 @@ class DefinitionAuthorityConversationTest(EngineCutoverFixture):
         speech = receipt.json()["speech"]
         self.assertIn("project to Issue Triage Workflow", speech)
         self.assertNotIn("PRJ-", speech, "an identifier is evidence, never speech")
+
+    def test_switching_workspace_keeps_the_conversation_alive(self):
+        """Found live: every turn after a workspace switch answered "stale" and the chat died."""
+        self.say("open Maya's ticket", session="switch")
+        moved = self.say("how many team members are there", session="switch", turn_id=2, scope=PLATFORM)
+        self.assertEqual(moved["status"], "completed")
+        self.assertEqual(moved["speech"], "Platform Workspace has 2 team members. I'll open Teams.")
+        again = self.say("show me the issues", session="switch", turn_id=3, scope=PLATFORM)
+        self.assertEqual(again["status"], "completed")
+        # The remembered ticket does not travel with the visitor into the other workspace.
+        forgotten = self.say("assign it to Avery", session="switch", turn_id=4, scope=PLATFORM)
+        self.assertNotIn("LIN-142", forgotten["speech"])
 
     def test_a_request_after_a_self_description_is_still_served(self):
         body = self.say("I'm a manager, show me the projects")

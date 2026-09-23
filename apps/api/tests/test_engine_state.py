@@ -76,6 +76,23 @@ class CommitAndLoadTest(EngineStateFixture):
                 loaded = self.store.load(connection, self.owner, "s1", "scope-1", PIN)
             self.assertEqual(loaded.memory.visitor_name, kept, repr(given))
 
+    def test_a_workspace_switch_forgets_the_memory_but_keeps_the_row_replaceable(self):
+        """Found live: after a switch the session answered "stale" forever, because the row's
+        revision no longer matched what the next turn had loaded."""
+        memory = ConversationMemory(focus=RecordRef("issue", "LIN-142"), last_view="issues", turn=1)
+        with db.get_connection() as connection:
+            connection.execute("begin immediate")
+            self.store.commit(connection, self.owner, "s1", 1, "scope-1", PIN, memory, expected_revision=0)
+        with db.get_connection() as connection:
+            switched = self.store.load(connection, self.owner, "s1", "scope-2", PIN)
+        self.assertEqual(switched.memory, ConversationMemory(), "nothing is remembered across workspaces")
+        self.assertEqual(switched.revision, 1, "the row's revision comes back so the next turn can write")
+        with db.get_connection() as connection:
+            connection.execute("begin immediate")
+            revision = self.store.commit(connection, self.owner, "s1", 2, "scope-2", PIN,
+                                         ConversationMemory(turn=2), expected_revision=switched.revision)
+        self.assertEqual(revision, 2, "the next turn in the new workspace wins its write")
+
     def test_committed_identifiers_are_loaded_back(self):
         memory = ConversationMemory(
             focus=RecordRef("issue", "LIN-142"), last_person=RecordRef("member", "Maya Chen"),
@@ -181,7 +198,10 @@ class IsolationTest(EngineStateFixture):
                               expected_revision=0)
         with db.get_connection() as connection:
             loaded = self.store.load(connection, owner, "s1", "scope-2", PIN)
-        self.assertIsNone(loaded)
+        # Nothing is remembered from the other workspace; only the row's revision comes back, so
+        # the next turn can replace it instead of losing its write and answering "stale".
+        self.assertEqual(loaded.memory, ConversationMemory())
+        self.assertEqual(loaded.revision, 1)
 
     def test_a_pin_mismatch_fails_closed(self):
         owner = ExecutionOwner("tenant-a", "product-a", "user-a")
@@ -192,7 +212,9 @@ class IsolationTest(EngineStateFixture):
                               expected_revision=0)
         with db.get_connection() as connection:
             loaded = self.store.load(connection, owner, "s1", "scope-1", OTHER_PIN)
-        self.assertIsNone(loaded)
+        # Fails closed on the memory, which is what the pin protects, and stays writable.
+        self.assertEqual(loaded.memory, ConversationMemory())
+        self.assertEqual(loaded.revision, 1)
 
     def test_invalidate_removes_the_row(self):
         owner = ExecutionOwner("tenant-a", "product-a", "user-a")

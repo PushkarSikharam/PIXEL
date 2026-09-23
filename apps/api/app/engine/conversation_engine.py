@@ -39,6 +39,7 @@ from app.engine.conversation import (
     CapabilityPolicy,
     Conversational,
     ConversationalTurn,
+    is_set_aside,
     OfferableActions,
     detect,
     offerable,
@@ -194,7 +195,7 @@ class ConversationEngine:
         drafted = False
         fresh = False
 
-        continued = self._continue_create(message, memory, context, composer)
+        continued = self._continue_create(message, text, memory, context, composer)
         if continued is not None:
             result, next_memory, stage, reply, validated, refusal = continued
             evidence = False
@@ -260,7 +261,12 @@ class ConversationEngine:
                                      **dict(result.placeholders))
         elif result.kind == RouteKind.CLARIFY:
             stage, evidence = TurnStage.CLARIFICATION, False
-            reply = composer.clarification(result.response_key or "", **self._question_values(next_memory))
+            started = self._start_create(composer, next_memory, context)
+            if started is not None:
+                next_memory, reply = started
+            else:
+                reply = composer.clarification(result.response_key or "",
+                                               **self._question_values(next_memory))
         elif result.kind == RouteKind.CANCELLED:
             stage, evidence = TurnStage.CANCELLED, False
             reply = composer.cancelled()
@@ -309,8 +315,8 @@ class ConversationEngine:
 
     # --- required-field completion (5c plan, section 7.1) ---
 
-    def _continue_create(self, message: str, memory: ConversationMemory, context: TurnContext,
-                         composer: ResponseComposer):
+    def _continue_create(self, message: str, text: NormalizedMessage, memory: ConversationMemory,
+                         context: TurnContext, composer: ResponseComposer):
         """Read this turn as the answer to a missing-value question, if one is waiting.
 
         Returns None when there is no such question, it has expired, or the message is a new
@@ -323,7 +329,7 @@ class ConversationEngine:
         cleared = replace(advanced, pending_clarification=None)
         entity = self._entity_of(pending.action_key)
         spec = entity.fields[pending.field]
-        if _SET_ASIDE.match(message):
+        if is_set_aside(text):
             return self._set_aside(composer, cleared)
         value = read_answer(spec, message, self._snapshot)
         if value is None or spec.type == "text":
@@ -385,6 +391,31 @@ class ConversationEngine:
                                        turn=context.turn, field=entity.title_field)
         asked = replace(memory, pending_clarification=pending, pending_confirmation=None)
         template, values = question_values(entity, entity.title_field, self._snapshot)
+        return asked, composer.field_question(template, **values)
+
+    def _start_create(self, composer: ResponseComposer, memory: ConversationMemory,
+                      context: TurnContext):
+        """A create nobody gave a value for asks for the first field its product requires.
+
+        "Add a librarian" is a create, not a change, so asking what to change would be asking
+        about the wrong thing. The action contract will not build a create with no fields, so the
+        first one is asked for here and the answer completes it.
+        """
+        pending = memory.pending_clarification
+        if pending is None or pending.field is not None or pending.fields:
+            return None
+        spec = self._definition.actions.get(pending.action_key or "")
+        if spec is None or spec.capability != Capability.CREATE_RECORD or spec.entity is None:
+            return None
+        entity = self._definition.entities[spec.entity]
+        missing = first_missing(entity, {})
+        if missing is None or missing not in spec.fields:
+            return None
+        asked = replace(memory, pending_clarification=PendingClarification(
+            MISSING_FIELD_KEY, pending.action_key, "value", fields={}, turn=context.turn,
+            field=missing,
+        ))
+        template, values = question_values(entity, missing, self._snapshot)
         return asked, composer.field_question(template, **values)
 
     def _propose_prefilled(self, composer: ResponseComposer, memory: ConversationMemory,
@@ -499,6 +530,11 @@ class ConversationEngine:
             if conversational.kind == Conversational.CAPABILITIES:
                 offers = offerable(self._definition, self._snapshot, self._policy)
                 return TurnStage.ANSWER, composer.capabilities(offers), (), True
+            if conversational.kind == Conversational.GUIDED_PATH:
+                # The route is built from this caller's own offers, so the platform answers it
+                # the same way the product's own guided intent does.
+                offers = offerable(self._definition, self._snapshot, self._policy)
+                return TurnStage.ANSWER, composer.guided_path(offers), (), True
             if conversational.kind == Conversational.NEXT_STEP:
                 return TurnStage.ANSWER, self._next_step(composer, context), (), True
             if conversational.kind == Conversational.LAST_CHANGE:

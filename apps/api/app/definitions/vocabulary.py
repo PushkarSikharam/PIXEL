@@ -48,6 +48,8 @@ RESPONSE_KEYS = frozenset({
     "clarify_person",
     # Added in 3.2 slice 4b: what to say when no knowledge source can answer a question.
     "knowledge_unavailable",
+    # Added in 5c: a change request that names a record but no field to change.
+    "clarify_change",
 })
 
 # All generic-engine speech is platform-owned. Legacy copy fields remain accepted and

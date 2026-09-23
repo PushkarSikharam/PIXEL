@@ -99,6 +99,18 @@ class PrecedenceTest(RouterFixture):
 
 
 class NormalizationSafetyTest(RouterFixture):
+    def test_a_product_word_never_respells_a_phrase_the_platform_reads(self):
+        """A product that declares a near-neighbour of a platform phrase must not silently
+        rewrite it: spelling correction may not make the platform deaf to its own questions."""
+        document = engine_definition()
+        document["intents"][0].setdefault("exclude", []).append("change")
+        router = IntentRouter(load_engine_definition(document=document), self.lookup)
+        for message in ("what changed", "what did you change", "thanks", "what next"):
+            with self.subTest(message=message):
+                normalized = router.normalizer.normalize(message)
+                self.assertEqual(normalized.full, message)
+                self.assertEqual(normalized.focused, message)
+
     def test_correction_markers_select_what_was_finally_asked(self):
         result = self.chat().say("reopen it, actually show me the contacts")
         self.assertEqual(result.proposal.action_key, "open_contacts")

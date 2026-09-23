@@ -38,7 +38,7 @@ DEMO_TENANT, DEMO_PRODUCT, DEMO_DEFINITION = "pixel-dev", "linear-demo", "linear
 DEMO_VERSION = json.loads(
     (Path(__file__).resolve().parents[3] / "products" / "linear_simplified" / "seed" / "demo_organization.json")
     .read_text(encoding="utf-8")
-)["product"]["definition_version"]
+)["organizations"][0]["products"][0]["definition_version"]
 
 
 def bearer(user_id: str, tenant_id: str | None = None) -> dict[str, str]:

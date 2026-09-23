@@ -74,7 +74,7 @@ STAGE_TEMPLATES: Mapping[Stage, frozenset[str]] = {
     Stage.FAILED: frozenset({"fallback", "next_step", "nothing_changed", "out_of_scope",
                              "destructive_refused", "person_outside_scope", "work_outside_scope",
                              "broad_scope_refused", "member_missing", "unknown_person"}),
-    Stage.CLARIFICATION: frozenset({"clarify_create", "clarify_assign", "clarify_owner",
+    Stage.CLARIFICATION: frozenset({"clarify_create", "clarify_assign", "clarify_owner", "clarify_change",
                                     "clarify_all_items", "clarify_update_target", "clarify_person",
                                     "correction"}),
     Stage.REFUSED: frozenset({"out_of_scope", "destructive_refused", "person_outside_scope",
@@ -84,7 +84,7 @@ STAGE_TEMPLATES: Mapping[Stage, frozenset[str]] = {
                              "capabilities", "fallback",
                              "profile_acknowledged",
                              "guided_path", "next_step", "last_change", "nothing_changed",
-                             "people_count", "anchor_count", "conversation_ended",
+                             "people_count", "anchor_count", "conversation_ended", "thanks",
                              "voice_interruption", "next_step_here", "knowledge_unavailable"}),
     Stage.UNGROUNDED: frozenset({"knowledge_unavailable"}),
 }
@@ -150,7 +150,8 @@ PLATFORM_CONVERSATION_TEMPLATES: Mapping[tuple[Stage, str], str] = {
     (Stage.ANSWER, "nothing_changed"): "Nothing has changed in this conversation yet.",
     (Stage.ANSWER, "people_count"): "{scope} has {count} {label}.",
     (Stage.ANSWER, "anchor_count"): "{scope} has {count} visible {label}: {records}.",
-    (Stage.ANSWER, "conversation_ended"): "Okay, we can stop here.",
+    (Stage.ANSWER, "conversation_ended"): "Okay, we can stop here. Come back whenever you like.",
+    (Stage.ANSWER, "thanks"): "Happy to help. Anything else you would like to see in {product}?",
     # Voice is a platform feature, so its behaviour is the platform's to describe.
     (Stage.ANSWER, "voice_interruption"): (
         "When you start speaking, I stop the current response, listen for the completed thought, "
@@ -176,6 +177,7 @@ PLATFORM_CONVERSATION_TEMPLATES: Mapping[tuple[Stage, str], str] = {
     (Stage.CLARIFICATION, "clarify_owner"): "Who should own the new {label}?",
     # Owner decision: the question says how to answer it.
     (Stage.CLARIFICATION, "clarify_update_target"): "Which {label} do you mean? Open it first, or tell me which one.",
+    (Stage.CLARIFICATION, "clarify_change"): "What should I change about {record_id}?",
     (Stage.CLARIFICATION, "correction"): "Got it, {view} instead.",
 }
 

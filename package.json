@@ -6,9 +6,13 @@
   ],
   "scripts": {
     "dev:web": "npm --workspace apps/web run dev",
+    "dev:console": "npm --workspace apps/console run dev",
     "build:web": "npm --workspace apps/web run build",
+    "build:console": "npm --workspace apps/console run build",
     "lint:web": "npm --workspace apps/web run lint",
+    "lint:console": "npm --workspace apps/console run lint",
     "test:web": "npm --workspace apps/web run test",
+    "test:console": "npm --workspace apps/console run test",
     "test:e2e": "playwright test",
     "measure:usage": "playwright test --config playwright.measure.config.ts",
     "smoke:live": "node scripts/smoke-live.mjs",

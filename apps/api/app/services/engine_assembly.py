@@ -41,12 +41,17 @@ class PreparedTurn:
 def prepare_turn(
     directory: OrganizationDirectory, package_for: Callable[[str], Any], principal: Any, grant: Any,
     product_id: str, visible_data: Mapping[str, Any], scope_id: str | None,
+    definition: Any = None,
 ) -> PreparedTurn | None:
     """Immutable views of the caller's records in the selected workspace; None if no engine applies.
 
     The live engine answers inside the one workspace the request selected, so the records are
     narrowed to it as well: an engine wider than the live turn would propose changes the live turn
     refuses. The product's package is chosen by the definition its binding names now.
+
+    A product that ships no package is served from its definition instead, so adding a product to
+    Pixel never requires writing code. An installed package still wins, because a product that
+    brought its own record source means to use it.
     """
     if scope_id is not None:
         if not grant.may_use(scope_id):
@@ -55,8 +60,8 @@ def prepare_turn(
     binding = directory.product(principal.tenant_id, product_id)
     if binding is None:
         return None
-    package = package_for(binding.definition_id)
-    if package.lookup_factory is None:
+    package = _package(package_for, binding, principal, product_id, grant, definition)
+    if package is None or package.lookup_factory is None:
         return None
     source = package.lookup_factory(grant)
     if not isinstance(source, LoadedRecordSource):
@@ -65,6 +70,24 @@ def prepare_turn(
         entity: tuple(views) for entity, views in source.records_from(visible_data).items()
     })
     return PreparedTurn(binding.definition_id, records, source.scope_label, package, grant)
+
+
+def _package(package_for: Callable[[str], Any], binding: Any, principal: Any, product_id: str,
+             grant: Any, definition: Any):
+    """The product's installed package, or one built from its definition when it has none."""
+    from app.installed_products import PackageMissing
+    from app.services.generic_package import package_from
+    from app.services.record_store import PRIMARY
+
+    try:
+        return package_for(binding.definition_id)
+    except PackageMissing:
+        if definition is None:
+            return None
+        # A visitor's private demo is its own space; an organization's own records are lasting.
+        context = getattr(principal, "demo_context", None)
+        space = getattr(context, "instance_id", None) or PRIMARY
+        return package_from(definition, principal.tenant_id, product_id, space)
 
 
 def assemble_engine(prepared: PreparedTurn, definition: Any, pin: Any) -> tuple[ConversationEngine, Any]:

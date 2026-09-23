@@ -39,6 +39,14 @@ def create_schema(connection) -> None:
     )
 
 
+def action_name(action_type: str | None) -> str:
+    """An action's own name as a telemetry value, or "none" for a turn that acted on nothing."""
+    if not action_type:
+        return "none"
+    value = re.sub(r"[^a-z0-9_]", "_", action_type.lower())[:40]
+    return value if _VALUE.match(value) else "other"
+
+
 def latency_band(milliseconds: float) -> str:
     return next((name for limit, name in LATENCY_BANDS if milliseconds < limit), "ge_3s")
 

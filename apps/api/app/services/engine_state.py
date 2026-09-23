@@ -56,6 +56,11 @@ class LoadedState:
 MAX_VISITOR_NAME = 60
 
 
+def _forgotten(row) -> LoadedState:
+    """Nothing is remembered from this row, but its revision is, so the next write can replace it."""
+    return LoadedState(memory=ConversationMemory(), revision=row["revision"], pending_requires_repeat=False)
+
+
 def _bounded_name(name: str | None) -> str | None:
     if name is None or not name.strip() or len(name) > MAX_VISITOR_NAME or not name.isprintable():
         return None
@@ -81,15 +86,17 @@ class EngineStateStore:
             return None
         if row["scope_id"] != scope_id:
             # A workspace switch clears remembered references and pending state (plan, section 6.1).
-            return None
+            # The row itself stays and is overwritten by this turn, so its revision comes back with
+            # empty memory: forgetting the old workspace must not cost the session its next turn.
+            return _forgotten(row)
         if row["codec_version"] != CODEC_VERSION:
-            return None
+            return _forgotten(row)
         if (row["definition_id"], row["definition_version"], row["definition_checksum"],
                 row["knowledge_version"]) != (
             pin.definition_id, pin.definition_version, pin.definition_checksum, pin.knowledge_version
         ):
             # An unknown or stale pin fails closed rather than reusing a possibly-incompatible row.
-            return None
+            return _forgotten(row)
         focus = _ref(row["focus_entity"], row["focus_id"])
         last_person = _ref(row["last_person_entity"], row["last_person_id"])
         follow_up = None

@@ -31,6 +31,7 @@ from app.engine.actions import (
     shape_errors,
 )
 from app.engine.lookup import PersonView, RecordLookup
+from app.engine.conversation import PLATFORM_PHRASES, is_set_aside
 from app.engine.memory import ConversationMemory, PendingClarification, PendingConfirmation, PersonFollowUp
 from app.engine.mentions import (
     NameMention,
@@ -54,7 +55,9 @@ CLARIFICATION_SLOTS: Mapping[str, str] = MappingProxyType({
 })
 # The platform questions used when a slot is missing or ambiguous and no clarification rule matched.
 RECORD_QUESTION = "clarify_update_target"
-SLOT_QUESTIONS: Mapping[str, str] = MappingProxyType({"record": RECORD_QUESTION, "person": "clarify_assign"})
+SLOT_QUESTIONS: Mapping[str, str] = MappingProxyType({
+    "record": RECORD_QUESTION, "person": "clarify_assign", "choice": "clarify_change",
+})
 ORDINALS: Mapping[str, int] = MappingProxyType({
     "first": 0, "1st": 0, "second": 1, "2nd": 1, "third": 2, "3rd": 2,
 })
@@ -132,7 +135,8 @@ class IntentRouter:
                 known.update(value.lower() for value in spec.values)
         self._known_words = frozenset(word for term in known for word in term.lower().split())
         self.normalizer = Normalizer(
-            definition.vocabulary, known, protected_phrases=(*AFFIRMATIONS, *CORRECTION_CUES, *ORDINALS),
+            definition.vocabulary, known,
+            protected_phrases=(*AFFIRMATIONS, *CORRECTION_CUES, *ORDINALS, *PLATFORM_PHRASES),
         )
         self._people_entity = definition.people.entity if definition.people else None
         # The focused text of the request being routed, stored with any question it raises.
@@ -183,6 +187,13 @@ class IntentRouter:
         pending = memory.pending_clarification
         assert pending is not None
         cleared = replace(memory, pending_clarification=None)
+
+        if is_set_aside(text):
+            # "Cancel" answers every question the platform asks, not only the create's.
+            return RoutedTurn(
+                RouteResult(RouteKind.CANCELLED, RouteStage.PENDING_CLARIFICATION, "action_cancelled"),
+                cleared,
+            ), cleared
 
         if pending.candidates:
             return self._answer_choice(text, pending, memory, cleared, context), cleared
@@ -316,14 +327,14 @@ class IntentRouter:
 
     def _supplied_slot(self, text: NormalizedMessage, pending: PendingClarification) -> RecordRef | RouteResult | None:
         if pending.expected == "person" and self._people_entity is not None:
-            people = self._people(text)
+            # The whole answer is the name here, including its first word.
+            people = self._people(text, answers_with_a_name=True)
             if len(people.visible) == 1:
                 return RecordRef(self._people_entity, people.visible[0].id)
             if people.unresolved and not people.visible:
-                return RouteResult(
-                    RouteKind.ANSWER, RouteStage.PENDING_CLARIFICATION, "unknown_person",
-                    placeholders={"person": people.unresolved[0].text},
-                )
+                # The same answer a request naming an unknown person gets: say so, and offer the
+                # control that adds one when the product declares it.
+                return self._person_not_found(people.unresolved[0].text, RouteStage.PENDING_CLARIFICATION)
         if pending.expected == "record" and pending.action_key is not None:
             entity = self._definition.actions[pending.action_key].entity
             for record_id in record_ids(text.words):
@@ -360,6 +371,15 @@ class IntentRouter:
             result = RouteResult(RouteKind.CLARIFY, RouteStage.PENDING_CLARIFICATION, RECORD_QUESTION)
             again = replace(pending, candidates=(), singled_out=None, fields=fields or None)
             return RoutedTurn(result, replace(memory, pending_clarification=again))
+        if spec.capability in MUTATING_CAPABILITIES and not fields:
+            # The record is known but nothing was named to change: ask, never guess, and never
+            # build a proposal the contract would reject.
+            key = SLOT_QUESTIONS["choice"]
+            asked = PendingClarification(key, pending.action_key, "choice", target=target,
+                                         turn=pending.turn, context=pending.context)
+            result = RouteResult(RouteKind.CLARIFY, RouteStage.PENDING_CLARIFICATION, key,
+                                 placeholders=MappingProxyType({"record_id": target.id if target else ""}))
+            return RoutedTurn(result, replace(memory, pending_clarification=asked))
         return self._proposal_turn(spec, pending.action_key, memory, from_correction, person=person, **params)
 
     def _proposal_turn(
@@ -432,7 +452,30 @@ class IntentRouter:
             follow_up = self._person_follow_up(text, people, memory, context)
             if follow_up is not None:
                 return follow_up
+            named = self._named_record(text)
+            if named is not None:
+                return RoutedTurn(
+                    RouteResult(RouteKind.PROPOSE, RouteStage.INTENT_GROUPS, "record_opened",
+                                proposal=named),
+                    memory,
+                )
         return self._clarify_or_fallback(clarification, RouteStage.CLARIFICATION_RULES, memory, context)
+
+    def _named_record(self, text: NormalizedMessage) -> GenericAction | None:
+        """A visible record the message names by its identifier ("open ACC-1", or just "ACC-1").
+
+        Only when nothing else matched, and only for an entity this product declares an action to
+        open. The identifier still goes through the caller's own lookup, so naming a record nobody
+        may see finds nothing.
+        """
+        for key, spec in sorted(self._definition.actions.items()):
+            if spec.capability != Capability.OPEN_RECORD or spec.entity is None:
+                continue
+            for record_id in record_ids(text.words):
+                if self._lookup.get(spec.entity, record_id) is None:
+                    continue
+                return self._build(key, target=RecordRef(spec.entity, record_id))
+        return None
 
     def _person_follow_up(
         self, text: NormalizedMessage, people: _People, memory: ConversationMemory, context: TurnContext,
@@ -515,8 +558,8 @@ class IntentRouter:
                 # priya" in lower case) asks who is meant. Without this it falls through to
                 # "I'm not sure how to help", which is not true: the request was understood.
                 key = self._question_for(failure.slot, failure.intent.action)
-            if key is None and failure.slot == "record":
-                key = self._question_for("record", failure.intent.action)
+            if key is None and failure.slot in ("record", "choice"):
+                key = self._question_for(failure.slot, failure.intent.action)
             if key is None:
                 return None
             slot = CLARIFICATION_SLOTS.get(key, failure.slot)
@@ -541,19 +584,7 @@ class IntentRouter:
         placeholders = {"person": failure.name or ""}
         if leaders and _all_same(leaders):
             return self._propose(leaders[0], memory, override=("unknown_person", placeholders))
-        adding = self._add_person_action()
-        if adding is not None and failure.name:
-            # The product can show where people are added, so offer that instead of only refusing.
-            # Nothing is created: the visitor adds the person themselves.
-            spec = self._definition.actions[adding]
-            entity = self._definition.entities[spec.entity]
-            proposal = self._build(adding, view=spec.view, control=spec.control,
-                                   prefill={entity.title_field: failure.name})
-            result = RouteResult(RouteKind.PROPOSE, stage, "member_missing", proposal=proposal,
-                                 placeholders=placeholders)
-            return RoutedTurn(result, memory)
-        result = RouteResult(RouteKind.ANSWER, stage, "unknown_person", placeholders=placeholders)
-        return RoutedTurn(result, memory)
+        return RoutedTurn(self._person_not_found(failure.name or "", stage), memory)
 
     def _clarify_or_fallback(
         self, clarification: MatchRule | None, stage: RouteStage, memory: ConversationMemory, context: TurnContext,
@@ -576,6 +607,11 @@ class IntentRouter:
             response = override[0]
             placeholders.update(override[1])
         stage = RouteStage.EXACT_PHRASES if met.score.exact else RouteStage.INTENT_GROUPS
+        creating = self._create_for(spec) if response == "clarify_owner" else None
+        if creating is not None:
+            memory = replace(memory, pending_clarification=PendingClarification(
+                response, creating, "person", turn=memory.turn, context=self._context_text,
+            ))
         reason = confirmation_reason(spec, target_from_correction=False)
         if reason is not None:
             result = RouteResult(RouteKind.CONFIRM, stage, "confirm_action", proposal=met.proposal,
@@ -625,7 +661,8 @@ class IntentRouter:
             else:
                 target = self._current_record(spec.entity, memory, context)
                 if target is None:
-                    return unmet("missing", slot="record")
+                    return unmet("missing", slot="record",
+                                 fields=self._changed_fields(spec, entity, text) or None)
             satisfied += 1
 
         people_needed = "person" in requires or (
@@ -693,9 +730,17 @@ class IntentRouter:
                     return unmet("ambiguous", slot="choice", target=target)
                 fields[name] = values[0]
             if not fields:
-                if people.unresolved and people_fields:
+                # Which slot is missing depends on what the message named. A request that names a
+                # declared field with a value this product does not declare ("set the urgency to
+                # bananas") is about that field, so its unrecognised word is never read as a
+                # person; anything else that names someone, or names the people field, is.
+                values_field = self._mentions_field(
+                    entity, [name for name in spec.fields if name not in people_fields], text)
+                wants_person = bool(people_fields) and not values_field
+                if people.unresolved and wants_person:
                     return unmet("not_visible", slot="person", name=people.unresolved[0].text, target=target)
-                return unmet("missing", slot="person" if people_fields else "choice", target=target)
+                asks_person = wants_person and self._mentions_field(entity, people_fields, text)
+                return unmet("missing", slot="person" if asks_person else "choice", target=target)
             params.update(target=target, fields=fields)
             placeholders["record_id"] = target.id if target else ""
         elif capability == Capability.HIGHLIGHT_CONTROL:
@@ -721,7 +766,8 @@ class IntentRouter:
             raise ValueError(f"router built a malformed {action_key} proposal: {errors}")
         return proposal
 
-    def _people(self, text: NormalizedMessage, *, subjects_are_names: bool = False) -> _People:
+    def _people(self, text: NormalizedMessage, *, subjects_are_names: bool = False,
+                answers_with_a_name: bool = False) -> _People:
         found: dict[str, PersonView] = {}
         if self._people_entity is not None:
             for word in person_search_words(tuple(text.focused.split()), self._known_words):
@@ -730,7 +776,8 @@ class IntentRouter:
         focused_words = set(text.focused.split())
         mentions = [
             mention for mention in name_mentions(
-                text.original, self._known_words, subjects_are_names=subjects_are_names)
+                text.original, self._known_words, subjects_are_names=subjects_are_names,
+                first_word_is_name=answers_with_a_name)
             if set(mention.words) & focused_words
         ]
         visible_words = {word for person in found.values() for word in person.name.lower().split()}
@@ -740,6 +787,23 @@ class IntentRouter:
     def _person_refs(self, people: tuple[PersonView, ...]) -> tuple[RecordRef, ...]:
         assert self._people_entity is not None
         return tuple(RecordRef(self._people_entity, person.id) for person in people)
+
+    def _person_not_found(self, name: str, stage: RouteStage) -> RouteResult:
+        """One answer for a person this caller cannot see, whether or not they exist elsewhere.
+
+        When the product declares a control that adds a person, it is offered with the name the
+        visitor typed. Nothing is created: the visitor adds the person themselves.
+        """
+        placeholders = MappingProxyType({"person": name})
+        adding = self._add_person_action()
+        if adding is None or not name:
+            return RouteResult(RouteKind.ANSWER, stage, "unknown_person", placeholders=placeholders)
+        spec = self._definition.actions[adding]
+        entity = self._definition.entities[spec.entity]
+        proposal = self._build(adding, view=spec.view, control=spec.control,
+                               prefill={entity.title_field: name})
+        return RouteResult(RouteKind.PROPOSE, stage, "member_missing", proposal=proposal,
+                           placeholders=placeholders)
 
     def _add_person_action(self) -> str | None:
         """The action that shows where a person is added, if the definition declares exactly one."""
@@ -752,6 +816,37 @@ class IntentRouter:
             and list(spec.prefill) == [entity.title_field]
         ]
         return found[0] if len(found) == 1 else None
+
+    def _create_for(self, spec: ActionSpec) -> str | None:
+        """The action that creates the kind of record this one is about, if there is exactly one."""
+        entity = spec.entity or (self._definition.views[spec.view].entity if spec.view else None)
+        found = [
+            key for key, candidate in sorted(self._definition.actions.items())
+            if candidate.capability == Capability.CREATE_RECORD and candidate.entity == entity
+        ]
+        return found[0] if len(found) == 1 else None
+
+    def _changed_fields(self, spec: ActionSpec, entity: EntitySpec | None, text: NormalizedMessage) -> dict:
+        """The values a change request names, read the same way whether or not its record is known."""
+        if entity is None or spec.capability != Capability.UPDATE_RECORD:
+            return {}
+        found = {}
+        for name, values in enum_values(entity, list(spec.fields), text.focused).items():
+            if len(values) == 1:
+                found[name] = values[0]
+        return found
+
+    def _mentions_field(self, entity: EntitySpec | None, names: list[str], text: NormalizedMessage) -> bool:
+        """Whether the message names one of these fields, by its key or its declared label."""
+        if entity is None:
+            return False
+        for name in names:
+            spec = entity.fields.get(name)
+            words = {name.replace("_", " "), (spec.label or name).lower() if spec else name}
+            stem = name.replace("_", " ")[:6]
+            if any(contains_term(text.full, word) for word in words) or stem in text.full:
+                return True
+        return False
 
     def _people_fields(self, spec: ActionSpec) -> list[str]:
         if self._people_entity is None or spec.entity is None:

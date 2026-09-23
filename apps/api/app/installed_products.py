@@ -28,6 +28,9 @@ class ProductPackage:
     # Immutable synthetic seed for a new private demo instance. Missing means the product cannot
     # offer public demo sessions; the platform never falls back to edited member records.
     demo_seed_factory: Callable[[], Any] | None = None
+    # Every action type this product's client may be sent. The platform answers with one of these
+    # or with nothing: a type no installed package declares never reaches a caller.
+    client_action_types: frozenset[str] = frozenset()
 
 
 class PackageMissing(LookupError):
@@ -48,6 +51,15 @@ def installed_packages() -> Mapping[str, ProductPackage]:
     from products.linear_simplified.backend.package import PACKAGE as linear_simplified
 
     return index_packages([linear_simplified])
+
+
+def client_action_types() -> frozenset[str]:
+    """Every action type any installed product may send a client.
+
+    The set is closed over what is installed, not over one product's vocabulary, so adding a
+    product adds its own action types and nothing widens for the products already there.
+    """
+    return frozenset().union(*(package.client_action_types for package in installed_packages().values()))
 
 
 def package_for(definition_id: str) -> ProductPackage:

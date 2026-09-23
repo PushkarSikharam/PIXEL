@@ -1,10 +1,19 @@
 # Milestone 3.2, Slice 5d: Legacy Engine Removal - Implementation Plan
 
-Status: **revision 5, awaiting owner approval. No 5d runtime code has changed.**
+Status: **revision 6, awaiting owner approval. No 5d runtime code has changed.**
 Date: 2026-09-22. Parent plan: `docs/MILESTONE_3_STEP_3_2_PLAN.md` revision 4.3. Prerequisite:
 slice 5c is merged, signed off and accepted in production under the gates in section 2.
 
 ## 0. What changed, revision by revision
+
+Revision 6 replaces the production acceptance gate (section 2.1). Revisions 1 to 5 assumed Pixel
+would be exercised by real visitors before its rollback switch was removed. It will not be: Pixel
+is developed, tested and deployed by one person, the demo is not advertised, and there is no
+audience to draw 250 real turns from. The old gate was therefore not merely unmet but unmeetable,
+and the only ways to "meet" it were to wait for traffic that is not coming or to relabel scripted
+traffic as real. The second is fabricating the evidence the gate exists to provide, so the gate is
+rewritten around evidence that can honestly be produced and that answers the same question. What
+is lost by the change is stated in the new section 2.1, not hidden by it.
 
 Revision 1 was written before 5c settled, and would have deleted code that still owned live
 behaviour, voice, test routing and later-milestone shims. Revision 2 replaced the loose deletion
@@ -70,33 +79,46 @@ request may merge only when every gate below has recorded evidence in the 5c rep
 - The owner has read the final 5c report and stated that the project may stop preserving switch
   rollback once section 2 is met.
 
-### 2.1 5c production acceptance
+### 2.1 5c acceptance, for a product with no visitors
 
-- **Volume.** Definition authority has served at least **500 accepted turns across at least 50
-  distinct sessions**, covering every workflow in the 5c matrix (5c plan, section 2.2).
-- **Real versus synthetic.** At least **250 turns and 25 sessions come from real visitors**.
-  Synthetic sessions may fill the rest and any workflow real traffic did not reach; they use the
-  public visitor path (`scripts/visitor_check.py` labels its sessions `synthetic-visitor-check-`),
-  make no paid model call, and are counted separately in the evidence.
-- **Window.** The turns span at least **7 consecutive days** of definition authority, including at
-  least one API restart or redeploy while conversations were open.
-- **What resets the count.** A rollback to legacy authority, any section 11.4 trigger of the 5c
-  plan, a definition-version move, or **any change that can alter what a turn does or says**. A
-  change is judged by evidence, not by file: it resets the count unless the shadow comparison and
-  both browser goldens are unchanged by it, and the change touches no routing, wording, memory,
-  validation or execution path. Purely additive work behind a default-off switch, and work that
-  only adds tests, documentation or operator commands, does not reset it.
-- **Milestone 3.4 during the window.** 3.4a (knowledge registry and pin verification) is allowed
-  under the rule above, because it adds a check and changes no turn behaviour. 3.4b and later change
-  retrieval and therefore reset the count; schedule them after the window closes, or accept the
-  restart deliberately and record that choice.
-- **Quality.** No isolation failure, unauthorized write, duplicate execution, dishonest completion
-  claim or definition-pin bypass. Definition-engine 5xx rate at or below 1%. Latency and fallback
-  within the 5c limits, measured against the archived legacy baseline (section 2.5).
-- Every model or provider failure observed has a deterministic, bounded outcome. Paid model use is
-  not required; if enabled, its budget and kill-switch evidence is attached.
-- All `behaviour`, `coverage`, `security` and `lifecycle` differences are closed or explicitly
-  accepted in the signed 5c report.
+The question this gate answers is unchanged: **is the definition engine safe to be the only
+engine?** The evidence is not, because Pixel has no visitors and will have none before this work.
+Volume from strangers is replaced by coverage, durability and rehearsal, each of which one
+operator can actually produce.
+
+1. **Coverage, not volume.** Every workflow in the 5c matrix is exercised under definition
+   authority against the deployed production API, through the public visitor path, in one recorded
+   run. `acceptance-report` prints `workflows` and `workflows.missing`; **`workflows.missing` must
+   be empty**. These sessions are labelled `synthetic-visitor-check-` and are counted and reported
+   as synthetic. No report, commit message or sign-off describes them as real visitors.
+2. **Restart while conversations are open.** At least one redeploy or API restart happens with
+   sessions open, and those sessions continue afterwards, proven by `restarts[]`.
+3. **Durability across days.** At least two separate calendar days of definition authority in
+   production with no rollback, so state that must survive a restart is exercised more than once.
+4. **Quality.** No isolation failure, unauthorized write, duplicate execution, dishonest completion
+   claim or definition-pin bypass, and no definition-engine 5xx in the recorded run.
+5. **Green Linux CI** on the 5c head: API, product, web, production build and both
+   browser-authority jobs.
+6. **Rollback rehearsed** (section 2.2, unchanged). With traffic evidence gone this becomes the
+   most valuable gate remaining, because it is the one that never depended on traffic.
+7. **The owner's decision, recorded.** Because real-visitor evidence is absent, removing switch
+   rollback is explicitly the owner's decision, taken knowing that Pixel has never been exercised
+   by anyone other than its developer. The 5c report records that in those words.
+
+**What this costs us, plainly.** We give up the evidence that unfamiliar people, phrasing requests
+in ways we never imagined, do not break the engine. Nothing in this plan replaces that. The
+partial mitigations are the golden recordings, the browser suites under both authorities, and the
+live sweeps already performed against production, all of which test phrasing we chose. The first
+real users will still find things we did not. That is an accepted risk of shipping a proof of
+concept, not an oversight, and it is the reason section 2.2 is not also relaxed.
+
+**What still resets the gate.** A rollback to legacy authority, any section 11.4 trigger of the 5c
+plan, a definition-version move, or any change that can alter what a turn does or says. A change
+is judged by evidence, not by file: it resets unless the shadow comparison and both browser
+goldens are unchanged by it, and it touches no routing, wording, memory, validation or execution
+path. Work that only adds tests, documentation or operator commands does not reset it. Milestone
+3.4b and later change retrieval and therefore reset it; schedule them after this gate is met, or
+accept the restart deliberately and record that choice.
 
 ### 2.1a The command that proves section 2.1
 

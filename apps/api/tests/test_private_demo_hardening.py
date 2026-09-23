@@ -216,9 +216,28 @@ class SeedIsPinnedTest(PrivateDemoFixture):
     """Finding 4."""
 
     def test_the_installed_seed_matches_its_approved_version_and_checksum(self):
-        seed = seed_module.demo_seed()
-        self.assertEqual((seed.version, seed.checksum),
+        from app.services.demo_instances import DemoSeed
+
+        approved = DemoSeed.from_records(seed_module.APPROVED_SEED_VERSION,
+                                         seed_module.approved_records())
+        self.assertEqual((approved.version, approved.checksum),
                          (seed_module.APPROVED_SEED_VERSION, seed_module.APPROVED_SEED_CHECKSUM))
+
+    def test_only_the_cycle_dates_are_added_after_approval(self):
+        """Materialising a cycle's window must not be a way to change anything else in the seed."""
+        approved = seed_module.approved_records()
+        served = json.loads(seed_module.demo_seed().content)
+        self.assertEqual(served.keys(), approved.keys())
+        for entity, records in approved.items():
+            if entity != "cycles":
+                self.assertEqual(served[entity], records, entity)
+        for key, cycle in approved["cycles"].items():
+            added = {"startDate", "endDate", "daysLeft"}
+            removed = {"startsInDays", "endsInDays"}
+            self.assertEqual(set(served["cycles"][key]) - set(cycle), added, key)
+            self.assertEqual(set(cycle) - set(served["cycles"][key]), removed, key)
+            unchanged = {name: value for name, value in cycle.items() if name not in removed}
+            self.assertEqual({name: served["cycles"][key][name] for name in unchanged}, unchanged, key)
 
     def edited_issues_file(self) -> Path:
         issues = json.loads(seed_module.ISSUES_PATH.read_text(encoding="utf-8"))

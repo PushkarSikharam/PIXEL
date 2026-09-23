@@ -46,6 +46,13 @@ class DefinitionSource:
     def package_path(self, definition_id: str) -> Path:
         return self.products_root / _checked_key(definition_id)
 
+    def read(self, definition_id: str, version: int) -> bytes:
+        """This version's text. A source that keeps definitions elsewhere overrides this."""
+        return _read_bytes(self.definition_path(definition_id, version))
+
+    def has(self, definition_id: str, version: int) -> bool:
+        return self.definition_path(definition_id, version).is_file()
+
     def packages(self) -> list[str]:
         """Definition IDs of every product package that ships definitions."""
         if not self.products_root.is_dir():
@@ -83,7 +90,7 @@ class AdapterManifest(Strict):
 
 
 def file_checksum(source: DefinitionSource, definition_id: str, version: int) -> str:
-    return _checksum(_read_bytes(source.definition_path(definition_id, version)))
+    return _checksum(source.read(definition_id, version))
 
 
 def load_definition(
@@ -92,7 +99,7 @@ def load_definition(
     version: int,
     expected_checksum: str | None = None,
 ) -> LoadedDefinition:
-    raw = _read_bytes(source.definition_path(definition_id, version))
+    raw = source.read(definition_id, version)
     checksum = _checksum(raw)
     if expected_checksum is not None and checksum != expected_checksum:
         raise DefinitionError(

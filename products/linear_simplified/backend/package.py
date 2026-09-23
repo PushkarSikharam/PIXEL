@@ -11,7 +11,7 @@ from app.installed_products import ProductPackage
 from products.linear_simplified.backend.knowledge import knowledge_for
 from products.linear_simplified.backend.lookup import lookup_for
 from products.linear_simplified.backend.demo_seed import demo_seed
-from products.linear_simplified.backend.translator import translator_for
+from products.linear_simplified.backend.translator import LEGACY_TYPES, translator_for
 
 PACKAGE = ProductPackage(
     definition_id="linear_simplified",
@@ -19,4 +19,5 @@ PACKAGE = ProductPackage(
     legacy_translator=translator_for,
     knowledge_factory=knowledge_for,
     demo_seed_factory=demo_seed,
+    client_action_types=frozenset(LEGACY_TYPES.values()),
 )

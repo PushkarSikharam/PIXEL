@@ -125,6 +125,18 @@ def migrate() -> None:
               check ((ownership = 'organization_private') = (owner_tenant_id is not null))
             );
 
+            -- The text of a definition that was added to Pixel rather than shipped as a file in
+            -- the repository. Immutable once written: a change is a new version, never an edit,
+            -- which is what makes a published version's checksum mean anything.
+            create table if not exists definition_sources(
+              definition_id text not null,
+              version integer not null,
+              source text not null,
+              checksum text not null,
+              created_at text not null,
+              primary key (definition_id, version)
+            );
+
             -- One product's Pixel: owned by one team, bound to one definition and knowledge version.
             create table if not exists product_bindings(
               tenant_id text not null,
@@ -377,6 +389,45 @@ def migrate() -> None:
             );
             create index if not exists engine_state_owner
               on engine_state(tenant_id, product_id, user_id, instance_id, instance_generation);
+
+            -- Records of any product, shaped by the definition that declares them rather than
+            -- by a table named after one product's entities (3.5). A space says whose records
+            -- these are: 'primary' is the organization's own, lasting records; a demo instance
+            -- id is one visitor's private, expiring copy.
+            create table if not exists product_records(
+              tenant_id text not null,
+              product_id text not null,
+              space_id text not null,
+              entity text not null,
+              record_id text not null,
+              revision integer not null check (revision > 0),
+              payload text not null check (json_valid(payload)),
+              updated_at text not null,
+              primary key (tenant_id, product_id, space_id, entity, record_id)
+            );
+            create index if not exists product_records_entity
+              on product_records(tenant_id, product_id, space_id, entity);
+
+            -- The named groups of anchor records a caller may be granted. Membership is by anchor
+            -- record, and which scopes any other record falls in is derived by following the
+            -- definition's own scope paths to its anchor.
+            create table if not exists record_scopes(
+              tenant_id text not null,
+              product_id text not null,
+              space_id text not null,
+              scope_id text not null,
+              name text not null,
+              description text not null default '',
+              primary key (tenant_id, product_id, space_id, scope_id)
+            );
+            create table if not exists record_scope_anchors(
+              tenant_id text not null,
+              product_id text not null,
+              space_id text not null,
+              scope_id text not null,
+              anchor_id text not null,
+              primary key (tenant_id, product_id, space_id, scope_id, anchor_id)
+            );
 
             -- Shadow engine parity counts (5a): aggregate counts only, never text, values or
             -- identifiers of sessions and visitors. Rows older than 30 days are pruned.

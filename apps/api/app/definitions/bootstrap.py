@@ -23,6 +23,7 @@ import json
 from pydantic import Field
 
 from app.definitions.contract import Slug, Strict
+from app.definitions.console import ensure_console_product
 from app.definitions.loader import DefinitionSource
 from app.definitions.organizations import OrganizationDirectory
 from app.definitions.registry import DefinitionRegistry
@@ -117,6 +118,9 @@ def _apply(directory: OrganizationDirectory, definition_id: str, seed: DemoOrgan
             directory.set_member_role(tenant_id, member.user_id, member.role, member_team)
     for product in seed.products:
         _apply_product(directory, definition_id, tenant_id, team_id, product)
+    # Every organization can move around the application, however it came to exist.
+    ensure_console_product(directory, tenant_id, team_id,
+                           tuple(member.user_id for member in seed.members))
 
 
 def _apply_product(directory: OrganizationDirectory, definition_id: str, tenant_id: str,

@@ -16,10 +16,14 @@ import alias. Do not replace those pages with a second console implementation.
 - `/demo` serves the isolated guided demo, including its chat and voice panel.
 - The console's "Visit demo" link crosses to the demo's separate root layout.
 
-The console currently labels its sample-data preview explicitly. Its prototype
-email screens are not production authentication. Keep shared demo administrator
-login blocked; publishing the design does not authorize shared workspace access.
-The live backend demo remains available separately at `/demo`.
+The console requires an individual session and no longer substitutes sample data.
+The email-code flow is disabled until SMTP delivery is configured. Keep shared demo
+administrator login blocked. Set the account settings described in
+`PIXEL_SYSTEM_DELIVERY_STATUS.md` on the API service, then redeploy and verify actual
+email delivery before enabling customer access. The guided demo stays at `/demo`.
+
+Unconnected management pages are intentionally unavailable, not simulated. This
+release is not the completed SaaS platform; the delivery status lists the remaining work.
 
 ## API service
 

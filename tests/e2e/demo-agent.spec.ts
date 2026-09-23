@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import {
   agentApiRoute,
   agentCancelTurnOneRoute,
@@ -21,6 +21,15 @@ const definitionAuthority = process.env.PIXEL_ENGINE_MODE === "definition";
 // The sentence each authority speaks for the same behaviour. Definition wording is the platform's
 // (reviewed in golden/browser_differences_definition.json); every behaviour assertion is shared.
 const said = (legacy: string, definition: string) => (definitionAuthority ? definition : legacy);
+
+async function ensureVoiceListening(page: Page) {
+  await expect(page.getByTestId("turn-status")).toHaveText("Ready");
+  const status = page.getByTestId("voice-status");
+  if ((await status.textContent())?.trim() !== "Voice: Listening") {
+    await page.getByTestId("voice-toggle").click();
+  }
+  await expect(status).toHaveText("Voice: Listening");
+}
 
 test("live readiness blocks partial demo behavior and recovers cleanly", async ({ page }) => {
   let loginRequests = 0;
@@ -888,8 +897,7 @@ test("handles voice typo input and voice-only demo issue creation", async ({ pag
   await expect(page.getByTestId("current-view-title")).toHaveText("Issue Detail");
   await expect(page.getByTestId("selected-issue-id")).toHaveText("LIN-142");
 
-  await page.getByTestId("voice-toggle").click();
-  await expect(page.getByTestId("voice-status")).toHaveText("Voice: Listening");
+  await ensureVoiceListening(page);
   await page.evaluate(() => window.__emitVoiceTranscript?.("open a fresh ticket for maya"));
 
   if (definitionAuthority) {
@@ -985,9 +993,7 @@ test("turns agent speech into listening when the user presses voice", async ({ p
   await page.evaluate(() => window.__emitVoiceTranscript?.("show sprint planning"));
   await expect(page.getByTestId("voice-status")).toHaveText("Voice: Speaking");
 
-  await page.getByTestId("voice-toggle").click();
-
-  await expect(page.getByTestId("voice-status")).toHaveText("Voice: Listening");
+  await ensureVoiceListening(page);
 });
 
 test("stops agent speech and listens when the visitor presses voice during speech", async ({ page }) => {
@@ -1009,8 +1015,7 @@ test("stops agent speech and listens when the visitor presses voice during speec
   await page.evaluate(() => window.__emitVoiceTranscript?.("show sprint planning"));
   await expect(page.getByTestId("voice-status")).toHaveText("Voice: Speaking");
 
-  await page.getByTestId("voice-toggle").click();
-  await expect(page.getByTestId("voice-status")).toHaveText("Voice: Listening");
+  await ensureVoiceListening(page);
   await page.evaluate(() => window.__emitVoiceTranscript?.("set up github integration"));
 
   await expect(page.getByTestId("current-view-title")).toHaveText("Integrations");

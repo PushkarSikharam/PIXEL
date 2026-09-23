@@ -68,6 +68,8 @@ def store_definition(text: str, *, definition_id: str, version: int) -> str:
     definitions are immutable, so a change is a new version.
     """
     check_key(definition_id)
+    if definition_id in DefinitionSource().packages():
+        raise DefinitionError("This definition identifier is reserved by an installed package.")
     if not isinstance(version, int) or version < 1:
         raise DefinitionError("a definition version is a positive whole number")
     raw = text.encode("utf-8")
@@ -81,6 +83,17 @@ def store_definition(text: str, *, definition_id: str, version: int) -> str:
     checksum = _checksum(raw)
     with get_connection() as connection:
         connection.execute("begin immediate")
+        owner = connection.execute(
+            "select ownership, owner_tenant_id from definitions where definition_id=?", (definition_id,),
+        ).fetchone()
+        expected_owner = (declared.ownership, declared.owner_organization)
+        if owner is not None and tuple(owner) != expected_owner:
+            raise DefinitionError("This definition identifier belongs to another owner.")
+        # Claim the identity with the source so a concurrent upload cannot reserve another
+        # owner's next version before lifecycle registration catches the mismatch.
+        if owner is None:
+            connection.execute("insert into definitions values (?, ?, ?, ?)",
+                               (definition_id, *expected_owner, datetime.now(UTC).isoformat()))
         existing = connection.execute(
             "select checksum from definition_sources where definition_id = ? and version = ?",
             (definition_id, version),

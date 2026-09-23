@@ -205,6 +205,11 @@ class DefinitionTranslator:
         if action.action_key not in self._definition.actions:
             raise LookupError(action.action_key)
         payload: dict[str, Any] = {}
+        spec = self._definition.actions[action.action_key]
+        if spec.capability == Capability.NAVIGATE_VIEW and spec.view:
+            # A request to go somewhere says where, so a client can act on it even when the
+            # answer came from a different product than the one it is showing.
+            payload["view"] = spec.view
         if action.target is not None:
             payload["record_id"] = action.target.id
         if action.filter is not None:

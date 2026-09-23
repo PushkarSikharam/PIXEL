@@ -9,6 +9,12 @@ from app.workspace_config import DEFAULT_WORKSPACE_SCOPE_ID
 
 
 
+# The stage a turn reports when the product could make nothing of the message. Named here
+# because it is part of what a response says, and `app.main` must not import the engine to read
+# it; a test holds it equal to the engine's own stage.
+FALLBACK_STAGE = "fallback"
+
+
 class TurnRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

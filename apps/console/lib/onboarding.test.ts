@@ -1,11 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
-  acceptUnderstanding, addSource, canEnter, completeAnalysis, goTo, initialOnboarding, publish,
-  removeSource, setConfirmation, setDetails, toggleAction, validate,
+  acceptUnderstanding, addSource, addThing, approveGeneratedUnderstanding, canEnter,
+  completeAnalysis, goTo, initialOnboarding,
+  publish, removeSource, setConfirmation, setDetails, toggleAction, updateField, updateThing,
+  understood, validate,
 } from "./onboarding";
 
 const started = () => setDetails(initialOnboarding("billing"), "Ledger", "ledger");
-const analyzed = () => completeAnalysis(addSource(goTo(started(), "sources"), "billing-guide.pdf", "document"));
+/** A product described the way somebody adding one describes it. */
+const described = () => {
+  let state = goTo(started(), "sources");
+  state = addThing(state);
+  state = updateThing(state, 0, { id: "invoice", label: "Invoice", plural: "Invoices" });
+  state = updateField(state, 0, 0, { name: "reference", type: "text", required: true });
+  return state;
+};
+const analyzed = () => completeAnalysis(described());
 
 describe("onboarding flow", () => {
   it("cannot skip ahead", () => {
@@ -37,14 +47,48 @@ describe("onboarding flow", () => {
     expect(state.actions.find((a) => a.key === "issue_refund")?.requiresConfirmation).toBe(true);
   });
 
-  it("changing sources after analysis invalidates everything downstream", () => {
+  it("publishes the reviewed server-generated definition without fake browser action switches", () => {
+    const reviewed = understood(described(), {
+      definition: "approved-definition",
+      things: ["Invoices"],
+      screens: ["Invoices"],
+      canDo: ["Open the list of invoices.", "Add an invoice."],
+    });
+    const approved = approveGeneratedUnderstanding(reviewed);
+    expect(approved.step).toBe("ready");
+    expect(approved.actions.every((action) => action.enabled)).toBe(true);
+    expect(approved.actions.find((action) => action.description === "Add an invoice.")?.requiresConfirmation).toBe(true);
+    expect(canEnter(approved, "ready")).toBe(true);
+  });
+
+  it("changing the description after analysis invalidates everything downstream", () => {
     let state = acceptUnderstanding(analyzed());
     state = toggleAction(state, "open_invoices", true);
-    const firstSource = state.sources[0].id;
-    state = removeSource(state, firstSource);
+    state = updateThing(state, 0, { label: "Bill", plural: "Bills" });
     expect(state.step).toBe("sources");
     expect(state.actions).toEqual([]);
+    expect(state.understanding).toBeNull();
     expect(canEnter(state, "review")).toBe(false);
+  });
+
+  it("a description with nothing to keep cannot be written into a product", () => {
+    let state = goTo(started(), "sources");
+    expect(canEnter(state, "analyzing")).toBe(false);
+    state = addThing(state);
+    state = updateThing(state, 0, { id: "rep", label: "Rep", plural: "Reps", people: true });
+    expect(canEnter(state, "analyzing")).toBe(false);
+    state = addThing(state);
+    state = updateThing(state, 1, { id: "deal", label: "Deal", plural: "Deals" });
+    expect(canEnter(state, "analyzing")).toBe(true);
+  });
+
+  it("only one kind of record can be the people", () => {
+    let state = described();
+    state = addThing(state);
+    state = updateThing(state, 1, { id: "rep", label: "Rep", plural: "Reps", people: true });
+    state = updateThing(state, 0, { people: true });
+    expect(state.things.filter((thing) => thing.people)).toHaveLength(1);
+    expect(state.things[0].people).toBe(true);
   });
 
   it("publishing needs a clean validation of exactly the current configuration", () => {

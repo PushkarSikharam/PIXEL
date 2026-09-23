@@ -4,7 +4,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import type { Environment, Permission } from "@pixel-console/lib/contracts";
 import { DIRECTORY, ORGANIZATIONS, PERSONAS, PRODUCTS, productById } from "@pixel-console/lib/mock-data";
 import { authorize, type Resource } from "@pixel-console/lib/permissions";
-import { isLive, listProducts, signIn, storedSession, type ApiProduct, type ApiSession } from "@pixel-console/lib/pixel-api";
+import { isLive, listProducts, currentAccount, storedSession, type ApiAccount, type ApiActionShape,
+  type ApiProduct, type ApiProductShape } from "@pixel-console/lib/pixel-api";
 
 /**
  * The signed-in context of the mocked console: who is acting, in which organization, on which
@@ -23,6 +24,13 @@ interface ConsoleState {
   theme: "system" | "light" | "dark";
 }
 
+export interface ProductSurface {
+  productId: string;
+  shape: ApiProductShape;
+  reloadRecords: () => Promise<void>;
+  showAction: (action: ApiActionShape, payload: Record<string, unknown>) => void;
+}
+
 interface ConsoleApi extends ConsoleState {
   persona: (typeof PERSONAS)[number];
   can: (permission: Permission, resource?: Partial<Resource>) => boolean;
@@ -30,7 +38,16 @@ interface ConsoleApi extends ConsoleState {
   /** Set when this console is showing a running Pixel rather than its own sample data. */
   live: boolean;
   liveError: string | null;
+  account: ApiAccount | null;
+  loading: boolean;
   reloadProducts: () => void;
+  /**
+   * What the open product screen wants the assistant to be able to do: reload its records and act
+   * on its screens. Absent when nobody is inside a product, and replaced whole when another is
+   * opened, so one product's callbacks can never run against another's.
+   */
+  productSurface: ProductSurface | null;
+  setProductSurface: (surface: ProductSurface | null) => void;
   setPersona: (id: string) => void;
   selectProduct: (id: string | null) => void;
   setEnvironment: (env: Environment) => void;
@@ -41,6 +58,7 @@ interface ConsoleApi extends ConsoleState {
 const Context = createContext<ConsoleApi | null>(null);
 
 export function ConsoleProvider({ children }: { children: ReactNode }) {
+  const [account, setAccount] = useState<ApiAccount | null>(null);
   const [state, setState] = useState<ConsoleState>({
     personaId: PERSONAS[0].id, organizationId: ORGANIZATIONS[0].id, productId: "ledger",
     environment: "staging", activeWork: null, discardEpoch: 0, theme: "system",
@@ -48,6 +66,12 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
   const persona = PERSONAS.find((p) => p.id === state.personaId) ?? PERSONAS[0];
 
   const can = useCallback((permission: Permission, resource: Partial<Resource> = {}) => {
+    if (isLive()) {
+      if (!account || (resource.organizationId && resource.organizationId !== account.tenant_id)) return false;
+      if (account.role === "org_admin") return true;
+      if (permission === "products.read" || permission === "definitions.read" || permission === "playground.use") return true;
+      return account.role === "team_admin" && resource.teamId === account.team_id && (permission === "products.manage" || permission === "definitions.edit");
+    }
     const product = resource.productId ? productById(resource.productId) : undefined;
     const full: Resource = {
       organizationId: resource.organizationId ?? state.organizationId,
@@ -56,12 +80,13 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       environment: resource.environment ?? null,
     };
     return authorize(persona.id, persona.memberships, permission, full, DIRECTORY).allowed;
-  }, [persona, state.organizationId]);
+  }, [persona, state.organizationId, account]);
 
   // Products from a running Pixel, when this console is connected to one. Until the first
   // answer arrives the sample catalogue is shown, so the console never renders half a page.
   const [live, setLive] = useState<ApiProduct[] | null>(null);
   const [liveError, setLiveError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [reloads, setReloads] = useState(0);
   const connected = isLive();
 
@@ -70,25 +95,33 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     (async () => {
       try {
-        const session: ApiSession = storedSession() ?? (await signIn("demo-admin"));
+        const session = storedSession();
+        if (!session) throw new Error("Sign in to open your organization.");
+        const identity = await currentAccount(session);
         const products = await listProducts(session);
         if (!cancelled) {
+          setAccount(identity);
+          setState((current) => ({ ...current, organizationId: identity.tenant_id,
+            productId: products.some((p) => p.product_id === current.productId) ? current.productId : null }));
           setLive(products);
           setLiveError(null);
         }
       } catch (error) {
         if (!cancelled) setLiveError(error instanceof Error ? error.message : "Products could not be loaded.");
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
   }, [connected, reloads]);
 
   const visibleProducts = useMemo(() => {
+    if (connected && live === null) return [];
     if (connected && live !== null) {
       return live.map((product) => ({
         id: product.product_id,
         organizationId: state.organizationId,
-        teamId: "",
+        teamId: product.team_id ?? "",
         name: product.name,
         slug: product.product_id,
         description: `${product.entities.length} kinds of record, ${product.views.length} screens.`,
@@ -101,6 +134,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
   }, [can, connected, live, state.organizationId]);
 
   const reloadProducts = useCallback(() => setReloads((count) => count + 1), []);
+  const [productSurface, setProductSurface] = useState<ProductSurface | null>(null);
 
   // Actions are stable across renders, and a setter that changes nothing keeps the same state
   // object, so effects that depend on them can never loop.
@@ -127,9 +161,11 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const api = useMemo<ConsoleApi>(() => ({
-    ...state, persona, can, visibleProducts, live: connected, liveError, reloadProducts,
+    ...state, persona, can, visibleProducts, live: connected, liveError, account, loading, reloadProducts,
+    productSurface, setProductSurface,
     setPersona, selectProduct, setEnvironment, setActiveWork, setTheme,
-  }), [state, persona, can, visibleProducts, connected, liveError, reloadProducts,
+  }), [state, persona, can, visibleProducts, connected, liveError, account, loading, reloadProducts,
+       productSurface,
        setPersona, selectProduct, setEnvironment, setActiveWork, setTheme]);
   return <Context.Provider value={api}>{children}</Context.Provider>;
 }

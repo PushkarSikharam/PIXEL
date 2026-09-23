@@ -2,16 +2,16 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Bot, RotateCcw, SendHorizonal } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { RotateCcw } from "lucide-react";
 import { useConsole } from "@pixel-console/components/console-context";
+import { ProductKnowledge } from "@pixel-console/components/product-knowledge";
 import { Dialog } from "@pixel-console/components/overlays";
 import { useToast } from "@pixel-console/components/toast";
-import { Alert, Badge, Button, EmptyState, ErrorState, Input, LoadingRows, PageHead, Panel, PermissionDenied, StatusBadge } from "@pixel-console/components/ui";
+import { Alert, Badge, Button, EmptyState, ErrorState, LoadingRows, PageHead, Panel, PermissionDenied, StatusBadge } from "@pixel-console/components/ui";
 import { DEPLOYMENTS, RELEASES, productById, teamName } from "@pixel-console/lib/mock-data";
-import {
-  executeProductAction, productRecords, productShape, sendProductTurn, signIn, storedSession,
-  type ApiActionShape, type ApiProductShape, type ApiRecords, type ApiSession, type ApiTurnResponse,
+import { productRecords, productShape, storedSession,
+  type ApiActionShape, type ApiProductShape, type ApiRecords, type ApiSession,
 } from "@pixel-console/lib/pixel-api";
 import type { Environment, Release } from "@pixel-console/lib/contracts";
 
@@ -20,11 +20,12 @@ const ENVS: Environment[] = ["development", "staging", "production"];
 export default function ProductDetail() {
   const { productId } = useParams<{ productId: string }>();
   const c = useConsole();
+  useEffect(() => { c.selectProduct(productId); }, [productId, c.selectProduct]);
   const liveProduct = c.live ? c.visibleProducts.find((p) => p.id === productId) : null;
 
   if (c.live) {
     if (!liveProduct) return <PermissionDenied what="this product" />;
-    return <LiveProductWorkspace productId={productId} />;
+    return <LiveProductWorkspace key={`${c.organizationId}:${productId}`} productId={productId} />;
   }
 
   const product = productById(productId);
@@ -33,6 +34,7 @@ export default function ProductDetail() {
 }
 
 function LiveProductWorkspace({ productId }: { productId: string }) {
+  const c = useConsole();
   const toast = useToast();
   const [session, setSession] = useState<ApiSession | null>(null);
   const [shape, setShape] = useState<ApiProductShape | null>(null);
@@ -40,6 +42,9 @@ function LiveProductWorkspace({ productId }: { productId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeView, setActiveView] = useState<string | null>(null);
+  const [conversationEpoch, setConversationEpoch] = useState(0);
+  const [recordSelection, setRecordSelection] = useState<{ entity: string; id: string } | null>(null);
+  const [recordFilter, setRecordFilter] = useState<{ entity: string; field: string; value: unknown } | null>(null);
 
   async function load(currentSession = session) {
     if (!currentSession) return;
@@ -56,7 +61,8 @@ function LiveProductWorkspace({ productId }: { productId: string }) {
     let cancelled = false;
     (async () => {
       try {
-        const nextSession = storedSession() ?? await signIn("demo-admin");
+        const nextSession = storedSession();
+        if (!nextSession) throw new Error("Sign in to open this product.");
         if (cancelled) return;
         setSession(nextSession);
         await load(nextSession);
@@ -71,7 +77,18 @@ function LiveProductWorkspace({ productId }: { productId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId]);
 
+  // Hand this product to the shell's assistant, and take it back on the way out so the next
+  // screen does not inherit it. Registered before any early return, so the same hooks run on
+  // every render of this screen.
+  useEffect(() => {
+    if (!shape || !session) return;
+    c.setProductSurface({ productId, shape, reloadRecords: () => load(session), showAction });
+    return () => c.setProductSurface(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productId, shape, session]);
+
   if (loading) return <><PageHead title="Product" description="Loading live product." /><LoadingRows rows={6} /></>;
+
   if (error || !shape || !records || !session) {
     return <><PageHead title="Product unavailable" /><ErrorState title="Product could not be loaded">{error}</ErrorState></>;
   }
@@ -79,38 +96,53 @@ function LiveProductWorkspace({ productId }: { productId: string }) {
   const currentView = shape.views.find((view) => view.name === activeView) ?? shape.views[0];
   const currentEntity = currentView?.entity ? shape.entities.find((entity) => entity.name === currentView.entity) : null;
   const currentRecords = currentEntity ? records.records[currentEntity.name] ?? [] : [];
+  const filteredRecords = recordFilter && recordFilter.entity === currentEntity?.name
+    ? currentRecords.filter((row) => row[recordFilter.field] === recordFilter.value) : currentRecords;
+  const selectedRecord = recordSelection && recordSelection.entity === currentEntity?.name ? currentRecords.find((row) => row.id === recordSelection.id) : null;
+
+  function showAction(action: ApiActionShape, payload: Record<string, unknown>) {
+    const view = action.view ?? shape?.views.find((candidate) => candidate.entity === action.entity && candidate.navigable)?.name;
+    if (view) setActiveView(view);
+    setRecordSelection(action.entity && typeof payload.record_id === "string" ? { entity: action.entity, id: payload.record_id } : null);
+    setRecordFilter(action.capability === "FILTER_RECORDS" && action.entity && action.by ? { entity: action.entity, field: action.by, value: payload[action.by] } : null);
+  }
 
   return (
     <>
       <PageHead title={shape.product_name}
         description={`Definition ${shape.definition_id} v${shape.definition_version}. ${shape.entities.length} record types, ${shape.views.length} screens.`}
         actions={<StatusBadge status="active" />} />
-      <div className="px-grid-two">
+      <div className="px-product-workspace">
         <div className="px-stack">
           <Panel title="Screens" actions={<Badge>{records.scope}</Badge>}>
             <div className="px-row" role="tablist" aria-label="Product screens">
               {shape.views.filter((view) => view.navigable).map((view) => (
                 <Button key={view.name} size="sm" variant={view.name === activeView ? "primary" : "default"}
-                  onClick={() => setActiveView(view.name)}>{view.label}</Button>
+                  onClick={() => { setActiveView(view.name); setRecordSelection(null); setRecordFilter(null); }}>{view.label}</Button>
               ))}
             </div>
           </Panel>
           {currentEntity ? (
             <Panel title={currentView.label} actions={<Badge>{currentRecords.length} {currentRecords.length === 1 ? currentEntity.label : currentEntity.plural}</Badge>}>
-              <GenericRecordTable shape={shape} entity={currentEntity.name} rows={currentRecords}
+              {recordFilter ? <Button size="sm" onClick={() => setRecordFilter(null)}>Clear filter</Button> : null}
+              {selectedRecord ? <section aria-label="Selected record" className="px-stack">
+                <h2>{String(selectedRecord[currentEntity.title_field] ?? selectedRecord.id)}</h2>
+                <dl>{currentEntity.fields.filter((field) => field.display).map((field) => <div key={field.name}><dt>{field.label}</dt><dd>{renderValue(selectedRecord[field.name])}</dd></div>)}</dl>
+                <Button size="sm" onClick={() => setRecordSelection(null)}>Back to records</Button>
+              </section> : <GenericRecordTable shape={shape} entity={currentEntity.name} rows={filteredRecords}
                 columns={currentView.columns.length ? currentView.columns : currentEntity.summary_fields} />
+              }
             </Panel>
           ) : (
             <Panel title={currentView?.label ?? "Screen"}>
               <EmptyState title="No records on this screen">This view has no entity attached yet.</EmptyState>
             </Panel>
           )}
-        </div>
-        <LiveProductChat session={session} shape={shape} productId={productId}
-          onRecordsChanged={async () => {
-            await load(session);
-            toast("ok", "Records refreshed.");
+          <ProductKnowledge session={session} productId={productId} onPublished={() => {
+            setConversationEpoch((value) => value + 1);
+            toast("ok", "Source published. A new conversation will use this version.");
           }} />
+        </div>
       </div>
     </>
   );
@@ -135,7 +167,7 @@ function GenericRecordTable({ shape, entity, rows, columns }: {
         <tbody>
           {rows.map((row) => (
             <tr key={row.id}>
-              {visibleColumns.map((column) => <td key={column}>{renderValue(row[column] ?? row.title)}</td>)}
+              {visibleColumns.map((column) => <td key={column}>{renderValue(row[column])}</td>)}
             </tr>
           ))}
         </tbody>
@@ -144,89 +176,6 @@ function GenericRecordTable({ shape, entity, rows, columns }: {
   );
 }
 
-function LiveProductChat({ session, shape, productId, onRecordsChanged }: {
-  session: ApiSession;
-  shape: ApiProductShape;
-  productId: string;
-  onRecordsChanged: () => Promise<void>;
-}) {
-  const [messages, setMessages] = useState<Array<{ role: "visitor" | "agent"; text: string }>>([
-    { role: "agent", text: `Welcome to ${shape.product_name}. I'm ${shape.assistant_name}.` },
-  ]);
-  const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
-  const turn = useRef(0);
-  const sessionId = useRef(`console-${productId}-${Date.now()}`);
-  const actions = useMemo(() => Object.fromEntries(shape.actions.map((action) => [action.client_type, action])), [shape.actions]);
-
-  async function send() {
-    const message = input.trim();
-    if (!message || busy) return;
-    setInput("");
-    setBusy(true);
-    setMessages((all) => [...all, { role: "visitor", text: message }]);
-    try {
-      turn.current += 1;
-      const response = await sendProductTurn(session, {
-        sessionId: sessionId.current,
-        turnId: turn.current,
-        productId,
-        message,
-      });
-      setMessages((all) => [...all, { role: "agent", text: response.speech }]);
-      const receipt = await maybeExecute(session, productId, response, actions);
-      if (receipt) {
-        setMessages((all) => [...all, { role: "agent", text: receipt.speech }]);
-        await onRecordsChanged();
-      }
-    } catch (caught) {
-      setMessages((all) => [...all, { role: "agent", text: caught instanceof Error ? caught.message : "That request failed." }]);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Panel title={<span className="px-row"><Bot aria-hidden size={16} />{shape.assistant_name}</span>}>
-      <div className="px-stack">
-        <div className="px-chat-log" aria-live="polite">
-          {messages.map((message, index) => (
-            <div key={index} className="px-console-message" data-role={message.role}>
-              <strong>{message.role === "visitor" ? "You" : shape.assistant_name}</strong>
-              <p>{message.text}</p>
-            </div>
-          ))}
-        </div>
-        <form className="px-row" onSubmit={(event) => { event.preventDefault(); void send(); }}>
-          <Input value={input} onChange={(event) => setInput(event.target.value)}
-            placeholder={`Ask ${shape.assistant_name}`} aria-label={`Ask ${shape.assistant_name}`} />
-          <Button type="submit" variant="primary" loading={busy}><SendHorizonal aria-hidden />Send</Button>
-        </form>
-        <Alert>Mutations are committed only when the backend returns an execution key for this product and turn.</Alert>
-      </div>
-    </Panel>
-  );
-}
-
-async function maybeExecute(
-  session: ApiSession,
-  productId: string,
-  response: ApiTurnResponse,
-  actions: Record<string, ApiActionShape>,
-) {
-  if (!response.execution || !response.validated_action) return null;
-  const action = actions[response.validated_action.type];
-  if (!action?.entity) return null;
-  if (action.capability !== "CREATE_RECORD" && action.capability !== "UPDATE_RECORD") return null;
-  return executeProductAction(session, {
-    productId,
-    entity: action.entity,
-    action: action.name,
-    payload: response.validated_action.payload,
-    executionKey: response.execution.key,
-    sessionId: response.execution.session_id,
-  });
-}
 
 function labelFor(fields: ApiProductShape["entities"][number]["fields"], column: string): string {
   if (column === "id") return "ID";

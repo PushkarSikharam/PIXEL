@@ -21,8 +21,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from test_engine_cutover import EngineCutoverFixture  # noqa: E402
 
+from app import main  # noqa: E402
+
 from app.auth import create_token  # noqa: E402
 from app.definitions.authoring import store_definition  # noqa: E402
+from app.definitions.console import ensure_console_product  # noqa: E402
 from app.definitions.loader import DefinitionError  # noqa: E402
 from app.definitions.organizations import OrganizationDirectory  # noqa: E402
 from app.definitions.registry import DefinitionRegistry  # noqa: E402
@@ -37,9 +40,13 @@ DEMO, DEMO_SCOPE = "linear-demo", "workspace-product-eng"
 class AddedProductFixture(EngineCutoverFixture):
     def setUp(self):
         super().setUp()
-        authority = unittest.mock.patch.dict(os.environ, {"PIXEL_ENGINE_MODE": "definition"})
-        authority.start()
-        self.addCleanup(authority.stop)
+        # The authority is fixed when the application starts, so a test module that ran the
+        # lifespan earlier can leave it pinned. Both are set here, so this suite states the
+        # authority it tests under rather than inheriting whatever ran before it.
+        for patcher in (unittest.mock.patch.dict(os.environ, {"PIXEL_ENGINE_MODE": "definition"}),
+                        unittest.mock.patch.object(main, "_authority", "definition")):
+            patcher.start()
+            self.addCleanup(patcher.stop)
         self.registry = DefinitionRegistry()
         self.directory = OrganizationDirectory(self.registry)
         self.turns: dict[str, int] = {}
@@ -260,6 +267,54 @@ class ChangingRecordsThroughTheChatTest(AddedProductFixture):
         self.assertIn(self.tide.id, self.ask("what changed", session="ledger")["speech"])
 
 
+class LeavingAProductTest(AddedProductFixture):
+    """Asking to leave where you are is navigation, not a question the product must answer."""
+
+    def setUp(self):
+        super().setUp()
+        console = unittest.mock.patch.dict(os.environ, {"PIXEL_CONSOLE_DEFINITION": "pixel_console"})
+        console.start()
+        self.addCleanup(console.stop)
+        self.console = ensure_console_product(self.directory, TENANT, "planning-team", ("demo-admin",))
+        self.add_product()
+        self.add_records()
+
+    def test_asking_to_leave_from_inside_a_product_takes_you_out(self):
+        for message in ("take me back to my products", "open my products", "take me out of this"):
+            with self.subTest(message=message):
+                answered = self.ask(message, session=f"leave-{message[:10]}")
+                self.assertEqual(self.action(answered), "OPEN_PRODUCTS", answered["speech"])
+
+    def test_the_product_still_answers_its_own_questions(self):
+        """Nothing the product can answer is handed to the application instead."""
+        self.assertEqual(self.action(self.ask("show me the books", session="own")), "OPEN_CATALOGUE")
+        counted = self.ask("how many books are there", session="own")
+        self.assertIn("Tide Tables", counted["speech"])
+
+    def test_leaving_does_not_join_the_two_conversations(self):
+        """The product's own memory must not gain anything from a turn the application answered."""
+        self.ask(f"open {self.tide.id}", session="apart")
+        self.ask("take me back to my products", session="apart")
+        # The record opened before is still what "it" refers to in the product's conversation.
+        changed = self.ask("give it to Otto", session="apart")
+        self.assertEqual(self.action(changed), "REASSIGN_BOOK")
+        self.assertEqual(changed["validated_action"]["payload"]["record_id"], self.tide.id)
+
+    def test_the_turn_is_reported_in_the_session_the_caller_is_in(self):
+        answered = self.ask("take me back to my products", session="reported")
+        self.assertEqual(answered["session_id"], "reported")
+
+    def test_nothing_the_product_could_not_answer_is_invented(self):
+        """A request that is neither the product's nor the application's is still unanswered."""
+        lost = self.ask("arrange a taxi for tomorrow morning", session="neither")
+        self.assertIsNone(self.action(lost))
+
+    def test_an_organization_without_the_application_product_keeps_the_product_reply(self):
+        with unittest.mock.patch.dict(os.environ, {"PIXEL_CONSOLE_DEFINITION": ""}):
+            answered = self.ask("take me back to my products", session="none")
+            self.assertIsNone(self.action(answered))
+
+
 class ProductEndpointsTest(AddedProductFixture):
     """What the console calls: list this organization's products, and add one."""
 
@@ -297,10 +352,12 @@ class ProductEndpointsTest(AddedProductFixture):
         self.assertEqual(response.status_code, 401, response.text)
 
     def test_adding_a_product_makes_it_answer_straight_away(self):
+        definition = library_definition()
+        definition["definition"].update(ownership="organization_private", owner_organization=TENANT)
         response = self.client.post(f"/api/organizations/{TENANT}/products", headers=self.as_user(), json={
             "product_id": "added-through-the-api", "team_id": "planning-team",
             "definition_id": DEFINITION,
-            "definition": yaml.safe_dump(library_definition(), sort_keys=False),
+            "definition": yaml.safe_dump(definition, sort_keys=False),
         })
         self.assertEqual(response.status_code, 201, response.text)
         self.assertEqual(response.json()["name"], "Sample Library")
@@ -308,12 +365,14 @@ class ProductEndpointsTest(AddedProductFixture):
         self.assertIn("Sample Library", answered["speech"])
 
     def test_a_team_admin_may_add_a_product_for_their_team(self):
+        definition = library_definition()
+        definition["definition"].update(ownership="organization_private", owner_organization=TENANT)
         self.directory.add_member(TENANT, "team-owner", "team_admin", "planning-team")
         response = self.client.post(f"/api/organizations/{TENANT}/products",
                                     headers=self.as_user("team-owner"), json={
             "product_id": "added-by-team-owner", "team_id": "planning-team",
             "definition_id": DEFINITION,
-            "definition": yaml.safe_dump(library_definition(), sort_keys=False),
+            "definition": yaml.safe_dump(definition, sort_keys=False),
         })
         self.assertEqual(response.status_code, 201, response.text)
 

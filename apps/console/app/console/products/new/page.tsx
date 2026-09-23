@@ -2,33 +2,54 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, FileText, Globe, Link2, Loader2, Trash2 } from "lucide-react";
+import { Check, Loader2, Plus, Trash2 } from "lucide-react";
 import { useConsole } from "@pixel-console/components/console-context";
 import { useToast } from "@pixel-console/components/toast";
 import { Alert, Badge, Button, Field, Input, PageHead, Panel, PermissionDenied } from "@pixel-console/components/ui";
 import { TEAMS } from "@pixel-console/lib/mock-data";
+
+// Pixel's own guide, named here because the console may name her and core may not.
+const ASSISTANT_NAME = "Edith";
 import {
-  STEP_LABELS, STEPS, acceptUnderstanding, addSource, canEnter, completeAnalysis, definitionIdFor, goTo,
-  initialOnboarding, publish, removeSource, setConfirmation, setDetails, starterDefinitionText,
+  STEP_LABELS, STEPS, acceptUnderstanding, addField, addThing, approveGeneratedUnderstanding,
+  canEnter, completeAnalysis,
+  definitionIdFor, goTo, initialOnboarding, publish, removeField, removeThing, setConfirmation,
+  setDetails, starterDefinitionText, understood, updateField, updateThing,
   toggleAction, validate, type OnboardingState, type Step,
 } from "@pixel-console/lib/onboarding";
-import { addProduct, signIn, storedSession } from "@pixel-console/lib/pixel-api";
-
-const VISIBLE_STEPS: Step[] = STEPS.filter((s) => s !== "published");
+import { addProduct, productDraft, storedSession } from "@pixel-console/lib/pixel-api";
+import { ProductImport } from "@pixel-console/components/product-import";
 
 export default function NewProduct() {
+  const c = useConsole();
+  const [advanced, setAdvanced] = useState(false);
+  if (!c.live) return <PrototypeNewProduct />;
+  if (advanced) return <>
+    <div className="px-row" style={{ justifyContent: "flex-end" }}>
+      <Button onClick={() => setAdvanced(false)}>Describe a product instead</Button>
+    </div>
+    <ProductImport />
+  </>;
+  return <PrototypeNewProduct onAdvanced={() => setAdvanced(true)} />;
+}
+
+function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
   const c = useConsole();
   const toast = useToast();
   const router = useRouter();
   const teams = TEAMS.filter((t) => t.organizationId === c.organizationId && !t.suspended
     && c.can("products.manage", { teamId: t.id, productId: null }));
-  const [state, setState] = useState<OnboardingState>(() => initialOnboarding(teams[0]?.id ?? ""));
+  const liveTeamId = c.account?.team_id ?? c.account?.teams[0]?.team_id ?? null;
+  const [state, setState] = useState<OnboardingState>(() => initialOnboarding(liveTeamId ?? teams[0]?.id ?? ""));
   const [sourceName, setSourceName] = useState("");
   const [sourceKind, setSourceKind] = useState<"document" | "openapi" | "url">("document");
   const [publishing, setPublishing] = useState(false);
+  const [drafting, setDrafting] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const { setActiveWork } = c;
-  const liveTeamId = c.live ? "planning-team" : null;
+  const visibleSteps: Step[] = STEPS.filter((step) => step !== "published"
+    && (!c.live || (step !== "actions" && step !== "validation")));
 
   // A started draft is unsaved work: switching product would discard it.
   useEffect(() => {
@@ -51,19 +72,52 @@ export default function NewProduct() {
   const slugError = state.slug && !/^[a-z0-9][a-z0-9-]{1,62}$/.test(state.slug)
     ? "Use 2 to 63 lowercase letters, digits or hyphens, starting with a letter or digit." : null;
 
-  function runAnalysis() {
+  async function runAnalysis() {
+    setDraftError(null);
+    if (!c.live) {
+      setState((s) => goTo(s, "analyzing"));
+      window.setTimeout(() => setState((s) => completeAnalysis(s)), 1200);
+      return;
+    }
+    const session = storedSession();
+    if (!session) { setDraftError("Sign in to add a product."); return; }
+    setDrafting(true);
     setState((s) => goTo(s, "analyzing"));
-    // Mocked analysis: nothing is sent anywhere.
-    window.setTimeout(() => setState((s) => completeAnalysis(s)), 1200);
+    try {
+      // Pixel writes the definition from the description; nothing is stored until it is accepted
+      // and published, so this can be read and changed first.
+      const drafted = await productDraft(session, {
+        productName: state.name.trim(),
+        assistantName: ASSISTANT_NAME,
+        definitionId: definitionIdFor(state),
+        things: state.things.map((thing) => ({
+          name: thing.id, label: thing.label.trim(), plural: thing.plural.trim(), people: thing.people,
+          fields: thing.fields.filter((field) => field.name.trim()).map((field) => ({
+            name: field.name.trim(), type: field.type, required: field.required,
+            values: field.values.split(",").map((value) => value.trim()).filter(Boolean),
+          })),
+        })),
+      });
+      setState((s) => understood(s, {
+        definition: drafted.definition, things: drafted.things,
+        screens: drafted.screens, canDo: drafted.can_do,
+      }));
+    } catch (caught) {
+      setDraftError(caught instanceof Error ? caught.message : "Pixel could not write that product.");
+      setState((s) => goTo(s, "sources"));
+    } finally {
+      setDrafting(false);
+    }
   }
 
   return (
     <>
-      <PageHead title="New product" description="Give Pixel approved material about your product, review what it understood, and choose what Edith may do." />
+      <PageHead title="New product" description="Describe what your product keeps, review Pixel's understanding, and publish it for your organization."
+        actions={onAdvanced ? <Button onClick={onAdvanced}>Upload a definition</Button> : undefined} />
       <div className="px-onboarding">
         <nav aria-label="Onboarding steps">
           <ol className="px-steps">
-            {VISIBLE_STEPS.map((step, index) => {
+            {visibleSteps.map((step, index) => {
               const done = STEPS.indexOf(state.step) > STEPS.indexOf(step);
               return (
                 <li key={step} aria-current={state.step === step ? "step" : undefined} data-state={done ? "done" : undefined}>
@@ -104,44 +158,74 @@ export default function NewProduct() {
           {state.step === "sources" && (
             <Panel>
               <div className="px-stack">
-                <p className="px-muted">Add documentation, an OpenAPI specification or public https pages. Executable and script files are never accepted, and nothing you upload is run.</p>
-                <form className="px-row" style={{ alignItems: "flex-end" }} onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!sourceName.trim()) return;
-                  setState((s) => addSource(s, sourceName.trim(), sourceKind));
-                  setSourceName("");
-                }}>
-                  <div style={{ flex: "1 1 260px" }}>
-                    <Field label={sourceKind === "url" ? "Page address" : "File name"} hint="Prototype: type a name; no file is read.">{(f) => (
-                      <Input id={f.id} describedBy={f.describedBy} value={sourceName} onChange={(e) => setSourceName(e.target.value)}
-                        placeholder={sourceKind === "url" ? "https://docs.example.com/billing" : "billing-guide.pdf"} />
-                    )}</Field>
-                  </div>
-                  <Field label="Kind">{(f) => (
-                    <select id={f.id} className="px-select" value={sourceKind} onChange={(e) => setSourceKind(e.target.value as typeof sourceKind)}>
-                      <option value="document">Document</option><option value="openapi">OpenAPI</option><option value="url">Web page</option>
-                    </select>
-                  )}</Field>
-                  <Button type="submit">Add source</Button>
-                </form>
-                {state.sources.length === 0 ? <p className="px-muted">No sources yet.</p> : (
-                  <ul className="px-stack" style={{ listStyle: "none", padding: 0, margin: 0, gap: 8 }}>
-                    {state.sources.map((s) => (
-                      <li key={s.id} className="px-row" style={{ justifyContent: "space-between", border: "1px solid var(--px-border)", borderRadius: 6, padding: "8px 12px" }}>
-                        <span className="px-row">
-                          {s.kind === "url" ? <Globe aria-hidden size={16} /> : s.kind === "openapi" ? <Link2 aria-hidden size={16} /> : <FileText aria-hidden size={16} />}
-                          <span>{s.name}</span>
-                          {s.status === "accepted" ? <Badge tone="ok">Accepted</Badge> : <Badge tone="danger">Refused</Badge>}
-                          {s.reason ? <span className="px-small px-muted">{s.reason}</span> : null}
-                        </span>
-                        <Button size="sm" variant="ghost" aria-label={`Remove ${s.name}`} onClick={() => setState((st) => removeSource(st, s.id))}><Trash2 aria-hidden /></Button>
-                      </li>
+                <p className="px-muted">
+                  Tell Pixel what your product keeps. Each kind of record becomes a screen you can
+                  open, ask about and change. Mark the one that is your people, and Edith will be
+                  able to assign work to them.
+                </p>
+                {state.things.map((thing, index) => (
+                  <fieldset key={index} className="px-stack"
+                    style={{ border: "1px solid var(--px-border)", borderRadius: 8, padding: 12, gap: 10 }}>
+                    <legend className="px-label">{thing.label.trim() || `Record ${index + 1}`}</legend>
+                    <div className="px-row" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
+                      <Field label="One of them is called" hint="For example: Deal">{(f) => (
+                        <Input id={f.id} describedBy={f.describedBy} value={thing.label}
+                          onChange={(e) => setState((st) => updateThing(st, index, {
+                            label: e.target.value,
+                            id: thing.id || e.target.value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, ""),
+                          }))} />
+                      )}</Field>
+                      <Field label="Many of them are called" hint="For example: Deals">{(f) => (
+                        <Input id={f.id} describedBy={f.describedBy} value={thing.plural}
+                          onChange={(e) => setState((st) => updateThing(st, index, { plural: e.target.value }))} />
+                      )}</Field>
+                      <label className="px-row px-small">
+                        <input type="checkbox" checked={thing.people}
+                          onChange={(e) => setState((st) => updateThing(st, index, { people: e.target.checked }))} />
+                        These are my people
+                      </label>
+                      <Button size="sm" variant="ghost" aria-label={`Remove ${thing.label || "record"}`}
+                        onClick={() => setState((st) => removeThing(st, index))}><Trash2 aria-hidden /></Button>
+                    </div>
+                    {thing.fields.map((field, fieldIndex) => (
+                      <div key={fieldIndex} className="px-row" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
+                        <Field label="Carries">{(f) => (
+                          <Input id={f.id} describedBy={f.describedBy} value={field.name} placeholder="title"
+                            onChange={(e) => setState((st) => updateField(st, index, fieldIndex, { name: e.target.value }))} />
+                        )}</Field>
+                        <Field label="Which is">{(f) => (
+                          <select id={f.id} className="px-select" value={field.type}
+                            onChange={(e) => setState((st) => updateField(st, index, fieldIndex, { type: e.target.value as typeof field.type }))}>
+                            <option value="text">Text</option><option value="enum">One of a few choices</option>
+                            <option value="integer">A whole number</option><option value="date">A date</option>
+                            <option value="boolean">Yes or no</option>
+                          </select>
+                        )}</Field>
+                        {field.type === "enum" ? (
+                          <Field label="Choices" hint="Separated by commas">{(f) => (
+                            <Input id={f.id} describedBy={f.describedBy} value={field.values} placeholder="New, Won, Lost"
+                              onChange={(e) => setState((st) => updateField(st, index, fieldIndex, { values: e.target.value }))} />
+                          )}</Field>
+                        ) : null}
+                        <label className="px-row px-small">
+                          <input type="checkbox" checked={field.required}
+                            onChange={(e) => setState((st) => updateField(st, index, fieldIndex, { required: e.target.checked }))} />
+                          Always needed
+                        </label>
+                        <Button size="sm" variant="ghost" aria-label={`Remove ${field.name || "field"}`}
+                          disabled={thing.fields.length === 1}
+                          onClick={() => setState((st) => removeField(st, index, fieldIndex))}><Trash2 aria-hidden /></Button>
+                      </div>
                     ))}
-                  </ul>
-                )}
+                    <div><Button size="sm" onClick={() => setState((st) => addField(st, index))}>Add something it carries</Button></div>
+                  </fieldset>
+                ))}
+                <div><Button onClick={() => setState((st) => addThing(st))}><Plus aria-hidden />Add a kind of record</Button></div>
+                {draftError ? <Alert tone="danger">{draftError}</Alert> : null}
                 <div className="px-row">
                   <Button onClick={() => setState((s) => goTo(s, "details"))}>Back</Button>
-                  <Button variant="primary" disabled={!canEnter(state, "analyzing")} onClick={runAnalysis}>Analyze sources</Button>
+                  <Button variant="primary" loading={drafting} disabled={!canEnter(state, "analyzing")}
+                    onClick={runAnalysis}>Let Pixel write it</Button>
                 </div>
               </div>
             </Panel>
@@ -149,22 +233,41 @@ export default function NewProduct() {
 
           {state.step === "analyzing" && (
             <Panel>
-              <div className="px-row" role="status" aria-live="polite"><Loader2 aria-hidden className="px-spin" />Reading approved sources (mocked)…</div>
+              <div className="px-row" role="status" aria-live="polite">
+                <Loader2 aria-hidden className="px-spin" />Writing your product&apos;s definition...
+              </div>
             </Panel>
           )}
 
           {state.step === "review" && (
             <Panel>
               <div className="px-stack">
-                <Alert>This is Pixel&apos;s proposal. Nothing is used until you accept it, and every action starts turned off.</Alert>
+                <Alert>This is what Pixel understood. Nothing runs on it until you accept it.</Alert>
                 <dl className="px-stack" style={{ gap: 8 }}>
-                  <div><dt className="px-label">What the product does</dt><dd className="px-muted" style={{ margin: 0 }}>Finance teams manage invoices, subscriptions and refunds.</dd></div>
-                  <div><dt className="px-label">Main records</dt><dd style={{ margin: 0 }} className="px-row"><Badge>Invoice</Badge><Badge>Customer</Badge><Badge>Subscription</Badge></dd></div>
-                  <div><dt className="px-label">Proposed actions</dt><dd style={{ margin: 0 }} className="px-muted">{state.actions.length} ({state.actions.filter((a) => a.mutating).length} change data)</dd></div>
+                  <div><dt className="px-label">It keeps</dt><dd style={{ margin: 0 }} className="px-row">
+                    {(state.understanding?.things ?? []).map((thing) => <Badge key={thing}>{thing}</Badge>)}
+                  </dd></div>
+                  <div><dt className="px-label">Its screens</dt><dd style={{ margin: 0 }} className="px-row">
+                    {(state.understanding?.screens ?? []).map((screen) => <Badge key={screen}>{screen}</Badge>)}
+                  </dd></div>
+                  <div><dt className="px-label">Edith will be able to</dt><dd style={{ margin: 0 }}>
+                    <ul className="px-stack" style={{ margin: 0, paddingLeft: 18, gap: 4 }}>
+                      {(state.understanding?.canDo ?? []).map((can) => <li key={can} className="px-small">{can}</li>)}
+                    </ul>
+                  </dd></div>
                 </dl>
+                <details>
+                  <summary className="px-small">Read the definition Pixel wrote</summary>
+                  <pre className="px-small" style={{ maxHeight: 280, overflow: "auto", whiteSpace: "pre-wrap" }}>
+                    {state.understanding?.definition}
+                  </pre>
+                </details>
                 <div className="px-row">
-                  <Button onClick={() => setState((s) => goTo(s, "sources"))}>Change sources</Button>
-                  <Button variant="primary" onClick={() => setState((s) => acceptUnderstanding(s))}>Accept and configure actions</Button>
+                  <Button onClick={() => setState((s) => goTo(s, "sources"))}>Change the description</Button>
+                  <Button variant="primary" onClick={() => setState((s) => c.live
+                    ? approveGeneratedUnderstanding(s) : acceptUnderstanding(s))}>
+                    {c.live ? "Accept and continue" : "Accept and configure actions"}
+                  </Button>
                 </div>
               </div>
             </Panel>
@@ -225,13 +328,14 @@ export default function NewProduct() {
                     setPublishing(true);
                     try {
                       if (c.live) {
-                        const session = storedSession() ?? await signIn("demo-admin");
+                        const session = storedSession();
+                        if (!session) throw new Error("Sign in to add a product.");
                         const definitionId = definitionIdFor(state);
                         const created = await addProduct(session, {
                           productId: state.slug,
                           teamId: liveTeamId ?? state.teamId,
                           definitionId,
-                          definition: starterDefinitionText(state),
+                          definition: state.understanding?.definition ?? starterDefinitionText(state),
                           version: 1,
                         });
                         c.reloadProducts();

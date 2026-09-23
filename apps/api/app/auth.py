@@ -7,7 +7,7 @@ Two security domains:
   grants nothing else.
 
 Tokens are signed with itsdangerous and must also match an active login row. In production the
-member login would come from an OIDC provider; the passwordless demo login exists only for
+member login can come from verified email codes; the passwordless demo login exists only for
 isolated synthetic demos.
 
 Record grants (workspace scopes and record administration inside a product's data) are not

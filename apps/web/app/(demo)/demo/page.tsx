@@ -3031,6 +3031,14 @@ function ConversationCard({
       }
 
       setVoiceError("");
+      isAgentSpeakingRef.current = false;
+      voiceEngineRef.current?.cancelSpeech();
+      if (mockVoiceTimerRef.current !== null) {
+        window.clearTimeout(mockVoiceTimerRef.current);
+        mockVoiceTimerRef.current = null;
+      }
+      mockVoiceTranscriptRef.current = "";
+      setLiveTranscript("");
       setVoiceEngineStatus("Listening");
       setVoiceEngineMode("azure");
       return;

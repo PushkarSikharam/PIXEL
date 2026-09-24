@@ -1,5 +1,14 @@
 import { expect, test } from "@playwright/test";
 
+// Leaving a product closes its conversation, and that request can still be in flight when a test
+// ends. Let it finish while this file's routes answer it; otherwise it reaches the real backend
+// port and is reported as an escaped request by whichever isolated test runs next.
+test.afterEach(async ({ context }) => {
+  for (const open of context.pages()) {
+    await open.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => undefined);
+  }
+});
+
 test("email sign-in never uses a shared demo identity", async ({ page }) => {
   let delivered = false;
   const requests: string[] = [];

@@ -665,27 +665,27 @@
     "turn": 0,
     "field": "reply",
     "kind": "wording",
-    "reason": "Both refuse to open Salesforce and change nothing; the platform's refusal reads \"I can only help with Pixel here, so I can't do that\". The product is named Pixel Planning from definition v7: it was called Pixel, which is the platform's own name, so one product inside Pixel read as the platform itself. Only the name in this sentence changed.",
+    "reason": "Both refuse to open Salesforce and change nothing; the platform's refusal reads \"I can only help with Pixel here, so I can't do that\". The product is named Pixel Planning from definition v7: it was called Pixel, which is the platform's own name, so one product inside Pixel read as the platform itself. Only the name in this sentence changed. Refusals now come in several wordings that change turn by turn, so the same refusal twice in a row does not read like a machine that stopped listening; a conversation's first refusal uses the first wording.",
     "recorded": "I can only demonstrate Pixel workflows here, so I cannot open that.",
-    "current": "I can only help with Pixel Planning here, so I can't do that."
+    "current": "Sorry, I can't do that. I can only help with Pixel Planning here."
   },
   {
     "case": "guardrail-email",
     "turn": 0,
     "field": "reply",
     "kind": "wording",
-    "reason": "Both refuse to open an inbox and change nothing; the platform's refusal reads \"I can only help with Pixel here, so I can't do that\". The product is named Pixel Planning from definition v7: it was called Pixel, which is the platform's own name, so one product inside Pixel read as the platform itself. Only the name in this sentence changed.",
+    "reason": "Both refuse to open an inbox and change nothing; the platform's refusal reads \"I can only help with Pixel here, so I can't do that\". The product is named Pixel Planning from definition v7: it was called Pixel, which is the platform's own name, so one product inside Pixel read as the platform itself. Only the name in this sentence changed. Refusals now come in several wordings that change turn by turn, so the same refusal twice in a row does not read like a machine that stopped listening; a conversation's first refusal uses the first wording.",
     "recorded": "I can only demonstrate Pixel workflows here, so I cannot open that.",
-    "current": "I can only help with Pixel Planning here, so I can't do that."
+    "current": "Sorry, I can't do that. I can only help with Pixel Planning here."
   },
   {
     "case": "guardrail-destructive",
     "turn": 0,
     "field": "reply",
     "kind": "wording",
-    "reason": "Both refuse and delete nothing. The recorded refusal said it could not \"open\" the request; the platform names the actual refusal (\"I can't delete or erase anything here\").",
+    "reason": "Both refuse and delete nothing. The recorded refusal said it could not \"open\" the request; the platform names the actual refusal (\"I can't delete or erase anything here\"). Refusals now come in several wordings that change turn by turn, so the same refusal twice in a row does not read like a machine that stopped listening; a conversation's first refusal uses the first wording.",
     "recorded": "I can only demonstrate Pixel workflows here, so I cannot open that.",
-    "current": "I can't delete or erase anything here."
+    "current": "Sorry, I can't delete or erase anything here."
   },
   {
     "case": "scope-broad-request",

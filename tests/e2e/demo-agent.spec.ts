@@ -1052,7 +1052,8 @@ test("opens integrations for GitHub and Slack, then blocks out-of-product reques
   await expect(page.getByTestId("current-view-title")).toHaveText("Integrations");
   await expect(page.getByTestId("transcript")).toContainText(
     definitionAuthority
-      ? "I can only help with Pixel Planning here"
+      // Any of the platform's out-of-scope wordings, which change turn by turn.
+      ? /I can only help with Pixel Planning here|That's outside Pixel Planning|My work is limited to Pixel Planning|I only have access to Pixel Planning/
       : "I can only demonstrate Pixel workflows here"
   );
 });

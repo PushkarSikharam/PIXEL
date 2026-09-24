@@ -30,10 +30,15 @@ import { CONSOLE_ROUTES } from "@pixel-console/lib/console-routes";
 const PLATFORM_PROMPTS = ["Add a product", "How many products do I have?", "Show me the demo", "How does Pixel work?"];
 const PRODUCT_PROMPTS = ["What can you do?", "Take me back to my products"];
 
-export function EdithPanel({ session, shape, productId, scope = "product", onRecordsChanged, onUiAction }: {
+export function EdithPanel({
+  session, shape, productId, currentPage = null, selectedRecordId = null,
+  scope = "product", onRecordsChanged, onUiAction,
+}: {
   session: ApiSession;
   shape: ApiProductShape;
   productId: string;
+  currentPage?: string | null;
+  selectedRecordId?: string | null;
   /** Whether this panel is answering for Pixel itself or for a product inside it. */
   scope?: "platform" | "product";
   onRecordsChanged?: () => Promise<void>;
@@ -103,6 +108,8 @@ export function EdithPanel({ session, shape, productId, scope = "product", onRec
         turnId: turn.current,
         productId,
         message,
+        currentPage,
+        selectedRecordId,
         signal: controller.signal,
       });
       if (!alive.current || controller.signal.aborted) return;

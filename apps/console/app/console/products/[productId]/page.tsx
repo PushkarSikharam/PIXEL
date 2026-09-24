@@ -45,6 +45,9 @@ function LiveProductWorkspace({ productId }: { productId: string }) {
   const [conversationEpoch, setConversationEpoch] = useState(0);
   const [recordSelection, setRecordSelection] = useState<{ entity: string; id: string } | null>(null);
   const [recordFilter, setRecordFilter] = useState<{ entity: string; field: string; value: unknown } | null>(null);
+  const surfaceCurrentPage = shape
+    ? activeView ?? shape.views.find((view) => view.navigable)?.name ?? shape.views[0]?.name ?? null
+    : null;
 
   async function load(currentSession = session) {
     if (!currentSession) return;
@@ -82,10 +85,13 @@ function LiveProductWorkspace({ productId }: { productId: string }) {
   // every render of this screen.
   useEffect(() => {
     if (!shape || !session) return;
-    c.setProductSurface({ productId, shape, reloadRecords: () => load(session), showAction });
+    c.setProductSurface({
+      productId, shape, currentPage: surfaceCurrentPage, selectedRecordId: recordSelection?.id ?? null,
+      reloadRecords: () => load(session), showAction,
+    });
     return () => c.setProductSurface(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [productId, shape, session]);
+  }, [productId, shape, session, surfaceCurrentPage, recordSelection?.id]);
 
   if (loading) return <><PageHead title="Product" description="Loading live product." /><LoadingRows rows={6} /></>;
 

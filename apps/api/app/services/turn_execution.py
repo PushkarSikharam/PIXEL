@@ -35,6 +35,7 @@ from app.definitions.access import AccessDenied, authorize_product
 from app.definitions.organizations import OrganizationDirectory
 from app.definitions.sessions import DefinitionUnavailable, SessionEnded, check_pinned_session, pin_new_session
 from app.engine.conversation_engine import EngineTurn, TurnStage
+from app.engine.actions import RecordRef
 from app.engine.execution import ExecutionLedger, principal_owner
 from app.engine.composer import ResponseComposer
 from app.engine.memory import ConversationMemory, PendingConfirmation
@@ -126,6 +127,9 @@ class NewEngineTurns:
         if prepared is None:
             self._sessions.complete_turn(request.session_id, request.turn_id)
             return _denied(request, "no_engine_for_product")
+        if reason := _invalid_context(request, definition, prepared):
+            self._sessions.complete_turn(request.session_id, request.turn_id)
+            return _denied(request, reason)
         engine, translator = assemble_engine(prepared, definition, session_pin)
 
         engine_pin = EnginePin(session_pin.definition_id, session_pin.definition_version,
@@ -331,3 +335,25 @@ def _stale(request: TurnRequest) -> TurnResponse:
         speech="This turn was replaced by a newer request.", proposed_action=None, validated_action=None,
         intent_trace=IntentTrace(status="interrupted", reason="Superseded by a newer turn."),
     )
+
+
+def _invalid_context(request: TurnRequest, definition: Any, prepared) -> str | None:
+    view = None
+    if request.current_page:
+        view = definition.views.get(request.current_page)
+        if view is None:
+            return "invalid_turn_page"
+    if not request.selected_issue_id:
+        return None
+    wanted = request.selected_issue_id.lower()
+    matches = [
+        RecordRef(entity, record.id)
+        for entity, records in prepared.records.items()
+        for record in records
+        if record.id.lower() == wanted
+    ]
+    if view is not None and view.entity is not None:
+        matches = [match for match in matches if match.entity == view.entity]
+    if len(matches) != 1:
+        return "invalid_selected_record"
+    return None

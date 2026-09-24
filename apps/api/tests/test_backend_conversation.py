@@ -23,10 +23,12 @@ PLATFORM = "workspace-platform"
 
 class BackendConversationTest(EngineCutoverFixture):
     def say(self, message: str, *, session: str = "talk", turn_id: int = 1, scope: str | None = None,
-            page: str = "dashboard") -> dict:
+            page: str = "dashboard", selected: str | None = None) -> dict:
         body = {"session_id": session, "turn_id": turn_id, "product_id": "linear-demo", "message": message,
                 "input_mode": "text", "current_page": page,
                 "workspace_scope_id": scope or "workspace-product-eng"}
+        if selected:
+            body["selected_issue_id"] = selected
         response = self.client.post("/api/turn", headers=self.headers, json=body)
         self.assertEqual(response.status_code, 200, response.text)
         return response.json()
@@ -273,8 +275,20 @@ class DefinitionAuthorityConversationTest(EngineCutoverFixture):
         self.assertEqual(self.say("what next", session="home", page="dashboard")["speech"],
                          "Ask what I can do in Pixel to see where to go next.")
         # A page the definition does not declare is never trusted.
-        self.assertEqual(self.say("what next", session="bogus", page="billing")["speech"],
-                         "Ask what I can do in Pixel to see where to go next.")
+        forged = self.say("what next", session="bogus", page="billing")
+        self.assertEqual(forged["status"], "denied")
+        self.assertIn("invalid_turn_page", forged["intent_trace"]["reason"])
+
+    def test_turn_context_selected_record_must_belong_to_this_product_and_scope(self):
+        valid = self.say("what next", session="selected", page="issue_detail", selected="LIN-142")
+        self.assertNotEqual(valid["status"], "denied")
+        forged = self.say("what next", session="forged", page="issue_detail", selected="CON-7")
+        self.assertEqual(forged["status"], "denied")
+        self.assertIn("invalid_selected_record", forged["intent_trace"]["reason"])
+        hidden = self.say("what next", session="hidden-selected", page="issue_detail",
+                          scope=PLATFORM, selected="LIN-142")
+        self.assertEqual(hidden["status"], "denied")
+        self.assertIn("invalid_selected_record", hidden["intent_trace"]["reason"])
 
     def test_adding_a_member_without_a_name_asks_for_it_and_prefills_the_answer(self):
         asked = self.say("Add a new team member", session="member")

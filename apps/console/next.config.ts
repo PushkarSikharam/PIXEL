@@ -1,10 +1,5 @@
 import type { NextConfig } from "next";
 
-// The one place the console may reach out to: the Pixel API it was pointed at, and nothing
-// else. Unset, the console talks to nobody and shows its own sample data.
-const apiBaseUrl = process.env.NEXT_PUBLIC_PIXEL_API_BASE_URL?.trim();
-const apiOrigin = apiBaseUrl?.startsWith("http") ? new URL(apiBaseUrl).origin : null;
-
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
@@ -24,12 +19,12 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              "script-src 'self' 'unsafe-inline'",
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data:",
               "font-src 'self'",
               "media-src 'self' blob:",
-              ["connect-src 'self' ws: wss:", apiOrigin].filter(Boolean).join(" "),
+              "connect-src 'self' ws: wss:",
               "frame-ancestors 'none'",
               "base-uri 'none'",
               "form-action 'self'"

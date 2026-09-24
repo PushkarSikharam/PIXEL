@@ -7,6 +7,7 @@ from urllib import error as url_error
 
 from test_engine_cutover import EngineCutoverFixture
 from app import account_api, db
+from app.auth import CSRF_COOKIE, SESSION_COOKIE, create_token
 from library_fixtures import library_definition
 from app.definitions.authoring import store_definition
 from app.definitions.loader import DefinitionError
@@ -65,6 +66,7 @@ class EmailAccountsTest(EngineCutoverFixture):
         enabled = patch.dict(os.environ, {
             "PIXEL_EMAIL_LOGIN_ENABLED": "true", "PIXEL_SELF_SIGNUP_ENABLED": "true",
             "PIXEL_ENGINE_MODE": "definition",
+            "PIXEL_SECURE_COOKIES": "false",
             "PIXEL_AUTH_SECRET": "test-only-stable-secret", "PIXEL_SMTP_HOST": "invalid.example",
             "PIXEL_SMTP_USER": "test", "PIXEL_SMTP_PASSWORD": "test", "PIXEL_EMAIL_FROM": "noreply@example.test",
         })
@@ -84,6 +86,12 @@ class EmailAccountsTest(EngineCutoverFixture):
         self.assertEqual(result.status_code, 200, result.text)
         return result.json()
 
+    def bearer(self, session: dict) -> dict[str, str]:
+        return {"Authorization": "Bearer " + create_token(session["user_id"], session["tenant_id"])}
+
+    def csrf(self, session: dict) -> dict[str, str]:
+        return {"X-Pixel-CSRF": session["csrf_token"]}
+
     def test_disabled_signin_does_not_send_mail(self):
         with patch.dict(os.environ, {"PIXEL_EMAIL_LOGIN_ENABLED": "false"}):
             self.assertEqual(self.client.post("/api/account/email-code", json={"email": "a@example.test"}).status_code, 503)
@@ -100,7 +108,7 @@ class EmailAccountsTest(EngineCutoverFixture):
         again = self.login()
         self.assertNotEqual(first["tenant_id"], second["tenant_id"])
         self.assertEqual(first["tenant_id"], again["tenant_id"])
-        headers = {"Authorization": "Bearer " + first["token"]}
+        headers = self.bearer(first)
         response = self.client.get("/api/account/session", headers=headers)
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["teams"][0]["team_id"], "default")
@@ -153,10 +161,23 @@ class EmailAccountsTest(EngineCutoverFixture):
 
     def test_logout_revokes_only_current_session(self):
         first, second = self.login(), self.login()
-        headers = {"Authorization": "Bearer " + first["token"]}
+        headers = self.bearer(first)
+        second_headers = self.bearer(second)
         self.assertEqual(self.client.post("/api/account/logout", headers=headers).status_code, 204)
         self.assertEqual(self.client.get("/api/account/session", headers=headers).status_code, 401)
-        self.assertEqual(self.client.get("/api/account/session", headers={"Authorization": "Bearer " + second["token"]}).status_code, 200)
+        self.assertEqual(self.client.get("/api/account/session", headers=second_headers).status_code, 200)
+
+    def test_browser_login_uses_httponly_cookie_and_csrf_not_a_script_token(self):
+        session = self.login()
+        self.assertNotIn("token", session)
+        self.assertRegex(session["csrf_token"], r"^[A-Za-z0-9_-]{30,}$")
+        cookie_names = {cookie.name for cookie in self.client.cookies.jar}
+        self.assertIn(SESSION_COOKIE, cookie_names)
+        self.assertIn(CSRF_COOKIE, cookie_names)
+        self.assertEqual(self.client.get("/api/account/session").status_code, 200)
+        self.assertEqual(self.client.post("/api/account/logout").status_code, 403)
+        self.assertEqual(self.client.post("/api/account/logout", headers=self.csrf(session)).status_code, 204)
+        self.assertEqual(self.client.get("/api/account/session").status_code, 401)
 
     def test_signup_requires_explicit_enable(self):
         with patch.dict(os.environ, {"PIXEL_SELF_SIGNUP_ENABLED": "false"}):
@@ -166,7 +187,7 @@ class EmailAccountsTest(EngineCutoverFixture):
 
     def test_verified_owner_can_add_a_private_product_and_answer_from_its_sources(self):
         account = self.login()
-        headers = {"Authorization": "Bearer " + account["token"]}
+        headers = self.bearer(account)
         definition = library_definition()
         definition["definition"].update(ownership="organization_private", owner_organization=account["tenant_id"])
         response = self.client.post(f'/api/organizations/{account["tenant_id"]}/products', headers=headers, json={
@@ -189,7 +210,7 @@ class EmailAccountsTest(EngineCutoverFixture):
 
     def test_upload_cannot_publish_shared_or_another_organizations_definition(self):
         account = self.login()
-        headers = {"Authorization": "Bearer " + account["token"]}
+        headers = self.bearer(account)
         for metadata in ({"ownership": "platform_shared"}, {"ownership": "organization_private", "owner_organization": "someone-else"}):
             definition = library_definition()
             definition["definition"].update(metadata)
@@ -248,7 +269,7 @@ class SignInLimitsTest(EmailAccountsTest):
     def test_a_session_survives_its_organization_being_readable(self):
         session = self.login()
         answered = self.client.get("/api/account/session", headers={
-            "Authorization": f"Bearer {session['token']}"})
+            **self.bearer(session)})
         self.assertEqual(answered.status_code, 200, answered.text)
         self.assertIn("console_product_id", answered.json())
 
@@ -256,6 +277,6 @@ class SignInLimitsTest(EmailAccountsTest):
         session = self.login()
         with patch.dict(os.environ, {"PIXEL_CONSOLE_DEFINITION": "pixel_console"}):
             answered = self.client.get("/api/account/session", headers={
-                "Authorization": f"Bearer {session['token']}"})
+                **self.bearer(session)})
         self.assertEqual(answered.status_code, 200, answered.text)
         self.assertIsNone(answered.json()["console_product_id"])

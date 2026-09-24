@@ -15,12 +15,12 @@ from urllib import error as url_error
 from urllib import request as url_request
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Response
+from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 import logging
 
-from app.auth import AuthUser, create_token, require_auth, require_member
+from app.auth import CSRF_COOKIE, SESSION_COOKIE, AuthUser, create_token, require_auth, require_member
 from app.definitions.console import configured_console, ensure_console_product
 from app.definitions.organizations import OrganizationDirectory
 from app.db import get_connection
@@ -36,6 +36,7 @@ DEFAULT_TEAM_ID, DEFAULT_TEAM_NAME = "default", "My team"
 DEPLOYMENT_CODES_PER_HOUR = 5000
 DEPLOYMENT_BUCKET = "deployment"
 router = APIRouter(prefix="/api/account", tags=["account"])
+SESSION_COOKIE_MAX_AGE = 86400
 
 
 class EmailRequest(BaseModel):
@@ -187,9 +188,11 @@ def verify_code(body: CodeRequest, response: Response) -> dict:
         organization = connection.execute("select state from organizations where tenant_id=?", (account["tenant_id"],)).fetchone()
     if not organization or organization[0] != "active":
         raise HTTPException(403, "This account is unavailable.")
+    token = create_token(account["user_id"], account["tenant_id"])
+    csrf = secrets.token_urlsafe(32)
+    _set_session_cookies(response, token, csrf)
     response.headers["Cache-Control"] = "no-store"
-    return {"token": create_token(account["user_id"], account["tenant_id"]),
-            "user_id": account["user_id"], "tenant_id": account["tenant_id"]}
+    return {"csrf_token": csrf, "user_id": account["user_id"], "tenant_id": account["tenant_id"]}
 
 
 def _register(email: str) -> dict:
@@ -240,10 +243,33 @@ def account_session(response: Response, user: AuthUser = Depends(require_auth)) 
 
 
 @router.post("/logout", status_code=204)
-def logout(user: AuthUser = Depends(require_auth), authorization: str = Header()) -> Response:
+def logout(user: AuthUser = Depends(require_auth), authorization: str | None = Header(default=None),
+           pixel_session: str | None = Cookie(default=None, alias=SESSION_COOKIE)) -> Response:
     require_member(user)
-    token = authorization.removeprefix("Bearer ").strip()
+    token = authorization.removeprefix("Bearer ").strip() if authorization else (pixel_session or "")
     with get_connection() as connection:
         connection.execute("delete from login_sessions where token_hash=? and user_id=?",
                            (hashlib.sha256(token.encode()).hexdigest(), user.user_id))
-    return Response(status_code=204, headers={"Cache-Control": "no-store"})
+    response = Response(status_code=204, headers={"Cache-Control": "no-store"})
+    _clear_session_cookies(response)
+    return response
+
+
+def _cookie_secure() -> bool:
+    return env_bool("PIXEL_SECURE_COOKIES", default=True)
+
+
+def _set_session_cookies(response: Response, token: str, csrf: str) -> None:
+    response.set_cookie(
+        SESSION_COOKIE, token, max_age=SESSION_COOKIE_MAX_AGE, httponly=True,
+        secure=_cookie_secure(), samesite="lax", path="/api",
+    )
+    response.set_cookie(
+        CSRF_COOKIE, csrf, max_age=SESSION_COOKIE_MAX_AGE, httponly=False,
+        secure=_cookie_secure(), samesite="lax", path="/api",
+    )
+
+
+def _clear_session_cookies(response: Response) -> None:
+    response.delete_cookie(SESSION_COOKIE, path="/api")
+    response.delete_cookie(CSRF_COOKIE, path="/api")

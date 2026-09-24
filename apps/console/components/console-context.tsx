@@ -27,6 +27,8 @@ interface ConsoleState {
 export interface ProductSurface {
   productId: string;
   shape: ApiProductShape;
+  currentPage: string | null;
+  selectedRecordId: string | null;
   reloadRecords: () => Promise<void>;
   showAction: (action: ApiActionShape, payload: Record<string, unknown>) => void;
 }

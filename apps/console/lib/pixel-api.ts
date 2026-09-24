@@ -1,10 +1,9 @@
 /**
  * The console's connection to the running Pixel API.
  *
- * The console was built on synthetic data so it could be designed before there was anything to
- * connect it to. It still runs that way: without `NEXT_PUBLIC_PIXEL_API_BASE_URL` set, nothing
- * here makes a request and the console shows its own sample organization exactly as before.
- * With it set, the products the console lists are the products the organization really has.
+ * The console talks to Pixel through its same-origin `/api/agent` proxy. That keeps the browser
+ * session in HttpOnly cookies owned by this app instead of exposing a bearer token to JavaScript
+ * or depending on third-party cookies.
  *
  * Nothing in this file decides what anybody may see. The API answers for the signed-in caller
  * and refuses what they may not reach; the console only displays what comes back.
@@ -102,7 +101,7 @@ export interface ApiExecutionReceipt {
 }
 
 export interface ApiSession {
-  token: string;
+  csrfToken: string;
   userId: string;
   tenantId: string;
 }
@@ -142,10 +141,10 @@ export async function requestEmailCode(email: string): Promise<{ challenge_id: s
 }
 
 export async function verifyEmailCode(challengeId: string, code: string): Promise<ApiSession> {
-  const answer = await call<{ token: string; user_id: string; tenant_id: string }>(
+  const answer = await call<{ csrf_token: string; user_id: string; tenant_id: string }>(
     "/account/verify-code", { method: "POST", body: JSON.stringify({ challenge_id: challengeId, code }) },
   );
-  const session = { token: answer.token, userId: answer.user_id, tenantId: answer.tenant_id };
+  const session = { csrfToken: answer.csrf_token, userId: answer.user_id, tenantId: answer.tenant_id };
   remember(session);
   return session;
 }
@@ -173,8 +172,7 @@ export async function endSession(): Promise<void> {
 const TOKEN_KEY = "pixel.console.session";
 
 export function apiBaseUrl(): string | null {
-  const configured = process.env.NEXT_PUBLIC_PIXEL_API_BASE_URL?.trim();
-  return configured ? configured.replace(/\/$/, "") : "/api/agent";
+  return "/api/agent";
 }
 
 /** Whether this console is pointed at a running Pixel. */
@@ -205,11 +203,13 @@ function remember(session: ApiSession | null): void {
 async function call<T>(path: string, init: RequestInit = {}, session?: ApiSession | null): Promise<T> {
   const base = apiBaseUrl();
   if (!base) throw new ApiError("This console is not connected to a Pixel API.");
+  const method = (init.method ?? "GET").toUpperCase();
   const response = await fetch(`${base}${path}`, {
     ...init,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...(session ? { Authorization: `Bearer ${session.token}` } : {}),
+      ...(session && !["GET", "HEAD", "OPTIONS"].includes(method) ? { "X-Pixel-CSRF": session.csrfToken } : {}),
       ...(init.headers ?? {}),
     },
   });
@@ -303,6 +303,8 @@ export async function sendProductTurn(session: ApiSession, input: {
   turnId: number;
   productId: string;
   message: string;
+  currentPage?: string | null;
+  selectedRecordId?: string | null;
   signal?: AbortSignal;
 }): Promise<ApiTurnResponse> {
   return call<ApiTurnResponse>("/turn", {
@@ -314,7 +316,8 @@ export async function sendProductTurn(session: ApiSession, input: {
       product_id: input.productId,
       message: input.message,
       input_mode: "text",
-      current_page: "console",
+      ...(input.currentPage ? { current_page: input.currentPage } : {}),
+      ...(input.selectedRecordId ? { selected_issue_id: input.selectedRecordId } : {}),
       workspace_scope_id: "primary",
     }),
   }, session);
@@ -323,7 +326,8 @@ export async function sendProductTurn(session: ApiSession, input: {
 export async function productSpeech(session: ApiSession, productId: string, sessionId: string, text: string, signal: AbortSignal) {
   const response = await fetch(`${apiBaseUrl()}/speech`, {
     method: "POST", signal,
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
+    credentials: "include",
+    headers: { "Content-Type": "application/json", "X-Pixel-CSRF": session.csrfToken },
     body: JSON.stringify({ product_id: productId, session_id: sessionId, text }),
   });
   if (!response.ok) throw new ApiError(response.status === 429 ? "Voice limit reached. Text remains available." : "Voice is unavailable. Text remains available.");

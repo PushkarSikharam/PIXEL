@@ -13,12 +13,15 @@
  */
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { useConsole } from "./console-context";
 import { EdithPanel } from "./edith";
 import { productShape, storedSession, type ApiProductShape, type ApiSession } from "@pixel-console/lib/pixel-api";
+import { viewForRoute } from "@pixel-console/lib/console-routes";
 
 export function Edith() {
   const c = useConsole();
+  const pathname = usePathname();
   const surface = c.productSurface;
   const consoleProductId = c.account?.console_product_id ?? null;
   const [session, setSession] = useState<ApiSession | null>(null);
@@ -41,11 +44,12 @@ export function Edith() {
   if (surface) {
     return (
       <EdithPanel key={`product:${surface.productId}`} session={session} shape={surface.shape}
-        productId={surface.productId} scope="product" onRecordsChanged={surface.reloadRecords}
+        productId={surface.productId} currentPage={surface.currentPage}
+        selectedRecordId={surface.selectedRecordId} scope="product" onRecordsChanged={surface.reloadRecords}
         onUiAction={surface.showAction} />
     );
   }
   if (!consoleProductId || !consoleShape) return null;
   return <EdithPanel key="pixel" session={session} shape={consoleShape}
-    productId={consoleProductId} scope="platform" />;
+    productId={consoleProductId} currentPage={viewForRoute(pathname)} scope="platform" />;
 }

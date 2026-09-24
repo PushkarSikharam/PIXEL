@@ -85,6 +85,12 @@ class OrganizationDirectory:
             row = connection.execute("select * from organizations where tenant_id = ?", (tenant_id,)).fetchone()
         return Organization(row["tenant_id"], row["name"], row["state"]) if row else None
 
+    def organizations(self) -> list[Organization]:
+        """Every organization, in identifier order."""
+        with use_connection(self._connection) as connection:
+            rows = connection.execute("select * from organizations order by tenant_id").fetchall()
+        return [Organization(row["tenant_id"], row["name"], row["state"]) for row in rows]
+
     def set_organization_state(self, tenant_id: str, state: str) -> Organization:
         self._require(state, ORGANIZATION_STATES, "organization state")
         self._update("organizations", "state = ?", (state,), "tenant_id = ?", (tenant_id,))

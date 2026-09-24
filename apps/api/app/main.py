@@ -7,6 +7,7 @@ from app.definitions.loader import parse_definition
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 import logging
+import re
 import threading
 import time
 
@@ -49,7 +50,7 @@ from dataclasses import replace as dataclasses_replace
 from typing import Any
 
 from app.definitions.authoring import store_definition
-from app.definitions.console import configured_console
+from app.definitions.console import catch_up_console_products, configured_console
 from app.definitions.drafting import ProductDraft, draft_text
 from app.definitions.loader import DefinitionError, MAX_DEFINITION_BYTES, parse_definition
 from app.definitions.registry import RegistryError
@@ -279,6 +280,12 @@ async def lifespan(_: FastAPI):
         DemoInstanceStore().prune(limit=1000)
         rate_limits.arm()
         idle_reset.arm()
+        # Anyone who has not signed in since the last release still gets the assistant this
+        # deployment ships, rather than the one that existed when they signed up.
+        try:
+            catch_up_console_products()
+        except Exception:  # noqa: BLE001 - starting up matters more than catching up
+            logger.exception("console_catch_up_unavailable")
         if env_bool("PIXEL_DEMO_SEEDS", default=False):
             # Demo records are created once, at startup, and never by a request: a refused or
             # unauthorized request must leave product data exactly as it found it.
@@ -307,6 +314,37 @@ app.include_router(knowledge_router)
 @app.exception_handler(RecordConflict)
 async def conflict_handler(_: Request, error: RecordConflict):
     return JSONResponse(status_code=409, content={"detail": str(error)})
+
+
+@app.exception_handler(RequestValidationError)
+async def refused_request_handler(_: Request, error: RequestValidationError):
+    """Say what was wrong with a request in a sentence, naming the field it was wrong about.
+
+    The default answer is a validation report: a list of objects, each carrying the whole body
+    that was sent, written for whoever is holding the schema. Our clients are screens people use,
+    and this reaches them - a person who typed a product name has no idea what
+    `identity.product_name` is, and should never be shown their own input echoed back as `input`.
+
+    The status is unchanged, and `detail` is still a string, so nothing that reads it breaks.
+    """
+    first = (error.errors() or [{}])[0]
+    location = [str(part) for part in first.get("loc", ()) if part not in ("body", "query", "path")]
+    field = location[-1] if location else None
+    message = str(first.get("msg", "This request could not be accepted.")).removeprefix("Value error, ")
+    # A rule that checked one field of a whole body says so itself, because the body is what
+    # failed and only the rule knows which part of it did.
+    named, _, attributed = message.partition(": ")
+    if attributed and " " not in named:
+        field, message = named, attributed
+        return JSONResponse(status_code=422,
+                            content={"detail": f"{message.rstrip('.')}.", "field": field})
+    if field is None:
+        return JSONResponse(status_code=422, content={"detail": message, "field": None})
+    _, label = _DRAFT_FIELDS.get(".".join(location[-2:]), (None, None))
+    label = label or field.replace("_", " ").capitalize()
+    body = message[0].lower() + message[1:] if message[:1].isupper() else message
+    return JSONResponse(status_code=422,
+                        content={"detail": f"{label} {body.rstrip('.')}.", "field": field})
 
 
 @app.exception_handler(RecordNotFound)
@@ -551,7 +589,7 @@ def draft_product(draft: ProductDraft, user: AuthUser = Depends(require_member))
         text = draft_text(draft, user.tenant_id)
         definition = parse_definition(text.encode())
     except (DefinitionError, ValueError) as refused:
-        raise HTTPException(status_code=422, detail=str(refused)) from refused
+        raise HTTPException(status_code=422, detail=_draft_problem(refused)) from refused
     return DraftedDefinition(
         definition_id=draft.definition_id,
         product_name=definition.identity.product_name,
@@ -560,6 +598,35 @@ def draft_product(draft: ProductDraft, user: AuthUser = Depends(require_member))
         screens=[view.label for view in definition.views.values()],
         can_do=sorted({action.description for action in definition.actions.values()}),
     )
+
+
+# Where a definition's own field names come from, in the words somebody filled in. A person who
+# typed a name into a box called "Product name" should not be sent to read about
+# `identity.product_name`, which appears nowhere they have been.
+_DRAFT_FIELDS = {
+    "identity.product_name": ("product_name", "The product name"),
+    "identity.assistant_name": ("assistant_name", "The assistant's name"),
+    "definition.definition_id": ("definition_id", "The product's address"),
+}
+_DRAFT_PROBLEM = re.compile(r"Value error, ([a-z_]+\.[a-z_]+): (.+?)(?: \[type=|$)", re.S)
+
+
+def _draft_problem(refused: Exception) -> dict:
+    """What was wrong with a described product, said once and attributed to one field.
+
+    A validation report is written for whoever wrote the definition. Nobody wrote this one: Pixel
+    did, from what somebody typed, so the report is ours to read and theirs to be told about in a
+    sentence. Anything we cannot attribute is still returned, plainly, rather than swallowed.
+    """
+    found = _DRAFT_PROBLEM.search(str(refused))
+    if found is None:
+        return {"field": None, "message": "This product could not be written. Please check what you entered."}
+    path, problem = found.group(1), " ".join(found.group(2).split())
+    # One field can fail several rules at once. The first is the one to fix, and the rest repeat
+    # the field's own path, which is ours and means nothing to the person reading it.
+    problem = problem.split(";")[0].strip().rstrip(".")
+    field, label = _DRAFT_FIELDS.get(path, (None, path.rpartition(".")[2].replace("_", " ").capitalize()))
+    return {"field": field, "message": f"{label} {problem}."}
 
 
 @app.post("/api/organizations/{tenant_id}/products", response_model=ProductSummary, status_code=201)

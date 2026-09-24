@@ -13,6 +13,7 @@ guess.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from app.definitions.organizations import OrganizationDirectory
@@ -20,6 +21,8 @@ from app.definitions.registry import RegistryError
 from app.definitions.shipped_knowledge import publish_shipped_documents
 from app.record_access import grant_records
 from app.services.env import env_value
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -34,6 +37,54 @@ def configured_console() -> ConsoleProduct | None:
     if not definition_id:
         return None
     return ConsoleProduct(definition_id, definition_id.replace("_", "-"))
+
+
+def console_versions_behind(directory: OrganizationDirectory) -> dict[str, int]:
+    """Organizations whose assistant for moving around Pixel is older than the one we ship.
+
+    Reported rather than assumed: an assistant three versions old answers every question in the
+    wording of the version it is on, which reads as a broken assistant rather than an old one.
+    Nothing here changes anything, so it is safe to call from a check as well as from a repair.
+    """
+    console = configured_console()
+    if console is None:
+        return {}
+    newest = max(directory.definitions.source.versions(console.definition_id), default=0)
+    if newest < 1:
+        return {}
+    behind: dict[str, int] = {}
+    for organization in directory.organizations():
+        binding = directory.product(organization.tenant_id, console.product_id)
+        if binding is not None and binding.definition_version < newest:
+            behind[organization.tenant_id] = binding.definition_version
+    return behind
+
+
+def catch_up_console_products(directory: OrganizationDirectory | None = None) -> int:
+    """Bring every organization's assistant up to the version this deployment ships.
+
+    Signing in does this for whoever signs in; an organization nobody has signed in to since the
+    last release would otherwise sit behind indefinitely, and its people would meet an assistant
+    that cannot do what the documentation says it can.
+
+    Only the application's own product is touched. A product somebody added themselves stays on
+    the version they accepted until they move it, which is the whole reason a product is pinned.
+    """
+    directory = directory or OrganizationDirectory()
+    console = configured_console()
+    if console is None:
+        return 0
+    moved = 0
+    for tenant_id in list(console_versions_behind(directory)):
+        team = next((team.team_id for team in directory.teams(tenant_id)), None)
+        try:
+            if ensure_console_product(directory, tenant_id, team or "") is not None:
+                moved += 1
+        except Exception:  # noqa: BLE001 - one organization must not stop the others
+            logger.exception("console_catch_up_failed", extra={"tenant_id": tenant_id})
+    if moved:
+        logger.info("console_caught_up", extra={"organizations": moved})
+    return moved
 
 
 def ensure_console_product(directory: OrganizationDirectory, tenant_id: str, team_id: str,

@@ -116,6 +116,13 @@ export class ApiError extends Error {
   }
 }
 
+/** A refusal about one thing somebody typed, and which thing it was. */
+export class FieldError extends ApiError {
+  constructor(message: string, readonly field: string) {
+    super(message);
+  }
+}
+
 /**
  * Somebody else changed the record first.
  *
@@ -149,8 +156,21 @@ export async function verifyEmailCode(challengeId: string, code: string): Promis
   return session;
 }
 
-export async function currentAccount(session: ApiSession): Promise<ApiAccount> {
-  return call("/account/session", {}, session);
+/**
+ * Who is signed in, according to the server.
+ *
+ * This is the whole sign-in check. The session cookie travels with the request, so the answer is
+ * the same in a new tab, after a refresh, and after the browser has been closed and reopened -
+ * which the old check, reading a value this tab happened to have in memory, was not.
+ *
+ * The identity it returns is remembered per tab afterwards, as a convenience for screens that
+ * need the organization before this has been asked again. It is a cache, never a credential:
+ * nothing is authorised by it, and losing it costs nothing but this call.
+ */
+export async function currentAccount(): Promise<ApiAccount> {
+  const account = await call<ApiAccount>("/account/session");
+  remember({ csrfToken: csrfToken(), userId: account.user_id, tenantId: account.tenant_id });
+  return account;
 }
 
 export interface ApiKnowledge { version: number; documents: Array<{ document_id: string; title: string; characters: number }> }
@@ -163,10 +183,19 @@ export async function approveKnowledge(session: ApiSession, productId: string, t
   }, session);
 }
 
+/**
+ * End the session on the server, then forget it here.
+ *
+ * The server call is not conditional on this tab having remembered anything. It used to be, and
+ * once the session lives in a cookie that would have meant a tab which had not signed in could
+ * appear to sign out while leaving the session alive for every other tab and for tomorrow.
+ */
 export async function endSession(): Promise<void> {
-  const session = storedSession();
-  if (session) await call("/account/logout", { method: "POST" }, session);
-  remember(null);
+  try {
+    await call("/account/logout", { method: "POST" });
+  } finally {
+    remember(null);
+  }
 }
 
 const TOKEN_KEY = "pixel.console.session";
@@ -180,13 +209,20 @@ export function isLive(): boolean {
   return apiBaseUrl() !== null;
 }
 
+/**
+ * The identity this tab last saw, for screens that need the organization to ask their question.
+ *
+ * Not a credential and not the sign-in check: the cookie is both of those. A tab that has this
+ * and a tab that does not are equally signed in, which is the point.
+ */
 export function storedSession(): ApiSession | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.sessionStorage.getItem(TOKEN_KEY);
-    return raw ? (JSON.parse(raw) as ApiSession) : null;
+    const kept = raw ? (JSON.parse(raw) as ApiSession) : null;
+    return kept ? { ...kept, csrfToken: csrfToken() } : null;
   } catch {
-    // A browser that refuses storage simply signs in again; it is never a reason to fail.
+    // A browser that refuses storage still works; it just asks the server again.
     return null;
   }
 }
@@ -200,7 +236,21 @@ function remember(session: ApiSession | null): void {
   }
 }
 
-async function call<T>(path: string, init: RequestInit = {}, session?: ApiSession | null): Promise<T> {
+/**
+ * The token a write has to echo back, taken from the cookie the server set.
+ *
+ * It is read at the moment of the request rather than remembered, so a tab that has been open
+ * across a new sign-in sends the token that is actually current. It is deliberately not a secret
+ * from our own pages: it is a secret from other sites, and what protects it there is that a
+ * cross-site request cannot read our cookies to set the matching header.
+ */
+function csrfToken(): string {
+  if (typeof document === "undefined") return "";
+  const found = document.cookie.split("; ").find((entry) => entry.startsWith("pixel_csrf="));
+  return found ? decodeURIComponent(found.slice("pixel_csrf=".length)) : "";
+}
+
+async function call<T>(path: string, init: RequestInit = {}, _session?: ApiSession | null): Promise<T> {
   const base = apiBaseUrl();
   if (!base) throw new ApiError("This console is not connected to a Pixel API.");
   const method = (init.method ?? "GET").toUpperCase();
@@ -209,7 +259,7 @@ async function call<T>(path: string, init: RequestInit = {}, session?: ApiSessio
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...(session && !["GET", "HEAD", "OPTIONS"].includes(method) ? { "X-Pixel-CSRF": session.csrfToken } : {}),
+      ...(["GET", "HEAD", "OPTIONS"].includes(method) ? {} : { "X-Pixel-CSRF": csrfToken() }),
       ...(init.headers ?? {}),
     },
   });
@@ -220,6 +270,22 @@ async function call<T>(path: string, init: RequestInit = {}, session?: ApiSessio
       detail = (JSON.parse(body) as { detail?: unknown }).detail ?? body;
     } catch {
       /* the body was not JSON; show it as it came */
+    }
+    // A refusal that names the field it is about, so a screen can put it beside that field
+    // rather than at the bottom of the page in the API's own words.
+    let named: string | null = null;
+    try {
+      named = (JSON.parse(body) as { field?: string | null }).field ?? null;
+    } catch {
+      /* not JSON; there is no field to attribute it to */
+    }
+    if (named) {
+      throw new FieldError(typeof detail === "string" ? detail
+        : String((detail as { message?: string })?.message ?? "This could not be accepted."), named);
+    }
+    if (detail && typeof detail === "object" && "message" in detail) {
+      const structured = detail as { message: string; field?: string | null };
+      if (structured.field) throw new FieldError(structured.message, structured.field);
     }
     if (detail && typeof detail === "object" && "message" in detail) {
       const structured = detail as { message: string; record?: ApiRecord | null };

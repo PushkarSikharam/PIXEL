@@ -29,10 +29,11 @@ export default function SignIn() {
   }
 
   return (
-    <AuthCard title="Sign in to Pixel" description="We'll email you a one-time code. There is no password."
+    <AuthCard title="Sign in to Pixel"
+      description="We'll email you a one-time code. There is no password, and if you have not been here before this makes you a workspace of your own."
       footer={<Link href="/demo">Explore the demo</Link>}>
       <form className="px-stack" onSubmit={submit} noValidate>
-        <Field label="Work email" error={error}>{(f) => (
+        <Field label="Your email" error={error}>{(f) => (
           <Input id={f.id} describedBy={f.describedBy} invalid={f.invalid} type="email" autoComplete="email" inputMode="email"
             autoFocus value={email} onChange={(e) => { setEmail(e.target.value); setError(null); }} />
         )}</Field>

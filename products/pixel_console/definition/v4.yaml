@@ -34,9 +34,9 @@ identity:
   greeting: Welcome to {product}. I'm {assistant}.
 
 vocabulary:
-  terms: [architecture, audit, build, demo, deploy, home, member, members, operate, organization,
-          overview, people, product, products, project, projects, settings, team, teams, test,
-          workspace]
+  terms: [architecture, audit, build, demo, deploy, home, knowledge, login, member, members,
+          onboarding, operate, organization, overview, people, product, products, project,
+          projects, records, screens, settings, sign in, signup, team, teams, test, workspace]
   corrections:
     prodcut: product
     prodcuts: products

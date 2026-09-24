@@ -22,8 +22,8 @@ export const STEPS: Step[] = ["details", "sources", "analyzing", "review", "acti
  * disagrees with the panel beside it reads as a bug even when nothing is broken.
  */
 export const STEP_LABELS: Record<Step, string> = {
-  details: "Name it", sources: "What it keeps", analyzing: "Writing it", review: "Read it back",
-  actions: "What it can do", validation: "Checks", ready: "Publish", published: "Published",
+  details: "Start", sources: "Describe it", analyzing: "Pixel is writing it", review: "Review",
+  actions: "Choose what it can do", validation: "Check it", ready: "Launch", published: "Live",
 };
 
 export interface Source { id: string; name: string; kind: "document" | "openapi" | "url"; status: "accepted" | "refused"; reason?: string }
@@ -81,6 +81,11 @@ export const initialOnboarding = (teamId: string): OnboardingState => ({
 const SLUG = /^[a-z0-9][a-z0-9-]{1,62}$/;
 const THING_NAME = /^[a-z][a-z0-9_]{0,47}$/;
 
+export function keyForName(name: string): string {
+  const key = name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  return (/^[a-z]/.test(key) ? key : `item_${key || "record"}`).slice(0, 48);
+}
+
 export function canEnter(state: OnboardingState, step: Step): boolean {
   const accepted = state.sources.filter((s) => s.status === "accepted");
   switch (step) {
@@ -89,7 +94,8 @@ export function canEnter(state: OnboardingState, step: Step): boolean {
     // Something to keep, and something to call each one: a product nobody can describe is not a
     // product Pixel can write.
     case "analyzing": return canEnter(state, "sources") && state.things.some((thing) => !thing.people)
-      && state.things.every((thing) => THING_NAME.test(thing.id) && thing.label.trim() && thing.plural.trim());
+      && state.things.every((thing) => THING_NAME.test(keyForName(thing.label || thing.id))
+        && thing.label.trim() && thing.plural.trim());
     case "review": return state.analysisRevision === state.sourceRevision && state.analysisRevision !== null;
     case "actions": return canEnter(state, "review") && state.understandingAccepted;
     case "validation": return canEnter(state, "actions") && state.actions.length > 0;

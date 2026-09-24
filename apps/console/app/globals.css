@@ -190,6 +190,11 @@ code, .px-mono { font-family: var(--px-mono); font-size: var(--px-text-sm); }
 .px-stat { padding: var(--px-space-3) var(--px-space-4); border: 1px solid var(--px-border); border-radius: var(--px-radius); }
 .px-stat dt { font-size: var(--px-text-sm); color: var(--px-text-2); }
 .px-stat dd { margin: var(--px-space-1) 0 0; font-size: var(--px-text-xl); font-weight: 600; font-variant-numeric: tabular-nums; }
+.px-stat-button { display: grid; gap: var(--px-space-1); text-align: left; background: var(--px-bg); color: var(--px-text); font: inherit; cursor: pointer; }
+.px-stat-button:hover:not(:disabled) { border-color: var(--px-accent); background: var(--px-accent-soft); }
+.px-stat-button:disabled { cursor: default; }
+.px-stat-label { font-size: var(--px-text-sm); color: var(--px-text-2); }
+.px-stat-value { font-size: var(--px-text-xl); font-weight: 600; font-variant-numeric: tabular-nums; }
 
 /* ---- Tables ---- */
 .px-table-wrap { width: 100%; overflow-x: auto; border: 1px solid var(--px-border); border-radius: var(--px-radius); }
@@ -323,7 +328,7 @@ code, .px-mono { font-family: var(--px-mono); font-size: var(--px-text-sm); }
    a full-width block above the page on a narrow screen. */
 .px-main.px-with-assistant {
   display: grid;
-  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  grid-template-columns: clamp(340px, 28vw, 440px) minmax(0, 1fr);
   gap: 20px;
   align-items: start;
 }
@@ -335,7 +340,7 @@ code, .px-mono { font-family: var(--px-mono); font-size: var(--px-text-sm); }
   min-width: 0;
 }
 .px-main.px-with-assistant:has(.px-product-assistant[data-collapsed="true"]) {
-  grid-template-columns: 112px minmax(0, 1fr);
+  grid-template-columns: 96px minmax(0, 1fr);
 }
 @media (max-width: 1000px) {
   .px-main.px-with-assistant,
@@ -388,7 +393,36 @@ code, .px-mono { font-family: var(--px-mono); font-size: var(--px-text-sm); }
 }
 
 .px-edith[data-collapsed="true"] {
+  width: 96px;
   max-height: none;
+  padding: 10px;
+}
+
+.px-edith[data-collapsed="true"] .px-edith-intro,
+.px-edith[data-collapsed="true"] .px-edith-transcript,
+.px-edith[data-collapsed="true"] .px-edith-path,
+.px-edith[data-collapsed="true"] .px-edith-prompts,
+.px-edith[data-collapsed="true"] .px-edith-form,
+.px-edith[data-collapsed="true"] .px-edith-voice {
+  display: none;
+}
+
+.px-edith[data-collapsed="true"] .px-edith-topbar {
+  display: grid;
+  justify-items: center;
+  margin: 0;
+}
+
+.px-edith[data-collapsed="true"] .px-edith-brand {
+  font-size: 0;
+}
+
+.px-edith[data-collapsed="true"] .px-edith-controls {
+  justify-content: center;
+}
+
+.px-edith[data-collapsed="true"] .px-edith-chip {
+  padding: 0 9px;
 }
 
 .px-edith-topbar {
@@ -507,7 +541,8 @@ code, .px-mono { font-family: var(--px-mono); font-size: var(--px-text-sm); }
   display: flex;
   flex-direction: column;
   gap: 10px;
-  min-height: 118px;
+  min-height: 170px;
+  max-height: min(44vh, 520px);
   overflow-y: auto;
   padding-right: 8px;
   scrollbar-color: #4a4b52 transparent;
@@ -517,7 +552,7 @@ code, .px-mono { font-family: var(--px-mono); font-size: var(--px-text-sm); }
   display: flex;
   flex-direction: column;
   gap: 5px;
-  max-width: 92%;
+  max-width: min(92%, 38rem);
   padding: 11px 13px;
   border: 1px solid #2f3036;
   border-radius: 10px;
@@ -527,7 +562,7 @@ code, .px-mono { font-family: var(--px-mono); font-size: var(--px-text-sm); }
 
 .px-edith-message[data-role="visitor"] {
   align-self: flex-end;
-  max-width: 84%;
+  max-width: min(84%, 32rem);
   border-color: #444751;
   background: #30323a;
 }
@@ -599,7 +634,7 @@ code, .px-mono { font-family: var(--px-mono); font-size: var(--px-text-sm); }
   border-radius: 8px;
   background: #26272d;
   color: #f4f4f5;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 760;
   line-height: 1.25;
   text-align: left;
@@ -632,22 +667,16 @@ code, .px-mono { font-family: var(--px-mono); font-size: var(--px-text-sm); }
 
 .px-edith-prompts {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   flex: 0 0 auto;
   gap: 6px;
   margin-top: 8px;
-  overflow-x: auto;
-  padding-bottom: 2px;
-  scrollbar-width: none;
-}
-
-.px-edith-prompts::-webkit-scrollbar {
-  display: none;
+  overflow: visible;
 }
 
 .px-edith-prompts button {
-  flex: 0 0 auto;
-  max-width: 220px;
+  flex: 1 1 150px;
+  max-width: none;
   min-height: 31px;
   padding: 6px 11px;
   border: 1px solid #3a3b40;
@@ -658,9 +687,7 @@ code, .px-mono { font-family: var(--px-mono); font-size: var(--px-text-sm); }
   font-weight: 720;
   line-height: 1.25;
   text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
   cursor: pointer;
 }
 

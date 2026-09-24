@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   acceptUnderstanding, addSource, addThing, approveGeneratedUnderstanding, canEnter,
   completeAnalysis, goTo, initialOnboarding,
-  publish, removeSource, setConfirmation, setDetails, toggleAction, updateField, updateThing,
+  keyForName, publish, removeSource, setConfirmation, setDetails, toggleAction, updateField, updateThing,
   understood, validate,
 } from "./onboarding";
 
@@ -79,6 +79,15 @@ describe("onboarding flow", () => {
     expect(canEnter(state, "analyzing")).toBe(false);
     state = addThing(state);
     state = updateThing(state, 1, { id: "deal", label: "Deal", plural: "Deals" });
+    expect(canEnter(state, "analyzing")).toBe(true);
+  });
+
+  it("turns plain user labels into safe internal keys", () => {
+    expect(keyForName("Due date")).toBe("due_date");
+    expect(keyForName("24 hour SLA")).toBe("item_24_hour_sla");
+    let state = goTo(started(), "sources");
+    state = addThing(state);
+    state = updateThing(state, 0, { id: "", label: "Customer Tickets", plural: "Customer Tickets" });
     expect(canEnter(state, "analyzing")).toBe(true);
   });
 

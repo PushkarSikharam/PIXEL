@@ -927,6 +927,10 @@ def remember_accepted(memory: ConversationMemory, result: RouteResult) -> Conver
     # Any accepted request can be followed by "what about <person>" on the next turn.
     updates["person_follow_up"] = PersonFollowUp(proposal.action_key, memory.turn)
     if proposal.capability == Capability.NAVIGATE_VIEW:
+        # Where somebody was is the screen they are leaving, and only when they are leaving it:
+        # asking twice for the same screen must not make that screen its own previous one.
+        if memory.last_view is not None and memory.last_view != proposal.view:
+            updates["previous_view"] = memory.last_view
         updates["last_view"] = proposal.view
     return replace(memory, **updates)
 

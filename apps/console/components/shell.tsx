@@ -164,15 +164,20 @@ export function Shell({ children }: { children: ReactNode }) {
         </header>
         <main id="main" className={`px-main${hasAssistant ? " px-with-assistant" : ""}`} tabIndex={-1}>
           {hasAssistant ? <Edith /> : null}
-          {c.live && c.loading ? <LoadingRows rows={4} /> : c.live && !c.account ? <div className="px-stack">
-            <h1>Your Pixel workspace</h1><Alert>{c.liveError ?? "Sign in to continue."}</Alert>
-            <Link className="px-button" data-variant="primary" href="/sign-in">Sign in</Link>
-          </div> : c.live && !CONNECTED_AREAS.some((area) =>
-            area === pathname || (area !== "/console" && pathname.startsWith(area + "/"))) ?
-            <Alert title="Not connected yet">
-              This part of Pixel is designed but not yet connected to your workspace, so nothing
-              here would be yours. <Link href="/console">Back to your workspace</Link>.
-            </Alert> : children}
+          {/* The page is one column beside the assistant. Without this wrapper each thing on the
+              page is a row of the same grid as the assistant, so the first row is as tall as the
+              assistant and everything after the heading starts below the fold. */}
+          <div className="px-main-column">
+            {c.live && c.loading ? <LoadingRows rows={4} /> : c.live && !c.account ? <div className="px-stack">
+              <h1>Your Pixel workspace</h1><Alert>{c.liveError ?? "Sign in to continue."}</Alert>
+              <Link className="px-button" data-variant="primary" href="/sign-in">Sign in</Link>
+            </div> : c.live && !CONNECTED_AREAS.some((area) =>
+              area === pathname || (area !== "/console" && pathname.startsWith(area + "/"))) ?
+              <Alert title="Not connected yet">
+                This part of Pixel is designed but not yet connected to your workspace, so nothing
+                here would be yours. <Link href="/console">Back to your workspace</Link>.
+              </Alert> : children}
+          </div>
         </main>
       </div>
       <Dialog open={pending !== undefined} onOpenChange={(open) => { if (!open) setPending(undefined); }}

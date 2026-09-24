@@ -35,6 +35,7 @@ from app.engine.actions import GenericAction
 from app.engine.composer import Reply, ResponseComposer, describe_changes
 from app.engine.field_completion import first_missing, question_values, read_answer
 from app.engine.conversation import (
+    BACK_CUES,
     KNOWLEDGE_UNAVAILABLE_KEY,
     CapabilityPolicy,
     Conversational,
@@ -46,7 +47,7 @@ from app.engine.conversation import (
 )
 from app.engine.knowledge import KnowledgeLookup, KnowledgePassage, answerable, ground
 from app.engine.memory import ConversationMemory, PendingClarification
-from app.engine.normalizer import NormalizedMessage
+from app.engine.normalizer import NormalizedMessage, contains_term
 from app.engine.router import IntentRouter, TurnContext, remember_accepted
 from app.engine.routing import RouteKind, RouteResult, RouteStage
 from app.engine.signals import (
@@ -102,6 +103,33 @@ _NAVIGATION_REQUEST = re.compile(
     re.IGNORECASE,
 )
 
+
+
+def _going_back(result: RouteResult, definition: ProductDefinition,
+                memory: ConversationMemory, text: NormalizedMessage) -> RouteResult:
+    """Send a bare "go back" to the screen somebody was on, not to one named in a definition.
+
+    A product can only say which of its screens a phrase means; it cannot know where this person
+    has been. So when somebody asks to go back and nothing else, the platform substitutes the
+    screen before this one, as long as this product declares a way of opening it. Without a
+    previous screen, or without an action that opens it, whatever the product decided stands: a
+    guess about where somebody was is worse than the product's own answer.
+
+    "Back to my products" names a destination and is not this: only the bare phrases count.
+    """
+    proposal = result.proposal
+    if proposal is None or proposal.capability != Capability.NAVIGATE_VIEW:
+        return result
+    if not any(contains_term(text.focused, cue) for cue in BACK_CUES):
+        return result
+    previous = memory.previous_view
+    if previous is None or previous == proposal.view or previous not in definition.views:
+        return result
+    opener = next((key for key, action in definition.actions.items()
+                   if action.capability == Capability.NAVIGATE_VIEW and action.view == previous), None)
+    if opener is None:
+        return result
+    return replace(result, proposal=replace(proposal, action_key=opener, view=previous))
 
 
 def _describes_visitor(message: str) -> bool:
@@ -231,6 +259,7 @@ class ConversationEngine:
             stage, reply, passages, evidence = self._after_fallback(text, message, context, memory)
         elif result.kind in (RouteKind.PROPOSE, RouteKind.CONFIRM):
             assert result.proposal is not None
+            result = _going_back(result, self._definition, memory, text)
             checked = ActionContractValidator(
                 self._definition, self._snapshot, definition_version=self._version,
             ).validate(result.proposal, confirmation=result.confirmation_reason)

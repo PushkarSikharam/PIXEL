@@ -19,6 +19,7 @@ from app.engine.conversation import Conversational, detect  # noqa: E402
 from app.engine.normalizer import NormalizedMessage  # noqa: E402
 
 PLATFORM = "workspace-platform"
+PRODUCT_NAME = "Pixel Planning"
 
 
 class BackendConversationTest(EngineCutoverFixture):
@@ -212,7 +213,11 @@ class DefinitionAuthorityConversationTest(EngineCutoverFixture):
             "we're a small team", "I am a product designer",
         )):
             body = self.say(message, session=f"profile-{index}")
-            self.assertEqual(body["speech"], "Thanks, that helps. What would you like to explore first in Pixel?", message)
+            self.assertEqual(
+                body["speech"],
+                f"Thanks, that helps. What would you like to explore first in {PRODUCT_NAME}?",
+                message,
+            )
             self.assertIsNone(body["validated_action"], message)
 
     def test_conversation_never_takes_over_a_request(self):
@@ -231,7 +236,8 @@ class DefinitionAuthorityConversationTest(EngineCutoverFixture):
     def test_a_conversational_question_beats_only_a_question_back(self):
         """A record word ("doing") may match an update; with nothing to act on, the question is answered."""
         capable = self.say("are you capable of doing")
-        self.assertTrue(capable["speech"].startswith("Here's what I can do in Pixel:"), capable["speech"])
+        self.assertTrue(capable["speech"].startswith(f"Here's what I can do in {PRODUCT_NAME}:"),
+                        capable["speech"])
         self.assertEqual(self.say("assign it", session="still-asks")["speech"], "Who should this record be assigned to?")
 
     def test_navigation_interrupts_an_unfinished_create_but_a_title_does_not(self):
@@ -264,16 +270,16 @@ class DefinitionAuthorityConversationTest(EngineCutoverFixture):
 
     def test_a_later_greeting_uses_the_name_the_visitor_gave(self):
         self.assertEqual(self.say("HI there i am Pushkar!", session="named")["speech"],
-                         "Nice to meet you, Pushkar. What would you like to explore in Pixel?")
+                         f"Nice to meet you, Pushkar. What would you like to explore in {PRODUCT_NAME}?")
         self.assertEqual(self.say("Hi", session="named", turn_id=2)["speech"],
-                         "Hi Pushkar, good to see you again. What would you like to explore next in Pixel?")
+                         f"Hi Pushkar, good to see you again. What would you like to explore next in {PRODUCT_NAME}?")
         self.assertNotIn("Pushkar", self.say("Hi", session="someone-else")["speech"])
 
     def test_the_next_step_is_drawn_from_the_open_view(self):
         self.assertEqual(self.say("what should I try next", page="teams")["speech"],
                          "From Teams, you could show you where Add member is in Teams.")
         self.assertEqual(self.say("what next", session="home", page="dashboard")["speech"],
-                         "Ask what I can do in Pixel to see where to go next.")
+                         f"Ask what I can do in {PRODUCT_NAME} to see where to go next.")
         # A page the definition does not declare is never trusted.
         forged = self.say("what next", session="bogus", page="billing")
         self.assertEqual(forged["status"], "denied")
@@ -307,11 +313,11 @@ class DefinitionAuthorityConversationTest(EngineCutoverFixture):
     def test_the_owners_wording_decisions(self):
         """5d plan revision 2, section 5: the four decisions, as the visitor hears them."""
         identity = self.say("who are you?", session="identity")["speech"]
-        self.assertTrue(identity.startswith("I'm Edith, your guide to Pixel."), identity)
+        self.assertTrue(identity.startswith(f"I'm Edith, your guide to {PRODUCT_NAME}."), identity)
         self.assertNotIn('"', identity + self.say("what can you do?", session="caps")["speech"])
         route = self.say("Run the evaluator demo", session="route")["speech"]
-        self.assertTrue(route.startswith("Here's a good way to explore Pixel: open "), route)
-        self.assertIn("then ask me for something outside Pixel to see how I stay in scope.", route)
+        self.assertTrue(route.startswith(f"Here's a good way to explore {PRODUCT_NAME}: open "), route)
+        self.assertIn(f"then ask me for something outside {PRODUCT_NAME} to see how I stay in scope.", route)
         self.assertEqual(self.say("not cycles, show me the issues", session="fix")["speech"],
                          "Got it. I'll switch to Issues.")
         self.assertEqual(self.say("show me the issues", session="plain")["speech"], "I'll open Issues.")
@@ -328,14 +334,16 @@ class DefinitionAuthorityConversationTest(EngineCutoverFixture):
         for index, (message, name) in enumerate((("Hi there i am pushkar", "Pushkar"), ("hi i'm priya", "Priya"),
                                                  ("my name is sam", "Sam"), ("I'm Sam from Acme", "Sam"))):
             self.assertEqual(self.say(message, session=f"intro-{index}")["speech"],
-                             f"Nice to meet you, {name}. What would you like to explore in Pixel?", message)
+                             f"Nice to meet you, {name}. What would you like to explore in {PRODUCT_NAME}?",
+                             message)
         for index, message in enumerate(("i am confused", "i am looking for a tool")):
             self.assertNotIn("Nice to meet you", self.say(message, session=f"not-a-name-{index}")["speech"])
         capable = self.say("what is pixel capable of doing?", session="capable")
-        self.assertTrue(capable["speech"].startswith("Here's what I can do in Pixel:"), capable["speech"])
+        self.assertTrue(capable["speech"].startswith(f"Here's what I can do in {PRODUCT_NAME}:"),
+                        capable["speech"])
         self.assertIsNone(capable["execution"], "a question never proposes a change")
         self.assertEqual(self.say("who build pixel?", session="who")["speech"],
-                         "I don't have approved Pixel information to answer that, so I won't guess.")
+                         f"I don't have approved {PRODUCT_NAME} information to answer that, so I won't guess.")
         self.assertTrue(self.say("who is edith?", session="edith")["speech"].startswith("I'm Edith"))
 
     def test_an_unknown_person_is_offered_for_adding_in_every_request(self):
@@ -350,12 +358,16 @@ class DefinitionAuthorityConversationTest(EngineCutoverFixture):
     def test_a_visitor_describing_their_situation_is_acknowledged(self):
         for index, message in enumerate(("i am new here", "we are just exploring", "I'm still looking around")):
             self.assertEqual(self.say(message, session=f"situation-{index}")["speech"],
-                             "Thanks, that helps. What would you like to explore first in Pixel?", message)
+                             f"Thanks, that helps. What would you like to explore first in {PRODUCT_NAME}?",
+                             message)
 
-    def test_a_question_about_the_product_itself_is_answered(self):
+    def test_a_question_about_pixel_without_approved_product_material_is_refused(self):
         for index, message in enumerate(("what is pixel?", "what does Pixel do?")):
-            self.assertTrue(self.say(message, session=f"product-{index}")["speech"]
-                            .startswith("Here's what I can do in Pixel:"), message)
+            self.assertEqual(
+                self.say(message, session=f"product-{index}")["speech"],
+                f"I don't have approved {PRODUCT_NAME} information to answer that, so I won't guess.",
+                message,
+            )
 
     def test_a_request_that_needs_a_person_asks_instead_of_falling_back(self):
         """Found live: "assign it to priya" (an unrecognised name) answered "I'm not sure how to help"."""

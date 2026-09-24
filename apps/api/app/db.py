@@ -410,6 +410,7 @@ def migrate() -> None:
               last_person_entity text,
               last_person_id text,
               last_view text,
+              previous_view text,
               last_change text,
               person_follow_up_action text,
               person_follow_up_turn integer,
@@ -513,8 +514,11 @@ def migrate() -> None:
                 "scope_id": "text",
             },
             # 5c: the visitor's introduced name, so a later greeting can use it.
+            # previous_view: the screen before the current one, so going back means where
+            # somebody was. A conversation that predates it simply has nowhere to go back to.
             "engine_state": {
                 "visitor_name": "text",
+                "previous_view": "text",
             },
         }.items():
             present = {row["name"] for row in connection.execute(f"pragma table_info({table})")}

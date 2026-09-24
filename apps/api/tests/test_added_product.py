@@ -634,5 +634,60 @@ class FillingInAFormTest(AddedProductFixture):
         self.assertEqual(self.read("book", self.tide.id)["revision"], current["revision"])
 
 
+class TheScreenAndTheAssistantAgreeTest(AddedProductFixture):
+    """Both read a product the same way, whichever way that product keeps its records.
+
+    A product that brought its own record source and one that is only a definition are read
+    through the same seam. Reading the store directly was right for the second and silently
+    wrong for the first: its screens showed nothing while its assistant answered about records
+    that were plainly there.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.headers = {"Authorization": f"Bearer {create_token('demo-admin', TENANT)}"}
+
+    def records(self, product: str, scope: str | None = None) -> dict:
+        query = f"?workspace_scope_id={scope}" if scope else ""
+        response = self.client.get(f"/api/products/{product}/records{query}", headers=self.headers)
+        self.assertEqual(response.status_code, 200, response.text)
+        return response.json()["records"]
+
+    def test_a_product_that_brought_its_own_records_shows_them(self):
+        """The shipped product keeps its records elsewhere. Its screens still show them."""
+        held = self.records(DEMO, DEMO_SCOPE)
+        self.assertTrue(any(rows for rows in held.values()),
+                        f"the shipped product read as empty: {held}")
+
+    def test_what_the_screen_shows_is_what_the_assistant_counts(self):
+        spoken = self.ask("how many tickets are there", product=DEMO, scope=DEMO_SCOPE)["speech"]
+        shown = self.records(DEMO, DEMO_SCOPE)
+        counted = max((len(rows) for rows in shown.values()), default=0)
+        self.assertTrue(any(str(len(rows)) in spoken for rows in shown.values() if rows),
+                        f"the assistant said {spoken!r}, the screen holds {counted}")
+
+    def test_a_product_that_is_only_a_definition_is_read_the_same_way(self):
+        self.add_product()
+        self.add_records()
+        held = self.records(PRODUCT)
+        self.assertEqual({row["id"] for row in held["book"]}, {self.tide.id, self.charts.id})
+        self.assertEqual({row["id"] for row in held["librarian"]}, {self.rosa.id, self.otto.id})
+
+    def test_neither_product_can_see_the_other(self):
+        self.add_product()
+        self.add_records()
+        self.assertNotIn("book", self.records(DEMO, DEMO_SCOPE))
+        added = self.records(PRODUCT)
+        self.assertNotIn("issue", added)
+        self.assertFalse(any("Tide Tables" in str(rows) for entity, rows in
+                             self.records(DEMO, DEMO_SCOPE).items()))
+
+    def test_a_record_carries_the_version_an_edit_is_made_against(self):
+        self.add_product()
+        self.add_records()
+        for row in self.records(PRODUCT)["book"]:
+            self.assertGreaterEqual(row["revision"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

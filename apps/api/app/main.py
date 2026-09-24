@@ -62,6 +62,7 @@ from app.services.record_store import (
     RecordStore,
     SpaceFull,
 )
+from app.services.engine_assembly import prepare_turn
 from app.services.engine_state import EngineStateStore
 from app.services.legacy_adapter import dispatch_legacy_mutation
 from app.services import turn_telemetry
@@ -269,15 +270,15 @@ async def lifespan(_: FastAPI):
     logger.info("engine_authority", extra={"authority": _authority})
     was_armed = rate_limits.armed
     reset_was_armed = idle_reset.armed
-    migrate()
-    # 5b: refuse to serve while a workspace-less key is still dispatched, before pruning can erase
-    # the evidence (plan, section 7.1), then prune retained execution rows.
-    require_no_legacy_keys()
-    prune_execution_ledger()
-    DemoInstanceStore().prune(limit=1000)
-    rate_limits.arm()
-    idle_reset.arm()
     try:
+        migrate()
+        # 5b: refuse to serve while a workspace-less key is still dispatched, before pruning can erase
+        # the evidence (plan, section 7.1), then prune retained execution rows.
+        require_no_legacy_keys()
+        prune_execution_ledger()
+        DemoInstanceStore().prune(limit=1000)
+        rate_limits.arm()
+        idle_reset.arm()
         if env_bool("PIXEL_DEMO_SEEDS", default=False):
             # Demo records are created once, at startup, and never by a request: a refused or
             # unauthorized request must leave product data exactly as it found it.
@@ -443,6 +444,44 @@ class AddProductRequest(BaseModel):
     # is stored: a product nobody can describe is not a product Pixel will run.
     definition: str = Field(min_length=1, max_length=MAX_DEFINITION_BYTES)
     definition_version: int = Field(default=1, ge=1)
+
+
+class MemberSummary(BaseModel):
+    """One person in an organization, as the console lists them."""
+
+    user_id: str
+    email: str | None = None
+    role: str
+    team_id: str | None = None
+    team_name: str | None = None
+
+
+class MembersResponse(BaseModel):
+    tenant_id: str
+    members: list[MemberSummary]
+
+
+@app.get("/api/organizations/{tenant_id}/members", response_model=MembersResponse)
+def list_members(tenant_id: str, user: AuthUser = Depends(require_member)) -> MembersResponse:
+    """Everyone in the caller's own organization. Never another organization's.
+
+    A screen that shows people has to show the ones who are really there. Leaving a sample list in
+    place once an account is real tells somebody their colleagues are in Pixel when they are not.
+    """
+    if tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="That organization is not available to you.")
+    directory = agent.directory
+    teams = {team.team_id: team.name for team in directory.teams(tenant_id)}
+    with get_connection() as connection:
+        emails = {row["user_id"]: row["email"] for row in connection.execute(
+            "select user_id, email from email_accounts where tenant_id = ?", (tenant_id,)
+        ).fetchall()}
+    return MembersResponse(tenant_id=tenant_id, members=[
+        MemberSummary(user_id=member.user_id, email=emails.get(member.user_id),
+                      role=member.role, team_id=member.team_id,
+                      team_name=teams.get(member.team_id) if member.team_id else None)
+        for member in directory.members(tenant_id)
+    ])
 
 
 @app.get("/api/organizations/{tenant_id}/products", response_model=ProductsResponse)
@@ -741,27 +780,42 @@ def product_shape(product_id: str, user: AuthUser = Depends(require_auth)) -> Pr
 @app.get("/api/products/{product_id}/records", response_model=RecordsResponse)
 def read_product_records(product_id: str, workspace_scope_id: str | None = None,
                          user: AuthUser = Depends(require_auth)) -> RecordsResponse:
-    """Every record of this product the caller may see, grouped by the kind of thing it is."""
+    """Every record of this product the caller may see, grouped by the kind of thing it is.
+
+    Read through the product's own package, exactly as a turn of conversation reads it. A product
+    that brought its own record source is served from that source; one that is only a definition
+    is served from the generic store. Reading the generic store for every product was wrong for
+    the first kind: the screen showed nothing while the assistant, reading the other way, answered
+    about records that were plainly there. A screen and an assistant that disagree about the same
+    product are worse than either being wrong alone.
+
+    Each record carries the version it is at, so an edit can say which version it was made
+    against. A product whose records come from somewhere without versions reports 0, which no
+    edit will be accepted for: such a product is changed where its records actually live.
+    """
     definition = _product_definition(user, product_id)
     grant = product_record_grant(user, product_id)
     if workspace_scope_id is not None:
         require_scope(workspace_scope_id, grant)
-        grant = dataclasses_replace(grant, scope_ids=frozenset({workspace_scope_id}), is_admin=False)
+    # The same snapshot a turn is given, including the legacy records for whichever product still
+    # owns them. A source that does not use them ignores them; none of them can widen what a
+    # caller sees, because the scope narrowing has already happened on the grant.
+    visible_data = _product_data(grant).load(grant.visible_scope_ids())
+    prepared = prepare_turn(agent.directory, package_for, user, grant, product_id,
+                            visible_data, workspace_scope_id, definition)
+    if prepared is None:
+        raise HTTPException(status_code=404, detail="That product is not available to you.")
     store = RecordStore(user.tenant_id or "", product_id, _record_space(user))
-    lookup = DefinitionLookup(definition, store, grant.visible_scope_ids())
-    # Which version of each record this is. Somebody editing one says which version they read,
-    # and an edit made against a version that has moved on is refused rather than silently
-    # overwriting whatever happened in between.
     revisions = {(entity, record.id): record.revision
                  for entity, records in store.all().items() for record in records}
     return RecordsResponse(
         product_id=product_id,
-        scope=lookup.scope_label,
+        scope=prepared.scope_label,
         records={
             entity: [{"id": view.id, "title": view.title,
                       "revision": revisions.get((entity, view.id), 0), **dict(view.fields)}
                      for view in views]
-            for entity, views in lookup.records_from({}).items()
+            for entity, views in prepared.records.items()
         },
     )
 

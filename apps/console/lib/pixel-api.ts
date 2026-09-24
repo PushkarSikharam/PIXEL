@@ -235,6 +235,22 @@ export function signOut(): void {
   remember(null);
 }
 
+export interface ApiMember {
+  user_id: string;
+  email: string | null;
+  role: string;
+  team_id: string | null;
+  team_name: string | null;
+}
+
+/** Everyone in the signed-in organization. The server serves that one and no other. */
+export async function listMembers(session: ApiSession): Promise<ApiMember[]> {
+  const answer = await call<{ members: ApiMember[] }>(
+    `/organizations/${encodeURIComponent(session.tenantId)}/members`, {}, session,
+  );
+  return answer.members;
+}
+
 export async function listProducts(session: ApiSession): Promise<ApiProduct[]> {
   const answer = await call<{ products: ApiProduct[] }>(
     `/organizations/${encodeURIComponent(session.tenantId)}/products`, {}, session,

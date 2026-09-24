@@ -11,7 +11,7 @@ import { TEAMS } from "@pixel-console/lib/mock-data";
 // Pixel's own guide, named here because the console may name her and core may not.
 const ASSISTANT_NAME = "Edith";
 import {
-  STEP_LABELS, STEPS, acceptUnderstanding, addField, addThing, approveGeneratedUnderstanding,
+  STEP_LABELS, STEPS, acceptUnderstanding, addField, addThing, addressFor, approveGeneratedUnderstanding,
   canEnter, completeAnalysis,
   definitionIdFor, goTo, initialOnboarding, publish, removeField, removeThing, setConfirmation,
   setDetails, starterDefinitionText, understood, updateField, updateThing,
@@ -137,9 +137,12 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
               <form className="px-stack" onSubmit={(e) => { e.preventDefault(); setState((s) => goTo(s, "sources")); }}>
                 <Field label="Product name">{(f) => (
                   <Input id={f.id} describedBy={f.describedBy} value={state.name} maxLength={80} required
-                    onChange={(e) => setState((s) => setDetails(s, e.target.value, s.slug || ""))} />
+                    onChange={(e) => setState((s) => setDetails(s, e.target.value,
+                      s.slugChosen ? s.slug : addressFor(e.target.value), { derived: !s.slugChosen }))} />
                 )}</Field>
-                <Field label="Slug" hint="Used in addresses and API calls. It cannot be changed later." error={slugError}>{(f) => (
+                <Field label="Address"
+                  hint="Where this product lives in Pixel. Taken from the name; change it now if you want something else, because it cannot be changed later."
+                  error={slugError}>{(f) => (
                   <Input id={f.id} describedBy={f.describedBy} invalid={f.invalid} value={state.slug} required
                     onChange={(e) => setState((s) => setDetails(s, s.name, e.target.value.toLowerCase()))} />
                 )}</Field>

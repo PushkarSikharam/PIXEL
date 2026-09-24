@@ -3,15 +3,16 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { RotateCcw } from "lucide-react";
+import { Pencil, Plus, RotateCcw } from "lucide-react";
 import { useConsole } from "@pixel-console/components/console-context";
 import { ProductKnowledge } from "@pixel-console/components/product-knowledge";
+import { RecordFormDialog } from "@pixel-console/components/record-form";
 import { Dialog } from "@pixel-console/components/overlays";
 import { useToast } from "@pixel-console/components/toast";
 import { Alert, Badge, Button, EmptyState, ErrorState, LoadingRows, PageHead, Panel, PermissionDenied, StatusBadge } from "@pixel-console/components/ui";
 import { DEPLOYMENTS, RELEASES, productById, teamName } from "@pixel-console/lib/mock-data";
 import { productRecords, productShape, storedSession,
-  type ApiActionShape, type ApiProductShape, type ApiRecords, type ApiSession,
+  type ApiActionShape, type ApiProductShape, type ApiRecord, type ApiRecords, type ApiSession,
 } from "@pixel-console/lib/pixel-api";
 import type { Environment, Release } from "@pixel-console/lib/contracts";
 
@@ -45,6 +46,10 @@ function LiveProductWorkspace({ productId }: { productId: string }) {
   const [conversationEpoch, setConversationEpoch] = useState(0);
   const [recordSelection, setRecordSelection] = useState<{ entity: string; id: string } | null>(null);
   const [recordFilter, setRecordFilter] = useState<{ entity: string; field: string; value: unknown } | null>(null);
+  // The record being written on a form: a new one of this kind, or one being changed. Nothing
+  // proposed either, so neither carries an execution key; the server decides both on their own
+  // merits.
+  const [writing, setWriting] = useState<{ entity: string; record: ApiRecord | null } | null>(null);
   const surfaceCurrentPage = shape
     ? activeView ?? shape.views.find((view) => view.navigable)?.name ?? shape.views[0]?.name ?? null
     : null;
@@ -57,7 +62,10 @@ function LiveProductWorkspace({ productId }: { productId: string }) {
     ]);
     setShape(nextShape);
     setRecords(nextRecords);
-    setActiveView((current) => current ?? nextShape.views.find((view) => view.navigable)?.name ?? nextShape.views[0]?.name ?? null);
+    // Open on a screen that has something on it. Landing on an empty dashboard is the first
+    // thing somebody sees of a product they just added, and it tells them it is empty when it
+    // is not.
+    setActiveView((current) => current ?? firstWorthOpening(nextShape, nextRecords) ?? null);
   }
 
   useEffect(() => {
@@ -106,6 +114,18 @@ function LiveProductWorkspace({ productId }: { productId: string }) {
     ? currentRecords.filter((row) => row[recordFilter.field] === recordFilter.value) : currentRecords;
   const selectedRecord = recordSelection && recordSelection.entity === currentEntity?.name ? currentRecords.find((row) => row.id === recordSelection.id) : null;
 
+  /**
+   * Whether this record can be changed on a form here.
+   *
+   * A form edit says which version of the record it was made against, so an edit made against a
+   * version that has moved on can be refused rather than overwriting it. A record from a source
+   * that keeps no versions reports 0, and there is no honest way to offer an edit for it: that
+   * product is changed where its records actually live.
+   */
+  function editable(record: ApiRecord | undefined | null): boolean {
+    return Number(record?.revision ?? 0) >= 1;
+  }
+
   function showAction(action: ApiActionShape, payload: Record<string, unknown>) {
     const view = action.view ?? shape?.views.find((candidate) => candidate.entity === action.entity && candidate.navigable)?.name;
     if (view) setActiveView(view);
@@ -116,7 +136,8 @@ function LiveProductWorkspace({ productId }: { productId: string }) {
   return (
     <>
       <PageHead title={shape.product_name}
-        description={`Definition ${shape.definition_id} v${shape.definition_version}. ${shape.entities.length} record types, ${shape.views.length} screens.`}
+        description={`${countOf(shape.entities.length, "kind of record", "kinds of record")}, `
+          + `${countOf(shape.views.length, "screen", "screens")}. Version ${shape.definition_version}.`}
         actions={<StatusBadge status="active" />} />
       <div className="px-product-workspace">
         <div className="px-stack">
@@ -129,21 +150,52 @@ function LiveProductWorkspace({ productId }: { productId: string }) {
             </div>
           </Panel>
           {currentEntity ? (
-            <Panel title={currentView.label} actions={<Badge>{currentRecords.length} {currentRecords.length === 1 ? currentEntity.label : currentEntity.plural}</Badge>}>
+            <Panel title={currentView.label} actions={<span className="px-row">
+              <Badge>{currentRecords.length} {currentRecords.length === 1 ? currentEntity.label : currentEntity.plural}</Badge>
+              <Button size="sm" variant="primary"
+                onClick={() => setWriting({ entity: currentEntity.name, record: null })}>
+                <Plus aria-hidden />New {currentEntity.label.toLowerCase()}</Button>
+            </span>}>
               {recordFilter ? <Button size="sm" onClick={() => setRecordFilter(null)}>Clear filter</Button> : null}
               {selectedRecord ? <section aria-label="Selected record" className="px-stack">
                 <h2>{String(selectedRecord[currentEntity.title_field] ?? selectedRecord.id)}</h2>
-                <dl>{currentEntity.fields.filter((field) => field.display).map((field) => <div key={field.name}><dt>{field.label}</dt><dd>{renderValue(selectedRecord[field.name])}</dd></div>)}</dl>
-                <Button size="sm" onClick={() => setRecordSelection(null)}>Back to records</Button>
-              </section> : <GenericRecordTable shape={shape} entity={currentEntity.name} rows={filteredRecords}
-                columns={currentView.columns.length ? currentView.columns : currentEntity.summary_fields} />
+                <dl>{currentEntity.fields.filter((field) => field.display).map((field) => (
+                  <div key={field.name}><dt>{field.label}</dt>
+                    <dd>{renderValue(named(shape, records, currentEntity.fields, field.name, selectedRecord[field.name]))}</dd>
+                  </div>
+                ))}</dl>
+                <div className="px-row">
+                  <Button size="sm" onClick={() => setRecordSelection(null)}>Back to records</Button>
+                  {editable(selectedRecord) ? (
+                    <Button size="sm" variant="primary"
+                      onClick={() => setWriting({ entity: currentEntity.name, record: selectedRecord })}>
+                      <Pencil aria-hidden />Edit</Button>
+                  ) : null}
+                </div>
+              </section> : <GenericRecordTable shape={shape} records={records} entity={currentEntity.name} rows={filteredRecords}
+                columns={currentView.columns.length ? currentView.columns : currentEntity.summary_fields}
+                onAdd={() => setWriting({ entity: currentEntity!.name, record: null })}
+                onEdit={(row) => setWriting({ entity: currentEntity!.name, record: row })} />
               }
             </Panel>
           ) : (
             <Panel title={currentView?.label ?? "Screen"}>
-              <EmptyState title="No records on this screen">This view has no entity attached yet.</EmptyState>
+              <ProductSummary shape={shape} records={records} onOpen={(view) => {
+                setActiveView(view); setRecordSelection(null); setRecordFilter(null);
+              }} />
             </Panel>
           )}
+          {writing ? (
+            <RecordFormDialog open session={session} productId={productId}
+              entity={shape.entities.find((entity) => entity.name === writing.entity)!}
+              records={records.records} editing={writing.record}
+              onOpenChange={(open) => { if (!open) setWriting(null); }}
+              onSaved={async (record, created) => {
+                await load(session);
+                setRecordSelection({ entity: writing.entity, id: record.id });
+                toast("ok", created ? `${record.title || record.id} created.` : `${record.title || record.id} saved.`);
+              }} />
+          ) : null}
           <ProductKnowledge session={session} productId={productId} onPublished={() => {
             setConversationEpoch((value) => value + 1);
             toast("ok", "Source published. A new conversation will use this version.");
@@ -154,26 +206,105 @@ function LiveProductWorkspace({ productId }: { productId: string }) {
   );
 }
 
-function GenericRecordTable({ shape, entity, rows, columns }: {
+/** "1 screen" and "7 screens", without a stray "(s)". */
+function countOf(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+/**
+ * The screen to open a product on: the first navigable one that actually has records, and
+ * otherwise the first navigable one at all.
+ */
+function firstWorthOpening(shape: ApiProductShape, records: ApiRecords): string | null {
+  const navigable = shape.views.filter((view) => view.navigable);
+  const withRecords = navigable.find((view) => view.entity && (records.records[view.entity]?.length ?? 0) > 0);
+  return (withRecords ?? navigable[0] ?? shape.views[0])?.name ?? null;
+}
+
+/**
+ * What a product holds, for a screen that holds nothing itself.
+ *
+ * A dashboard a definition declares without an entity has nothing of its own to show. Saying so
+ * is accurate and useless; this says what the product does have and offers a way into each of
+ * it, which is what somebody arriving on their own product needs.
+ */
+function ProductSummary({ shape, records, onOpen }: {
   shape: ApiProductShape;
+  records: ApiRecords;
+  onOpen: (view: string) => void;
+}) {
+  const kinds = shape.entities.map((entity) => ({
+    entity,
+    count: records.records[entity.name]?.length ?? 0,
+    view: shape.views.find((view) => view.entity === entity.name && view.navigable)?.name ?? null,
+  }));
+  if (kinds.length === 0) {
+    return <EmptyState title="Nothing on this screen yet">This product keeps no records.</EmptyState>;
+  }
+  return (
+    <div className="px-stack">
+      <p className="px-muted">What this product holds right now.</p>
+      <div className="px-table-wrap">
+        <table className="px-table">
+          <caption className="px-sr-only">Records this product holds</caption>
+          <thead><tr><th scope="col">Records</th><th scope="col" className="px-num">How many</th><th scope="col"><span className="px-sr-only">Open</span></th></tr></thead>
+          <tbody>
+            {kinds.map(({ entity, count, view }) => (
+              <tr key={entity.name}>
+                <td>{entity.plural}</td>
+                <td className="px-num">{count}</td>
+                <td style={{ textAlign: "right" }}>
+                  {view ? <Button size="sm" onClick={() => onOpen(view)}>Open</Button> : null}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function GenericRecordTable({ shape, records, entity, rows, columns, onAdd, onEdit }: {
+  shape: ApiProductShape;
+  records: ApiRecords;
   entity: string;
-  rows: Array<Record<string, unknown> & { id: string; title?: string }>;
+  rows: ApiRecord[];
   columns: string[];
+  onAdd?: () => void;
+  onEdit?: (row: ApiRecord) => void;
 }) {
   const entityShape = shape.entities.find((candidate) => candidate.name === entity);
   const fields = entityShape?.fields ?? [];
   const visibleColumns = ["id", ...(columns.length ? columns : fields.filter((field) => field.display).map((field) => field.name))];
   if (rows.length === 0) {
-    return <EmptyState title={`No ${entityShape?.plural.toLowerCase() ?? "records"} yet`}>Use Edith to create the first one.</EmptyState>;
+    // An empty screen that only says it is empty is a dead end. Both ways of filling it are
+    // offered, because somebody meeting this product for the first time may want either.
+    return (
+      <EmptyState title={`No ${entityShape?.plural.toLowerCase() ?? "records"} yet`}
+        action={onAdd ? <Button variant="primary" onClick={onAdd}>
+          <Plus aria-hidden />Add the first {entityShape?.label.toLowerCase() ?? "record"}</Button> : undefined}>
+        Add one here, or ask {shape.assistant_name} to create it for you.
+      </EmptyState>
+    );
   }
   return (
     <div className="px-table-wrap">
       <table className="px-table">
-        <thead><tr>{visibleColumns.map((column) => <th key={column} scope="col">{labelFor(fields, column)}</th>)}</tr></thead>
+        <thead><tr>{visibleColumns.map((column) => <th key={column} scope="col">{labelFor(fields, column)}</th>)}
+          {onEdit ? <th scope="col"><span className="px-sr-only">Actions</span></th> : null}</tr></thead>
         <tbody>
           {rows.map((row) => (
             <tr key={row.id}>
-              {visibleColumns.map((column) => <td key={column}>{renderValue(row[column])}</td>)}
+              {visibleColumns.map((column) => (
+                <td key={column}>{renderValue(named(shape, records, fields, column, row[column]))}</td>
+              ))}
+              {onEdit ? <td style={{ textAlign: "right" }}>
+                {Number(row.revision ?? 0) >= 1 ? (
+                  <Button size="sm" aria-label={`Edit ${String(row.title || row.id)}`}
+                    onClick={() => onEdit(row)}><Pencil aria-hidden />Edit</Button>
+                ) : null}
+              </td> : null}
             </tr>
           ))}
         </tbody>
@@ -185,7 +316,28 @@ function GenericRecordTable({ shape, entity, rows, columns }: {
 
 function labelFor(fields: ApiProductShape["entities"][number]["fields"], column: string): string {
   if (column === "id") return "ID";
-  return fields.find((field) => field.name === column)?.label ?? column.replace(/_/g, " ");
+  const label = fields.find((field) => field.name === column)?.label || column.replace(/_/g, " ");
+  // A definition that names its fields but does not label them gets a readable heading anyway.
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+/**
+ * A value as the product would say it.
+ *
+ * A reference is stored as the identifier of the record it points at, which is the right thing to
+ * store and the wrong thing to read: a column of assignees should say who they are. The record it
+ * points at is already on this screen, so its title is here to be used.
+ */
+function named(shape: ApiProductShape, records: ApiRecords,
+               fields: ApiProductShape["entities"][number]["fields"],
+               column: string, value: unknown): unknown {
+  const target = fields.find((field) => field.name === column)?.target;
+  if (!target) return value;
+  const title = (id: unknown) => {
+    const found = (records.records[target] ?? []).find((record) => record.id === id);
+    return found ? String(found.title || found.id) : String(id);
+  };
+  return Array.isArray(value) ? value.map(title) : (value === null || value === undefined ? value : title(value));
 }
 
 function renderValue(value: unknown) {

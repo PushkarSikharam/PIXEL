@@ -1,16 +1,88 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MoreHorizontal, UserPlus } from "lucide-react";
 import { useConsole } from "@pixel-console/components/console-context";
 import { Dialog, Menu } from "@pixel-console/components/overlays";
 import { useToast } from "@pixel-console/components/toast";
-import { Button, Field, Input, PageHead, Panel, PermissionDenied, StatusBadge } from "@pixel-console/components/ui";
+import { Button, EmptyState, ErrorState, Field, Input, LoadingRows, PageHead, Panel, PermissionDenied, StatusBadge } from "@pixel-console/components/ui";
+import { listMembers, storedSession, type ApiMember } from "@pixel-console/lib/pixel-api";
 import { INVITATIONS, MEMBERS, TEAMS, teamName } from "@pixel-console/lib/mock-data";
 import type { Member, Role } from "@pixel-console/lib/contracts";
 import { normalizeEmail } from "@pixel-console/lib/mock-identity";
 
 const ROLE_LABEL: Record<Role, string> = { org_admin: "Organization admin", team_admin: "Team admin", team_member: "Team member" };
+
+const ROLE_WORDS: Record<string, string> = {
+  org_admin: "Organization admin", team_admin: "Team admin", team_member: "Team member",
+};
+
+/**
+ * The people who are really in this organization.
+ *
+ * The prototype below shows a sample organization, which is the right thing when the console has
+ * no Pixel behind it and the wrong thing the moment it does: somebody signing in to see who is in
+ * their workspace must not be shown five colleagues who do not exist. Inviting is not connected
+ * yet, and this says so rather than offering a button that does nothing.
+ */
+function LivePeople() {
+  const c = useConsole();
+  const [people, setPeople] = useState<ApiMember[] | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const session = storedSession();
+        if (!session) throw new Error("Sign in to see who is in your organization.");
+        const found = await listMembers(session);
+        if (!cancelled) { setPeople(found); setProblem(null); }
+      } catch (error) {
+        if (!cancelled) setProblem(error instanceof Error ? error.message : "These could not be loaded.");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [c.organizationId]);
+
+  if (problem) return <><PageHead title="People" /><ErrorState title="People could not be loaded">{problem}</ErrorState></>;
+  if (people === null) return <><PageHead title="People" description="Loading." /><LoadingRows rows={4} /></>;
+
+  return (
+    <>
+      <PageHead title="People"
+        description={`Everyone in ${c.account?.organization_name ?? "this organization"}, and the team each one works in.`} />
+      <Panel title={`People (${people.length})`}>
+        {people.length === 0 ? (
+          <EmptyState title="Nobody here yet">You are the only person in this organization.</EmptyState>
+        ) : (
+          <div className="px-table-wrap">
+            <table className="px-table">
+              <caption className="px-sr-only">People in this organization</caption>
+              <thead><tr><th scope="col">Person</th><th scope="col">Role</th><th scope="col">Team</th></tr></thead>
+              <tbody>
+                {people.map((person) => (
+                  <tr key={person.user_id}>
+                    <td>{person.email ?? person.user_id}
+                      {person.email ? <div className="px-small px-muted">{person.user_id}</div> : null}</td>
+                    <td>{ROLE_WORDS[person.role] ?? person.role}</td>
+                    <td>{person.team_name ?? <span className="px-muted">All teams</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+      <Panel title="Inviting somebody">
+        <p className="px-muted">
+          Invitations are not connected yet, so there is nothing here to send. Everyone listed
+          above reached this organization by signing in to it.
+        </p>
+      </Panel>
+    </>
+  );
+}
 
 export default function Members() {
   const c = useConsole();
@@ -23,6 +95,7 @@ export default function Members() {
   const [team, setTeam] = useState("billing");
   const [emailError, setEmailError] = useState<string | null>(null);
 
+  if (c.live) return <LivePeople />;
   if (!c.can("members.read")) return <PermissionDenied what="this organization's members" />;
   const isOrgAdmin = c.persona.memberships.some((m) => m.role === "org_admin");
   const manageableTeams = TEAMS.filter((t) => t.organizationId === c.organizationId && !t.suspended

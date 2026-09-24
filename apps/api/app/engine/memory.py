@@ -96,6 +96,9 @@ class ConversationMemory:
     focus: RecordRef | None = None
     last_person: RecordRef | None = None
     last_view: str | None = None
+    # The screen before the current one, so that going back means where somebody was rather than
+    # a screen the product named once. Only ever a view this product declares.
+    previous_view: str | None = None
     last_change: str | None = None  # an executed ledger entry's key
     turn: int = 0
     # Added in 5a, optional: nothing that predates it is affected.

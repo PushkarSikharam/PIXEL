@@ -22,7 +22,7 @@ function Catalogue() {
 
   const head = (
     <PageHead title="Products" description="Every product your teams own in this organization."
-      actions={canCreate ? <Link className="px-button" data-variant="primary" href="/console/products/new"><Plus aria-hidden />New product</Link> : null} />
+      actions={canCreate ? <Link className="px-button" data-variant="primary" href="/console/products/new"><Plus aria-hidden />Add a product</Link> : null} />
   );
   if (demo === "denied") return <>{head}<PermissionDenied what="this organization's products" /></>;
   if (demo === "loading") return <>{head}<LoadingRows rows={5} label="Loading products" /></>;
@@ -48,12 +48,11 @@ function Catalogue() {
         <div className="px-table-wrap">
           <table className="px-table">
             <caption className="px-sr-only">Products</caption>
-            <thead><tr><th scope="col">Name</th><th scope="col">Slug</th><th scope="col">Team</th><th scope="col">State</th><th scope="col" className="px-num">Revision</th></tr></thead>
+            <thead><tr><th scope="col">Product</th><th scope="col">Team</th><th scope="col">Status</th><th scope="col" className="px-num">Version</th></tr></thead>
             <tbody>
               {products.map((p) => (
                 <tr key={p.id}>
                   <td><Link href={`/console/products/${encodeURIComponent(p.id)}`}>{p.name}</Link><div className="px-small px-muted">{p.description}</div></td>
-                  <td className="px-mono">{p.slug}</td>
                   <td>{c.live ? c.account?.teams.find((t) => t.team_id === p.teamId)?.name ?? p.teamId : teamName(p.teamId)}</td>
                   <td><StatusBadge status={p.state} /></td>
                   <td className="px-num">{p.revision}</td>

@@ -83,6 +83,14 @@ class DraftThing(BaseModel):
         return self
 
 
+def _checked(field: str, label: str, rule, value: str) -> None:
+    """Apply one rule, and say which field failed it in words from that field's own label."""
+    try:
+        rule(value)
+    except ValueError as refused:
+        raise ValueError(f"{field}: {label} {refused}") from refused
+
+
 class ProductDraft(BaseModel):
     """A product as the person adding it describes it."""
 
@@ -97,9 +105,12 @@ class ProductDraft(BaseModel):
 
     @model_validator(mode="after")
     def _sound(self) -> "ProductDraft":
-        check_text(self.product_name)
-        check_text(self.assistant_name)
-        check_key(self.definition_id)
+        # Attributed as it is checked. A description is written by a person filling in boxes, so
+        # a refusal has to say which box; an unattributed "must not contain '<'" leaves somebody
+        # rereading three screens to find what we meant.
+        _checked("product_name", "The product name", check_text, self.product_name)
+        _checked("assistant_name", "The assistant's name", check_text, self.assistant_name)
+        _checked("definition_id", "The product's address", check_key, self.definition_id)
         names = [thing.name for thing in self.things]
         if len(set(names)) != len(names):
             raise ValueError("two things share a name")

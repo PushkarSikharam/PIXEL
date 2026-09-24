@@ -36,7 +36,11 @@ DEFAULT_TEAM_ID, DEFAULT_TEAM_NAME = "default", "My team"
 DEPLOYMENT_CODES_PER_HOUR = 5000
 DEPLOYMENT_BUCKET = "deployment"
 router = APIRouter(prefix="/api/account", tags=["account"])
-SESSION_COOKIE_MAX_AGE = 86400
+# A week. Somebody using Pixel daily should sign in about as often as they sign in to anything
+# else they work in; a day meant closing the browser cost them their session. Revocation is what
+# bounds a stolen cookie, not a short window: signing out deletes the session row, and every
+# request checks that row exists.
+SESSION_COOKIE_MAX_AGE = 7 * 86400
 
 
 class EmailRequest(BaseModel):
@@ -161,7 +165,7 @@ def request_code(body: EmailRequest, response: Response) -> dict:
 def verify_code(body: CodeRequest, response: Response) -> dict:
     settings = _settings()
     now = time.time()
-    account, register_for = None, None
+    account, register_for, proved_address = None, None, False
     with get_connection() as connection:
         connection.execute("begin immediate")
         row = connection.execute("select * from email_challenges where challenge_id=?", (body.challenge_id,)).fetchone()
@@ -169,21 +173,35 @@ def verify_code(body: CodeRequest, response: Response) -> dict:
             connection.execute("update email_challenges set attempts=attempts+1 where challenge_id=?", (body.challenge_id,))
             if hmac.compare_digest(row["code_digest"], _digest(settings[0], body.challenge_id + body.code)):
                 connection.execute("update email_challenges set consumed=1 where challenge_id=?", (body.challenge_id,))
+                # They read a code we sent to this address, so they hold that inbox. Nothing said
+                # to them from here can disclose anything about anybody else.
+                proved_address = True
                 account = connection.execute("select * from email_accounts where email=?", (row["email"],)).fetchone()
                 if account is None and env_bool("PIXEL_SELF_SIGNUP_ENABLED", default=False):
                     register_for = row["email"]
     if register_for is not None:
         account = _register(register_for)
     if account is None:
-        raise HTTPException(401, "The code is invalid, expired, or this account has no access.")
-    if register_for is not None:
-        # A brand new organization gets the assistant for moving around the application, so the
-        # first screen somebody sees already has one. It is not worth failing a sign-in over.
-        try:
-            ensure_console_product(OrganizationDirectory(), account["tenant_id"], DEFAULT_TEAM_ID,
-                                   (account["user_id"],))
-        except Exception:  # noqa: BLE001 - never block somebody signing in
-            logger.warning("console_product_not_created", extra={"tenant_id": account["tenant_id"]})
+        # Two different things used to be one sentence. Somebody who typed their code correctly
+        # was told it was invalid, and went looking for a fault in the code rather than learning
+        # that this deployment does not hand out accounts. Saying which is safe: the only way to
+        # reach this branch is to have proved control of the address the code was sent to.
+        raise HTTPException(403 if proved_address else 401,
+                            "Pixel is invite-only here, so this address cannot open a workspace yet. "
+                            "Ask whoever runs this Pixel for an invitation."
+                            if proved_address else
+                            "That code is not right, or it has expired. Ask for a new one.")
+    # Every sign-in, not only the first. Moving around Pixel is Pixel's own, so an organization
+    # should be on the version the platform ships rather than the one that existed the day they
+    # signed up; doing this only at registration left accounts years behind without a symptom
+    # anyone could see. It is idempotent, it only ever touches the application's own product, and
+    # it is not worth failing a sign-in over - but a failure is reported, because an assistant
+    # silently stuck on an old version is exactly what this is here to prevent.
+    try:
+        ensure_console_product(OrganizationDirectory(), account["tenant_id"], DEFAULT_TEAM_ID,
+                               (account["user_id"],))
+    except Exception:  # noqa: BLE001 - never block somebody signing in
+        logger.exception("console_product_not_ensured", extra={"tenant_id": account["tenant_id"]})
     with get_connection() as connection:
         organization = connection.execute("select state from organizations where tenant_id=?", (account["tenant_id"],)).fetchone()
     if not organization or organization[0] != "active":
@@ -264,12 +282,16 @@ def _set_session_cookies(response: Response, token: str, csrf: str) -> None:
         SESSION_COOKIE, token, max_age=SESSION_COOKIE_MAX_AGE, httponly=True,
         secure=_cookie_secure(), samesite="lax", path="/api",
     )
+    # Readable by the page, and readable on every page: the browser only hands a cookie to a
+    # script whose path it matches, and the console does not live under /api. This is the token
+    # a write has to echo back, and it is deliberately not a secret from our own pages - it is a
+    # secret from other sites, which `samesite` and the header check are what protect.
     response.set_cookie(
         CSRF_COOKIE, csrf, max_age=SESSION_COOKIE_MAX_AGE, httponly=False,
-        secure=_cookie_secure(), samesite="lax", path="/api",
+        secure=_cookie_secure(), samesite="lax", path="/",
     )
 
 
 def _clear_session_cookies(response: Response) -> None:
     response.delete_cookie(SESSION_COOKIE, path="/api")
-    response.delete_cookie(CSRF_COOKIE, path="/api")
+    response.delete_cookie(CSRF_COOKIE, path="/")

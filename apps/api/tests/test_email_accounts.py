@@ -179,11 +179,120 @@ class EmailAccountsTest(EngineCutoverFixture):
         self.assertEqual(self.client.post("/api/account/logout", headers=self.csrf(session)).status_code, 204)
         self.assertEqual(self.client.get("/api/account/session").status_code, 401)
 
+    # --- Staying signed in -------------------------------------------------------------------
+    #
+    # A session lives in the cookie, so every one of these is really the same question asked in
+    # the ways a person meets it: a second tab, a reloaded page, a browser opened the next day.
+    # They used to differ because the browser decided who was signed in from something one tab
+    # happened to hold in memory.
+
+    def test_a_second_tab_is_signed_in_and_can_write(self):
+        """A new tab shares the cookie and nothing else. Reading is not enough: it must write."""
+        session = self.login()
+        # A tab that kept nothing of its own, which is what a newly opened one has.
+        self.assertEqual(self.client.get("/api/account/session").status_code, 200)
+        written = self.client.post("/api/account/logout", headers=self.csrf(session))
+        self.assertEqual(written.status_code, 204, written.text)
+
+    def test_the_token_a_write_needs_is_readable_by_the_page(self):
+        """The page is not under /api, so a cookie scoped there would be invisible to it."""
+        self.login()
+        csrf = next(cookie for cookie in self.client.cookies.jar if cookie.name == CSRF_COOKIE)
+        session = next(cookie for cookie in self.client.cookies.jar if cookie.name == SESSION_COOKIE)
+        self.assertEqual(csrf.path, "/")
+        # And the one that authenticates stays out of the page's reach entirely.
+        self.assertEqual(session.path, "/api")
+
+    def test_a_session_outlives_a_day(self):
+        """Closing the browser in the evening is not a reason to sign in again."""
+        from app.account_api import SESSION_COOKIE_MAX_AGE
+        from app.auth import _TOKEN_MAX_AGE_SECONDS
+
+        self.assertGreater(SESSION_COOKIE_MAX_AGE, 86400)
+        self.assertGreaterEqual(_TOKEN_MAX_AGE_SECONDS, SESSION_COOKIE_MAX_AGE)
+
+    def test_signing_out_ends_it_everywhere_and_no_tab_can_write_after(self):
+        """Every tab shares one cookie, so signing out in one has to end it for all of them.
+
+        The check is the session a tab is actually holding, not a freshly minted one: a new token
+        is a different session and revoking one has never touched another.
+        """
+        session = self.login()
+        held = next(cookie.value for cookie in self.client.cookies.jar if cookie.name == SESSION_COOKIE)
+        self.assertEqual(self.client.post("/api/account/logout", headers=self.csrf(session)).status_code, 204)
+        self.assertEqual(self.client.get("/api/account/session").status_code, 401)
+        # The other tab, still sending the cookie it had before anyone signed out.
+        self.client.cookies.set(SESSION_COOKIE, held)
+        self.client.cookies.set(CSRF_COOKIE, session["csrf_token"])
+        stale = self.client.get("/api/account/session")
+        self.assertEqual(stale.status_code, 401, stale.text)
+        refused = self.client.post("/api/account/logout", headers=self.csrf(session))
+        self.assertEqual(refused.status_code, 401, refused.text)
+
+    def test_a_write_without_the_token_is_still_refused(self):
+        """What the cookie does not do. The header must still match, or this is not protection."""
+        self.login()
+        self.assertEqual(self.client.post("/api/account/logout").status_code, 403)
+        self.assertEqual(
+            self.client.post("/api/account/logout", headers={"X-Pixel-CSRF": "not-the-token"}).status_code,
+            403,
+        )
+
+    def test_signing_in_brings_the_console_assistant_forward(self):
+        """Not only at registration: an account signing in gets the version we ship today."""
+        from app.definitions.console import configured_console
+        from app.definitions.organizations import OrganizationDirectory
+
+        with patch.dict(os.environ, {"PIXEL_CONSOLE_DEFINITION": "pixel_console"}):
+            session = self.login("newcomer@example.test")
+            directory = OrganizationDirectory()
+            console = configured_console()
+            bound = directory.product(session["tenant_id"], console.product_id)
+            self.assertIsNotNone(bound, "signing in should give an organization the assistant")
+            newest = max(directory.definitions.source.versions(console.definition_id))
+            directory.definitions.ensure_published(console.definition_id, 1)
+            directory.move_product_version(session["tenant_id"], console.product_id, 1)
+            self.login("newcomer@example.test")
+            self.assertEqual(
+                directory.product(session["tenant_id"], console.product_id).definition_version,
+                newest,
+            )
+
     def test_signup_requires_explicit_enable(self):
+        """Still off by default, and now it says so instead of blaming the code.
+
+        The refusal was a 401 reading "the code is invalid, expired, or this account has no
+        access", which sent somebody whose code was perfectly right to look for a fault in the
+        code. It is a 403 saying this Pixel is invite-only. Telling them that discloses nothing:
+        reaching this point at all means they read a code we mailed to that address, so they hold
+        that inbox, and the answer says nothing about anybody else's.
+        """
         with patch.dict(os.environ, {"PIXEL_SELF_SIGNUP_ENABLED": "false"}):
-            self.assertEqual(self.client.post("/api/account/verify-code", json=self.challenge()).status_code, 401)
+            refused = self.client.post("/api/account/verify-code", json=self.challenge())
+            self.assertEqual(refused.status_code, 403, refused.text)
+            self.assertIn("invite-only", refused.json()["detail"])
+            self.assertNotIn("invalid", refused.json()["detail"])
         with db.get_connection() as connection:
             self.assertEqual(connection.execute("select count(*) from email_accounts").fetchone()[0], 0)
+
+    def test_a_wrong_code_is_still_just_a_wrong_code(self):
+        """The other half of that split: nothing about accounts is said to somebody who has not
+        proved they hold the address."""
+        challenge = self.challenge()
+        wrong = self.client.post("/api/account/verify-code",
+                                 json={"challenge_id": challenge["challenge_id"], "code": "00000000"})
+        self.assertEqual(wrong.status_code, 401, wrong.text)
+        self.assertNotIn("invite", wrong.json()["detail"].lower())
+
+    def test_with_signup_open_any_address_gets_its_own_workspace(self):
+        """Open sign-up: a stranger's first code creates their organization, and only theirs."""
+        mine = self.login("founder@example.test")
+        theirs = self.login("someone-else@example.test")
+        self.assertNotEqual(mine["tenant_id"], theirs["tenant_id"])
+        self.assertNotEqual(mine["user_id"], theirs["user_id"])
+        products = self.client.get(f"/api/organizations/{mine['tenant_id']}/products",
+                                   headers=self.bearer(theirs))
+        self.assertEqual(products.status_code, 404, "one workspace must not see another")
 
     def test_verified_owner_can_add_a_private_product_and_answer_from_its_sources(self):
         account = self.login()

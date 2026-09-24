@@ -44,7 +44,9 @@ from app.installed_products import PackageMissing, package_for
 # which is fine for the demo.  Set PIXEL_AUTH_SECRET for stable tokens.
 _SECRET = env_value("PIXEL_AUTH_SECRET") or os.urandom(32).hex()
 _SERIALIZER = URLSafeTimedSerializer(_SECRET)
-_TOKEN_MAX_AGE_SECONDS = int(os.environ.get("PIXEL_TOKEN_MAX_AGE", "86400"))
+# As long as the session cookie may live, so a cookie the browser still holds is still honoured.
+# A shorter window here would sign people out while their browser believed they were signed in.
+_TOKEN_MAX_AGE_SECONDS = int(os.environ.get("PIXEL_TOKEN_MAX_AGE", str(7 * 86400)))
 SESSION_COOKIE = "pixel_session"
 CSRF_COOKIE = "pixel_csrf"
 CSRF_HEADER = "X-Pixel-CSRF"

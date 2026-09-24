@@ -97,10 +97,11 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     (async () => {
       try {
-        const session = storedSession();
-        if (!session) throw new Error("Sign in to open your organization.");
-        const identity = await currentAccount(session);
-        const products = await listProducts(session);
+        // Ask the server, rather than looking for something this tab happens to remember. A new
+        // tab, a refresh and a reopened browser all still carry the session cookie, and each of
+        // them used to look signed out because this tab's own memory was empty.
+        const identity = await currentAccount();
+        const products = await listProducts({ csrfToken: "", userId: identity.user_id, tenantId: identity.tenant_id });
         if (!cancelled) {
           setAccount(identity);
           setState((current) => ({ ...current, organizationId: identity.tenant_id,

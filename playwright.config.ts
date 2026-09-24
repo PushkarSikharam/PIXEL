@@ -12,6 +12,7 @@ export default defineConfig({
   // Every spec file starts its own isolated API and the fixed-port sentinel.
   workers: 1,
   globalSetup: "./tests/e2e/global-setup.ts",
+  globalTeardown: "./tests/e2e/global-teardown.ts",
   // In CI, the github reporter turns each failure into a public annotation on the run.
   reporter: process.env.CI
     ? [["github"], ["list"], ["html", { open: "never" }]]

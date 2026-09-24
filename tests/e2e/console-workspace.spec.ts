@@ -24,7 +24,9 @@ test("email sign-in never uses a shared demo identity", async ({ page }) => {
     return route.fulfill({ status: 404, json: { detail: "Unexpected test request" } });
   });
   await page.goto("/sign-in");
-  await page.getByLabel("Work email").fill("owner@example.test");
+  // "Your email", not "Work email": with sign-up open, the first code someone enters makes them
+  // a workspace, and it need not be a company address.
+  await page.getByLabel("Your email").fill("owner@example.test");
   await page.getByRole("button", { name: "Email me a code" }).click();
   await page.getByLabel("One-time code").fill("12345678");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();

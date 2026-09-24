@@ -44,7 +44,10 @@ export default function VerifyPage() {
     finally { setBusy(false); }
   }
 
-  return <AuthCard title="Check your email" description={challenge ? `Enter the 8-digit code sent to ${challenge.email}. It expires in 10 minutes.` : "Start sign-in to receive a code."}
+  return <AuthCard title="Check your email"
+    description={challenge
+      ? `We sent an 8-digit code to ${challenge.email}. It expires in 10 minutes. If nothing arrives, check the address is right.`
+      : "Start sign-in to receive a code."}
     footer={<Link href="/sign-in">Use a different email</Link>}>
     {error ? <Alert tone="warn">{error}</Alert> : null}
     {challenge ? <form className="px-stack" onSubmit={verify}>

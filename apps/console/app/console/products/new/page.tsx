@@ -17,7 +17,7 @@ import {
   setDetails, starterDefinitionText, understood, updateField, updateThing,
   toggleAction, validate, type OnboardingState, type Step,
 } from "@pixel-console/lib/onboarding";
-import { addProduct, productDraft, storedSession } from "@pixel-console/lib/pixel-api";
+import { FieldError, addProduct, productDraft, storedSession } from "@pixel-console/lib/pixel-api";
 import { ProductImport } from "@pixel-console/components/product-import";
 
 export default function NewProduct() {
@@ -46,6 +46,9 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
   const [publishing, setPublishing] = useState(false);
   const [drafting, setDrafting] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
+  // Which box a refusal was about, so it can be shown there instead of as a notice at the foot
+  // of a step the person may not even be on any more.
+  const [draftField, setDraftField] = useState<string | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const { setActiveWork } = c;
   const visibleSteps: Step[] = STEPS.filter((step) => step !== "published"
@@ -104,7 +107,11 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
       }));
     } catch (caught) {
       setDraftError(caught instanceof Error ? caught.message : "Pixel could not write that product.");
-      setState((s) => goTo(s, "sources"));
+      // A refusal that named a box goes back to the step that box is on, and is shown beside it.
+      // Anything else stays with the description, which is where it was most likely written.
+      const named = caught instanceof FieldError ? caught.field : null;
+      setDraftField(named);
+      setState((s) => goTo(s, named === "product_name" || named === "definition_id" ? "details" : "sources"));
     } finally {
       setDrafting(false);
     }
@@ -135,10 +142,15 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
           {state.step === "details" && (
             <Panel>
               <form className="px-stack" onSubmit={(e) => { e.preventDefault(); setState((s) => goTo(s, "sources")); }}>
-                <Field label="Product name">{(f) => (
-                  <Input id={f.id} describedBy={f.describedBy} value={state.name} maxLength={80} required
-                    onChange={(e) => setState((s) => setDetails(s, e.target.value,
-                      s.slugChosen ? s.slug : addressFor(e.target.value), { derived: !s.slugChosen }))} />
+                <Field label="Product name"
+                  error={draftField === "product_name" ? draftError : null}>{(f) => (
+                  <Input id={f.id} describedBy={f.describedBy} invalid={f.invalid} value={state.name}
+                    maxLength={80} required
+                    onChange={(e) => {
+                      if (draftField === "product_name") { setDraftError(null); setDraftField(null); }
+                      setState((s) => setDetails(s, e.target.value,
+                        s.slugChosen ? s.slug : addressFor(e.target.value), { derived: !s.slugChosen }));
+                    }} />
                 )}</Field>
                 <Field label="Address"
                   hint="Where this product lives in Pixel. Taken from the name; change it now if you want something else, because it cannot be changed later."
@@ -224,7 +236,7 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
                   </fieldset>
                 ))}
                 <div><Button onClick={() => setState((st) => addThing(st))}><Plus aria-hidden />Add a kind of record</Button></div>
-                {draftError ? <Alert tone="danger">{draftError}</Alert> : null}
+                {draftError && !draftField ? <Alert tone="danger">{draftError}</Alert> : null}
                 <div className="px-row">
                   <Button onClick={() => setState((s) => goTo(s, "details"))}>Back</Button>
                   <Button variant="primary" loading={drafting} disabled={!canEnter(state, "analyzing")}

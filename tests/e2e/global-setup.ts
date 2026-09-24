@@ -1,11 +1,14 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { resolve } from "node:path";
-import { E2E_SENTINEL_PORT } from "./ports";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { E2E_PROCESS_FILE, E2E_SENTINEL_LOG, E2E_SENTINEL_PORT } from "./ports";
 
 const WEB_PORT = 3100;
 
 export default async function startWebServer() {
-  await assertPortFree();
+  await assertPortFree(WEB_PORT, "web server");
+  await assertPortFree(E2E_SENTINEL_PORT, "sentinel");
+  const sentinel = await startSentinel();
   const webRoot = resolve(process.cwd(), "apps/web");
   const nextBin = resolve(process.cwd(), "node_modules/next/dist/bin/next");
   const server = spawn(process.execPath, [nextBin, "dev", "--port", String(WEB_PORT)], {
@@ -20,19 +23,65 @@ export default async function startWebServer() {
     windowsHide: true
   });
 
-  await waitForServer(server);
-  return async () => stopServer(server);
+  try {
+    await waitForServer(server);
+    writeProcessFile(server, sentinel);
+  } catch (error) {
+    await stopServer(server);
+    await stopServer(sentinel);
+    throw error;
+  }
 }
 
-async function assertPortFree() {
+async function startSentinel() {
+  const logPath = resolve(process.cwd(), E2E_SENTINEL_LOG);
+  mkdirSync(dirname(logPath), { recursive: true });
+  writeFileSync(logPath, "", "utf8");
+  const sentinelScript = resolve(process.cwd(), "tests/e2e/sentinel-server.mjs");
+  const sentinel = spawn(process.execPath, [sentinelScript, String(E2E_SENTINEL_PORT), logPath], {
+    cwd: process.cwd(),
+    stdio: "ignore",
+    windowsHide: true
+  });
+  await waitForSentinel(sentinel);
+  writeFileSync(logPath, "", "utf8");
+  return sentinel;
+}
+
+async function waitForSentinel(sentinel: ChildProcess) {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    if (sentinel.exitCode !== null) {
+      throw new Error(`E2E sentinel exited early with code ${sentinel.exitCode}.`);
+    }
+    try {
+      const response = await fetch(`http://127.0.0.1:${E2E_SENTINEL_PORT}/health`);
+      if (response.status === 503) return;
+    } catch {
+      // Not listening yet.
+    }
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 100));
+  }
+  throw new Error(`Timed out waiting for E2E sentinel on port ${E2E_SENTINEL_PORT}.`);
+}
+
+function writeProcessFile(server: ChildProcess, sentinel: ChildProcess) {
+  const processFile = resolve(process.cwd(), E2E_PROCESS_FILE);
+  mkdirSync(dirname(processFile), { recursive: true });
+  writeFileSync(processFile, JSON.stringify({
+    webPid: server.pid ?? null,
+    sentinelPid: sentinel.pid ?? null
+  }), "utf8");
+}
+
+async function assertPortFree(port: number, label: string) {
   try {
-    await fetch(`http://127.0.0.1:${WEB_PORT}`);
+    await fetch(`http://127.0.0.1:${port}`);
   } catch {
     // Nothing is listening, which is what the e2e server needs.
     return;
   }
   throw new Error(
-    `Port ${WEB_PORT} is already serving an app. Stop the existing dev server before running e2e.`
+    `Port ${port} is already serving a ${label}. Stop the existing process before running e2e.`
   );
 }
 

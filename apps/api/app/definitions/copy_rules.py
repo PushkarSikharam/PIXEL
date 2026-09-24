@@ -124,7 +124,16 @@ LABEL_RULES = (*EXECUTION, *PROMISE, *FIRST_PERSON_CLAIM, *DESTRUCTIVE)
 
 MAX_LABEL = 120
 _SENTENCE_BREAK = re.compile(r"[.;:!?]\s+\S")
-_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9 &'.()-]*")
+# What a business actually calls itself. The old set rejected a comma, so "Acme, Inc" could not
+# be a product name, and an underscore, a slash and an exclamation mark went the same way -
+# ordinary names, refused for no reason anyone could act on.
+#
+# This is still an allowlist, and everything dangerous stays outside it: angle brackets, braces,
+# backslashes and backticks cannot appear, so a name can never read as markup, a placeholder or
+# a path. What a name may not *say* is a separate question, answered by NAME_RULES.
+_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9 &'.,()+/_!?:-]*")
+# Named so a refusal can say which character was the problem instead of restating the rule.
+_ALLOWED_IN_NAME = frozenset(" &'.,()+/_!?:-")
 
 
 def _normalized(text: str) -> str:
@@ -163,10 +172,26 @@ def choice_question_problems(text: str) -> list[str]:
 
 
 def name_problems(text: str) -> list[str]:
-    """A product, assistant, entity or view name: never a sentence."""
+    """A product, assistant, entity or view name: never a sentence.
+
+    A refusal names the character that caused it. "is not a plain name" told somebody nothing
+    they could act on, least of all which of the words they typed was the problem.
+    """
     problems = _violations(text, NAME_RULES)
-    if not _NAME.fullmatch(text.strip()) or _SENTENCE_BREAK.search(text):
+    stripped = text.strip()
+    if not stripped:
+        problems.append("cannot be empty")
+        return problems
+    refused = sorted({character for character in stripped
+                      if not character.isalnum() and character not in _ALLOWED_IN_NAME})
+    if refused:
+        problems.append("cannot contain " + ", ".join(repr(character) for character in refused))
+    elif not stripped[0].isalnum():
+        problems.append("must start with a letter or a number")
+    elif not _NAME.fullmatch(stripped):
         problems.append("is not a plain name")
+    if _SENTENCE_BREAK.search(text):
+        problems.append("must be a name, not a sentence")
     return problems
 
 

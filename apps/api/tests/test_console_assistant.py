@@ -347,5 +347,76 @@ class GoingBackTest(ConsoleAssistantFixture):
         self.assertIn("open", answer["speech"].lower())
 
 
+class NobodyIsLeftBehindTest(ConsoleAssistantFixture):
+    """Every organization runs the assistant this deployment ships.
+
+    Setting the console product up only when an account was created left organizations on
+    whatever version existed the day they signed up. There was no symptom anyone could see
+    either: the assistant answered every question in the wording of its own version, which reads
+    as an assistant that does not work rather than one that is old.
+    """
+
+    def newest(self) -> int:
+        return max(self.directory.definitions.source.versions(CONSOLE_DEFINITION))
+
+    def put_behind(self, version: int = 1) -> None:
+        self.directory.definitions.ensure_published(CONSOLE_DEFINITION, version)
+        self.directory.move_product_version(TENANT, self.console.product_id, version)
+
+    def test_no_organization_is_behind_the_version_we_ship(self):
+        """The check that stops this happening again."""
+        from app.definitions.console import console_versions_behind
+
+        self.assertEqual(console_versions_behind(self.directory), {})
+
+    def test_an_organization_left_behind_is_reported(self):
+        from app.definitions.console import console_versions_behind
+
+        self.put_behind()
+        self.assertEqual(console_versions_behind(self.directory), {TENANT: 1})
+
+    def test_the_catch_up_brings_it_forward(self):
+        from app.definitions.console import catch_up_console_products, console_versions_behind
+
+        self.put_behind()
+        self.assertEqual(catch_up_console_products(self.directory), 1)
+        self.assertEqual(console_versions_behind(self.directory), {})
+        self.assertEqual(self.directory.product(TENANT, self.console.product_id).definition_version,
+                         self.newest())
+
+    def test_catching_up_leaves_a_customers_own_product_alone(self):
+        from app.definitions.console import catch_up_console_products
+
+        before = self.directory.product(TENANT, "linear-demo")
+        self.put_behind()
+        catch_up_console_products(self.directory)
+        after = self.directory.product(TENANT, "linear-demo")
+        self.assertEqual(after.definition_version, before.definition_version)
+        self.assertEqual(after.definition_id, before.definition_id)
+
+    def test_catching_up_leaves_the_organization_and_its_people_alone(self):
+        from app.definitions.console import catch_up_console_products
+
+        organization = self.directory.organization(TENANT)
+        members = {(m.user_id, m.role, m.team_id) for m in self.directory.members(TENANT)}
+        teams = {(t.team_id, t.name, t.state) for t in self.directory.teams(TENANT)}
+        self.put_behind()
+        catch_up_console_products(self.directory)
+        self.assertEqual(self.directory.organization(TENANT), organization)
+        self.assertEqual({(m.user_id, m.role, m.team_id) for m in self.directory.members(TENANT)}, members)
+        self.assertEqual({(t.team_id, t.name, t.state) for t in self.directory.teams(TENANT)}, teams)
+
+    def test_an_account_left_behind_answers_like_the_newest_once_it_catches_up(self):
+        """The symptom, gone: the same question, before and after."""
+        from app.definitions.console import catch_up_console_products
+
+        self.put_behind()
+        behind = self.ask("how many products do I have", session="behind")["speech"]
+        self.assertNotIn("You have", behind)
+        catch_up_console_products(self.directory)
+        caught_up = self.ask("how many products do I have", session="caught-up")["speech"]
+        self.assertIn("You have", caught_up)
+
+
 if __name__ == "__main__":
     unittest.main()

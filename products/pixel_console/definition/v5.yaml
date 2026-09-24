@@ -4,22 +4,20 @@
 # rather than decided in the browser. One engine then answers both "open my products" and
 # whatever the product they are inside is asked, and the assistant is the same assistant in both.
 #
-# v4 answers the way people actually ask. v1 to v3 are published and unchanged. It adds, and
-# changes nothing else:
-#   - "how products do i have" counts them, like "how many products" already did: a dropped word
-#     is a typo, not a different question;
-#   - "create a project" opens the screen that adds a product, because somebody arriving from
-#     another tool calls it a project and Pixel's answer to that is a product;
-#   - "team", "teams" and "organization" reach the people screen.
+# v5 widens the words Pixel knows for itself. v1 to v4 are published and unchanged.
 #
-# The products an organization runs and the people in it are read from the platform's own tables,
-# so a count is what the application actually has rather than a copy that could drift from it.
-# Nothing here changes any of them: Pixel's assistant reads and navigates, and adding or removing
-# a product is done on the screen that does it, where it can be confirmed.
+# It exists because v4 was edited after it had been published, which the platform refuses: a
+# published version is immutable, and a file that no longer matches the checksum it was
+# registered with stops every conversation on that product. The words below are the change that
+# was wrongly made to v4; nothing else differs from it.
+#
+# Pixel now knows the words people use for the parts of it they ask about - knowledge, login,
+# onboarding, records, screens, signing in and signing up - so a question using them reaches the
+# right screen instead of the fallback.
 
 definition:
   definition_id: pixel_console
-  version: 4
+  version: 5
   ownership: platform_shared
 
 identity:
@@ -34,9 +32,9 @@ identity:
   greeting: Welcome to {product}. I'm {assistant}.
 
 vocabulary:
-  terms: [architecture, audit, build, demo, deploy, home, member, members, operate, organization,
-          overview, people, product, products, project, projects, settings, team, teams, test,
-          workspace]
+  terms: [architecture, audit, build, demo, deploy, home, knowledge, login, member, members,
+          onboarding, operate, organization, overview, people, product, products, project,
+          projects, records, screens, settings, sign in, signup, team, teams, test, workspace]
   corrections:
     prodcut: product
     prodcuts: products

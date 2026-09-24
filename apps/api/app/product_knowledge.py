@@ -99,6 +99,16 @@ def _subject_terms(text: str) -> set[str]:
             if word not in _ASKING_WORDS}
 
 
+def _title_fit(text: str, title: str) -> int:
+    """How many of the question's own words, asking words included, a document's title uses.
+
+    Only ever a tie-break. "What is Pixel?" asks about nothing but Pixel, which "What Pixel is"
+    and "How Pixel works" both name; the question's shape is what says which one it wants.
+    """
+    asked = {_stem(word) for word in re.findall(r"\w{2,}", text.casefold())}
+    return len(asked & {_stem(word) for word in re.findall(r"\w{2,}", title.casefold())})
+
+
 def _stem(word: str) -> str:
     """A crude common-ending trim, so records matches record and lasts matches last.
 
@@ -163,9 +173,10 @@ class ApprovedKnowledge:
                 for term in matched
             )
             grounds = len(matched) >= MIN_MATCHED_TERMS or bool(matched & title_terms)
-            ranked.append((score, row["document_id"], start, KnowledgePassage(
+            ranked.append((score, _title_fit(text, row["title"]), row["document_id"], start, KnowledgePassage(
                 title=row["title"], source=f"document:{row['document_id']}",
                 snippet=snippet, grounds_answer=grounds)))
-        # Ties are broken by document and position, so the same question always reads the same way.
-        ranked.sort(key=lambda item: (-item[0], item[1], item[2]))
-        return [passage for _, _, _, passage in ranked[:max(0, min(limit, 5))]]
+        # Ties go to the title that reads most like the question, then to document and position, so
+        # the same question always reads the same way.
+        ranked.sort(key=lambda item: (-item[0], -item[1], item[2], item[3]))
+        return [passage for _, _, _, _, passage in ranked[:max(0, min(limit, 5))]]

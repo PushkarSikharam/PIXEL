@@ -356,7 +356,10 @@ class ResponseComposer:
             return self._render_platform(
                 Stage.UNGROUNDED, "knowledge_unavailable", PLATFORM_KNOWLEDGE_UNAVAILABLE, {}
             )
-        speech = f'According to the product documentation: "{snippet}"'
+        # Always attributed, so a document saying "Done, I have updated it" is never heard as the
+        # assistant claiming something it did. The attribution is fixed wording: a title is written
+        # by whoever approved the document and is never spoken.
+        speech = f"From the product documentation: {snippet}"
         return Reply(speech, Stage.ANSWER, None, sources=(passage.source,), source_titles=(title,))
 
     # --- model-written speech ---

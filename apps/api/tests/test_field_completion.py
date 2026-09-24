@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from app import db, main  # noqa: E402
 from app.definitions.contract import FieldSpec  # noqa: E402
 from app.engine.field_completion import read_answer  # noqa: E402
+from app.engine.mentions import title_text  # noqa: E402
 from app.engine.lookup import RecordView  # noqa: E402
 from app.engine.snapshot import TurnSnapshot  # noqa: E402
 from test_turn_execution import NewEngineFixture, SCOPE  # noqa: E402
@@ -49,6 +50,22 @@ class ReadAnswerTest(unittest.TestCase):
         self.assertIsNone(read_answer(FieldSpec(type="date"), "next friday", empty))
         self.assertEqual(read_answer(FieldSpec(type="text"), "  'Fix login redirect.' ", empty),
                          "Fix login redirect")
+
+    def test_a_reply_to_the_question_is_not_a_value(self):
+        """Answering "yes" to "what should the title be?" once saved a record called "yes"."""
+        text = FieldSpec(type="text")
+        for reply in ("yes", "Yes.", "ok", "Sure!", "no", "cancel", "never mind", "go ahead"):
+            with self.subTest(reply=reply):
+                self.assertIsNone(read_answer(text, reply, snapshot()))
+        self.assertEqual(read_answer(text, "Yes campaign", snapshot()), "Yes campaign")
+        self.assertEqual(read_answer(text, "Acme renewal", snapshot()), "Acme renewal")
+
+    def test_a_new_record_can_be_named_the_way_people_name_things(self):
+        self.assertEqual(title_text("create a deal called Acme renewal"), "Acme renewal")
+        self.assertEqual(title_text("add a company named 'Northwind'"), "Northwind")
+        self.assertEqual(title_text("new task titled Ship the beta"), "Ship the beta")
+        self.assertEqual(title_text("create a ticket for Maya about login bug"), "Login bug")
+        self.assertIsNone(title_text("create a deal"))
 
     def test_a_reference_is_one_visible_record_or_nothing(self):
         visible = snapshot(("PRJ-1", "Issue Triage Workflow"), ("PRJ-2", "Issue Intake"))

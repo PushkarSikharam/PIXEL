@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import type { Environment, Permission } from "@pixel-console/lib/contracts";
 import { DIRECTORY, ORGANIZATIONS, PERSONAS, PRODUCTS, productById } from "@pixel-console/lib/mock-data";
 import { authorize, type Resource } from "@pixel-console/lib/permissions";
-import { isLive, listProducts, currentAccount, serverUnavailable, storedSession, type ApiAccount, type ApiActionShape,
+import { ApiError, isLive, listProducts, currentAccount, serverUnavailable, storedSession, type ApiAccount, type ApiActionShape,
   type ApiProduct, type ApiProductShape } from "@pixel-console/lib/pixel-api";
 
 /**
@@ -117,7 +117,10 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
         }
       } catch (error) {
         if (!cancelled) {
-          setLiveError(error instanceof Error ? error.message : "Products could not be loaded.");
+          // Being signed out is not an error, and the server's words for it ("Authorization header
+          // is required") are not for the person reading the page.
+          const signedOut = error instanceof ApiError && (error.status === 401 || error.status === 403);
+          setLiveError(signedOut ? null : error instanceof Error ? error.message : "Products could not be loaded.");
           setLiveUnavailable(serverUnavailable(error));
         }
       } finally {

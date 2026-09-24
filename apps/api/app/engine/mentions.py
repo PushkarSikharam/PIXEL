@@ -30,7 +30,7 @@ _TOKEN = re.compile(r"[A-Za-z][A-Za-z'’-]*")
 _POSSESSIVE = re.compile(r"['’]s?$")
 _APOSTROPHE = re.compile(r"['’]")
 _RECORD_ID = re.compile(r"^[a-z]+-\d+$")
-_TITLE_CUE = re.compile(r"\babout\s+(.+)$", re.IGNORECASE)
+_TITLE_CUE = re.compile(r"\b(?:about|called|named|titled)\s+(.+)$", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -114,9 +114,9 @@ def enum_values(entity: EntitySpec, field_names: list[str], text: str) -> dict[s
 
 
 def title_text(original: str) -> str | None:
-    """The subject of a new record, taken from "... about <subject>"."""
+    """The subject of a new record, taken from "... about <subject>" or "... called <name>"."""
     match = _TITLE_CUE.search(original)
     if not match:
         return None
-    subject = re.sub(r"[^\w\s'-]", "", match.group(1)).strip()
+    subject = re.sub(r"[^\w\s'-]", "", match.group(1)).strip().strip("'").strip()
     return subject[:1].upper() + subject[1:] if subject else None

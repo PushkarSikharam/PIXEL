@@ -86,6 +86,23 @@ class ProductKnowledgeTest(AddedProductFixture):
         self.assertEqual(found[0].title, "Renewals")
         self.assertTrue(found[0].grounds_answer)
 
+    def test_a_question_reaches_the_document_whose_title_it_echoes(self):
+        """Both titles name the subject, so the words "what" and "how" have to decide.
+
+        "What is Pixel?" was answered from "How Pixel works" because the two tied on "Pixel" and
+        the tie went to whichever document sorted first.
+        """
+        # The document about how it works sorts first, as Pixel's own "how-pixel-works" does.
+        ids = [SimpleNamespace(hex="0" * 32), SimpleNamespace(hex="f" * 32)]
+        with patch("app.product_knowledge.uuid4", side_effect=ids):
+            self.publish(title="How Ledger works", text="Ledger checks every entry twice before saving.")
+            version = self.publish(title="What Ledger is",
+                                   text="Ledger is a book of accounts for small teams.").json()["version"]
+        knowledge = ApprovedKnowledge(self.context(version))
+        self.assertEqual(knowledge.search("What is Ledger?")[0].title, "What Ledger is")
+        self.assertEqual(knowledge.search("what does ledger do")[0].title, "What Ledger is")
+        self.assertEqual(knowledge.search("How does Ledger work?")[0].title, "How Ledger works")
+
     def test_one_word_in_common_is_not_an_answer(self):
         version = self.publish(title="Loans",
                                text="A book loan lasts fourteen days.").json()["version"]

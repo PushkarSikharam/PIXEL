@@ -183,8 +183,14 @@ export function Shell({ children }: { children: ReactNode }) {
               </Alert>
               <div className="px-row"><Button variant="primary" onClick={c.reloadProducts}>Try again</Button></div>
             </div> : c.live && !c.account ? <div className="px-stack">
-              <h1>Your Pixel workspace</h1><Alert>{c.liveError ?? "Sign in to continue."}</Alert>
-              <Link className="px-button" data-variant="primary" href="/sign-in">Sign in</Link>
+              <h1>Your Pixel workspace</h1>
+              {c.liveError
+                ? <Alert tone="warn">{c.liveError}</Alert>
+                : <p className="px-muted" style={{ margin: 0 }}>Sign in to see your products and ask Edith about them, or explore the demo first.</p>}
+              <div className="px-row">
+                <Link className="px-button" data-variant="primary" href="/sign-in">Sign in</Link>
+                <a className="px-button" href="/demo">Explore the demo</a>
+              </div>
             </div> : c.live && !CONNECTED_AREAS.some((area) =>
               area === pathname || (area !== "/console" && pathname.startsWith(area + "/"))) ?
               <Alert title="Not connected yet">

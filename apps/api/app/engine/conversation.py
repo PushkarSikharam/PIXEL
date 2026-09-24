@@ -85,6 +85,12 @@ GUIDED_PATH_CUES = ("run the evaluator demo", "evaluator demo", "guided demo", "
                     "walk me through", "take me through", "give me a tour", "a tour")
 NEXT_STEP_CUES = ("what should i try next", "what should we try next", "next step", "what next",
                   "where should i start")
+# Going back is a request about the conversation, not about the product, so the platform reads it
+# for itself. Only bare phrases: "back to my products" names a destination and stays a request for
+# that destination.
+BACK_CUES = ("go back", "take me back", "go back please", "back please", "previous screen",
+             "the previous screen", "last screen", "the last screen", "where i was",
+             "back to where i was", "go back to where i was")
 VOICE_CUES = ("voice", "interrupt", "interruption", "stop speaking", "stopping", "listening",
               "listen while", "live voice")
 
@@ -93,7 +99,7 @@ VOICE_CUES = ("voice", "interrupt", "interruption", "stop speaking", "stopping",
 # and leave the platform unable to recognise its own question.
 PLATFORM_PHRASES: tuple[str, ...] = (
     *sorted(GREETINGS), *IDENTITY_CUES, *CAPABILITY_CUES, *LAST_CHANGE_CUES, *INTRODUCTION_CUES,
-    *THANKS_CUES, *CLOSING_CUES, *GUIDED_PATH_CUES, *NEXT_STEP_CUES, *VOICE_CUES,
+    *THANKS_CUES, *CLOSING_CUES, *GUIDED_PATH_CUES, *NEXT_STEP_CUES, *VOICE_CUES, *BACK_CUES,
 )
 
 

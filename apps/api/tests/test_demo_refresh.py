@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -18,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fastapi.testclient import TestClient
 
 import app.main as main_module
+from app import db
 from app.main import app
 from app.services.demo_refresh import IdleDemoReset
 from test_public_demo import PublicDemoFixture
@@ -165,7 +167,10 @@ class ArmingTest(unittest.TestCase):
 
     def test_a_running_server_arms_it_and_a_test_server_leaves_it_as_found(self):
         reset = IdleDemoReset()
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
         with patch.object(main_module, "idle_reset", reset), \
+                patch.object(db, "DB_PATH", Path(temporary.name) / "demo-refresh.sqlite3"), \
                 patch.dict(os.environ, {"PIXEL_DEMO_IDLE_RESET_MINUTES": "20"}):
             with TestClient(app):
                 self.assertTrue(reset.armed)

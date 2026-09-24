@@ -104,6 +104,7 @@ class EngineStateStore:
             follow_up = PersonFollowUp(row["person_follow_up_action"], row["person_follow_up_turn"])
         memory = ConversationMemory(
             focus=focus, last_person=last_person, last_view=row["last_view"],
+            previous_view=_column(row, "previous_view"),
             last_change=row["last_change"], turn=row["last_turn"], person_follow_up=follow_up,
             visitor_name=row["visitor_name"],
         )
@@ -127,10 +128,10 @@ class EngineStateStore:
               session_id, tenant_id, product_id, user_id, instance_id, instance_generation,
               scope_id, codec_version, definition_id, definition_version, definition_checksum,
               knowledge_version, last_turn, revision, focus_entity, focus_id,
-              last_person_entity, last_person_id, last_view, last_change,
+              last_person_entity, last_person_id, last_view, previous_view, last_change,
               person_follow_up_action, person_follow_up_turn, pending_requires_repeat,
               pending_turn, updated_at, visitor_name
-            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             on conflict(session_id) do update set
               scope_id = excluded.scope_id, codec_version = excluded.codec_version,
               definition_id = excluded.definition_id, definition_version = excluded.definition_version,
@@ -139,7 +140,8 @@ class EngineStateStore:
               last_turn = excluded.last_turn, revision = excluded.revision,
               focus_entity = excluded.focus_entity, focus_id = excluded.focus_id,
               last_person_entity = excluded.last_person_entity, last_person_id = excluded.last_person_id,
-              last_view = excluded.last_view, last_change = excluded.last_change,
+              last_view = excluded.last_view, previous_view = excluded.previous_view,
+              last_change = excluded.last_change,
               person_follow_up_action = excluded.person_follow_up_action,
               person_follow_up_turn = excluded.person_follow_up_turn,
               pending_requires_repeat = excluded.pending_requires_repeat,
@@ -152,7 +154,7 @@ class EngineStateStore:
                 owner.instance_generation, scope_id, CODEC_VERSION, pin.definition_id,
                 pin.definition_version, pin.definition_checksum, pin.knowledge_version, turn_id,
                 new_revision, *_ref_columns(memory.focus), *_ref_columns(memory.last_person),
-                memory.last_view, memory.last_change,
+                memory.last_view, memory.previous_view, memory.last_change,
                 memory.person_follow_up.action_key if memory.person_follow_up else None,
                 memory.person_follow_up.turn if memory.person_follow_up else None,
                 int(pending), pending_turn, _utc_now(), _bounded_name(memory.visitor_name),
@@ -223,6 +225,14 @@ def rebuild_signal_history(connection: sqlite3.Connection, owner: ExecutionOwner
     history = SignalHistory()
     signals = [EngineSignal(row["type"], row["value"], row["confidence"]) for row in rows[-HISTORY_LIMIT:]]
     return history.add(signals)
+
+
+def _column(row, name: str):
+    """One column of a row, or None when this row predates it."""
+    try:
+        return row[name]
+    except (IndexError, KeyError):
+        return None
 
 
 def _ref(entity: str | None, record_id: str | None) -> RecordRef | None:

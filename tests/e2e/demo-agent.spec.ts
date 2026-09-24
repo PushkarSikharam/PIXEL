@@ -684,7 +684,7 @@ test("answers capability and team-count questions conversationally", async ({ pa
   await sendChat(page, "are you capable of doing");
   await expect(page.getByTestId("current-view-title")).toHaveText("Dashboard");
   await expect(page.getByTestId("transcript")).toContainText(
-    said("I can guide this Pixel demo", "Here's what I can do in Pixel:")
+    said("I can guide this Pixel demo", "Here's what I can do in Pixel Planning:")
   );
 
   await sendChat(page, "how many team members are there");
@@ -933,7 +933,7 @@ test("answers identity questions without generic routing", async ({ page }) => {
   await sendChat(page, "Hii there who are u");
 
   await expect(page.getByTestId("transcript")).toContainText(
-    said("I'm Edith, Pixel's live demo guide.", "I'm Edith, your guide to Pixel.")
+    said("I'm Edith, Pixel's live demo guide.", "I'm Edith, your guide to Pixel Planning.")
   );
 });
 
@@ -942,12 +942,12 @@ test("handles greetings, capabilities, and visitor introduction naturally", asyn
 
   await sendChat(page, "Hii There?");
   await expect(page.getByTestId("transcript")).toContainText(
-    said("Hi there. What would you like to explore first in Pixel?", "Hi, I'm Edith, your guide to Pixel.")
+    said("Hi there. What would you like to explore first in Pixel?", "Hi, I'm Edith, your guide to Pixel Planning.")
   );
 
   await sendChat(page, "What are you capable of doing?");
   await expect(page.getByTestId("transcript")).toContainText(
-    said("I can guide this Pixel demo through", "Here's what I can do in Pixel:")
+    said("I can guide this Pixel demo through", "Here's what I can do in Pixel Planning:")
   );
 
   await sendChat(page, "HI there i am Pushkar!");
@@ -958,7 +958,7 @@ test("handles greetings, capabilities, and visitor introduction naturally", asyn
   await sendChat(page, "Hi");
   await expect(page.getByTestId("transcript")).toContainText(
     said("Hi Pushkar. What would you like to explore next in Pixel?",
-         "Hi Pushkar, good to see you again. What would you like to explore next in Pixel?")
+         "Hi Pushkar, good to see you again. What would you like to explore next in Pixel Planning?")
   );
 });
 
@@ -1052,7 +1052,7 @@ test("opens integrations for GitHub and Slack, then blocks out-of-product reques
   await expect(page.getByTestId("current-view-title")).toHaveText("Integrations");
   await expect(page.getByTestId("transcript")).toContainText(
     definitionAuthority
-      ? "I can only help with Pixel here"
+      ? "I can only help with Pixel Planning here"
       : "I can only demonstrate Pixel workflows here"
   );
 });

@@ -665,18 +665,18 @@
     "turn": 0,
     "field": "reply",
     "kind": "wording",
-    "reason": "Both refuse to open Salesforce and change nothing; the platform's refusal reads \"I can only help with Pixel here, so I can't do that\".",
+    "reason": "Both refuse to open Salesforce and change nothing; the platform's refusal reads \"I can only help with Pixel here, so I can't do that\". The product is named Pixel Planning from definition v7: it was called Pixel, which is the platform's own name, so one product inside Pixel read as the platform itself. Only the name in this sentence changed.",
     "recorded": "I can only demonstrate Pixel workflows here, so I cannot open that.",
-    "current": "I can only help with Pixel here, so I can't do that."
+    "current": "I can only help with Pixel Planning here, so I can't do that."
   },
   {
     "case": "guardrail-email",
     "turn": 0,
     "field": "reply",
     "kind": "wording",
-    "reason": "Both refuse to open an inbox and change nothing; the platform's refusal reads \"I can only help with Pixel here, so I can't do that\".",
+    "reason": "Both refuse to open an inbox and change nothing; the platform's refusal reads \"I can only help with Pixel here, so I can't do that\". The product is named Pixel Planning from definition v7: it was called Pixel, which is the platform's own name, so one product inside Pixel read as the platform itself. Only the name in this sentence changed.",
     "recorded": "I can only demonstrate Pixel workflows here, so I cannot open that.",
-    "current": "I can only help with Pixel here, so I can't do that."
+    "current": "I can only help with Pixel Planning here, so I can't do that."
   },
   {
     "case": "guardrail-destructive",
@@ -800,9 +800,9 @@
     "turn": 0,
     "field": "reply",
     "kind": "wording",
-    "reason": "Both greet and ask what to explore. The platform introduces the assistant by name (\"Hi, I'm Edith, your guide to Pixel. What would you like to explore?\"). Owner decision (5d plan revision 2, section 5): names are spoken plainly.",
+    "reason": "Both greet and ask what to explore. The platform introduces the assistant by name (\"Hi, I'm Edith, your guide to Pixel. What would you like to explore?\"). Owner decision (5d plan revision 2, section 5): names are spoken plainly. The product is named Pixel Planning from definition v7: it was called Pixel, which is the platform's own name, so one product inside Pixel read as the platform itself. Only the name in this sentence changed.",
     "recorded": "Hi there. What would you like to explore first in Pixel?",
-    "current": "Hi, I'm Edith, your guide to Pixel. What would you like to explore?"
+    "current": "Hi, I'm Edith, your guide to Pixel Planning. What would you like to explore?"
   },
   {
     "case": "greeting-with-name",
@@ -818,9 +818,9 @@
     "turn": 0,
     "field": "reply",
     "kind": "wording",
-    "reason": "Both greet Priya by name and ask what to explore. The recorded reply listed five product areas; the platform asks \"Nice to meet you, Priya. What would you like to explore in Pixel?\". Owner decision (5d plan revision 2, section 5): names are spoken plainly.",
+    "reason": "Both greet Priya by name and ask what to explore. The recorded reply listed five product areas; the platform asks \"Nice to meet you, Priya. What would you like to explore in Pixel?\". Owner decision (5d plan revision 2, section 5): names are spoken plainly. The product is named Pixel Planning from definition v7: it was called Pixel, which is the platform's own name, so one product inside Pixel read as the platform itself. Only the name in this sentence changed.",
     "recorded": "Nice to meet you, Priya. What would you like to explore first: planning, tickets, projects, teams, or integrations?",
-    "current": "Nice to meet you, Priya. What would you like to explore in Pixel?"
+    "current": "Nice to meet you, Priya. What would you like to explore in Pixel Planning?"
   },
   {
     "case": "identity",
@@ -836,9 +836,9 @@
     "turn": 0,
     "field": "reply",
     "kind": "wording",
-    "reason": "Both answer as Edith, Pixel's guide. The recorded reply listed product areas; the platform says \"I'm Edith, your guide to Pixel. Ask me what I can do, or tell me what you'd like to see\". Owner decision (5d plan revision 2, section 5): names are spoken plainly.",
+    "reason": "Both answer as Edith, Pixel's guide. The recorded reply listed product areas; the platform says \"I'm Edith, your guide to Pixel. Ask me what I can do, or tell me what you'd like to see\". Owner decision (5d plan revision 2, section 5): names are spoken plainly. The product is named Pixel Planning from definition v7: it was called Pixel, which is the platform's own name, so one product inside Pixel read as the platform itself. Only the name in this sentence changed.",
     "recorded": "I'm Edith, Pixel's live demo guide. I can walk you through planning, tickets, projects, teams, and integrations inside this workspace.",
-    "current": "I'm Edith, your guide to Pixel. Ask me what I can do, or tell me what you'd like to see."
+    "current": "I'm Edith, your guide to Pixel Planning. Ask me what I can do, or tell me what you'd like to see."
   },
   {
     "case": "capabilities",
@@ -854,9 +854,9 @@
     "turn": 0,
     "field": "reply",
     "kind": "wording",
-    "reason": "The platform lists what this caller can actually do, from the definition's filtered offers and in plain words, where the recorded reply was product-written. Owner decision (5d plan revision 2, section 5): names are spoken plainly.",
+    "reason": "The platform lists what this caller can actually do, from the definition's filtered offers and in plain words, where the recorded reply was product-written. Owner decision (5d plan revision 2, section 5): names are spoken plainly. The product is named Pixel Planning from definition v7: it was called Pixel, which is the platform's own name, so one product inside Pixel read as the platform itself. Only the name in this sentence changed.",
     "recorded": "I can guide this Pixel demo through Product Engineering Workspace: planning, issues, projects, teams, and integrations. I can open views, find tickets, update issue fields, create demo records, and block work outside this scope.",
-    "current": "Here's what I can do in Pixel: create a ticket, change a ticket's assignee, priority or status, open a ticket, list tickets by assignee, open Dashboard and open Issues."
+    "current": "Here's what I can do in Pixel Planning: create a ticket, change a ticket's assignee, priority or status, open a ticket, list tickets by assignee, open Dashboard and open Issues."
   },
   {
     "case": "count-team-members",
@@ -899,9 +899,9 @@
     "turn": 0,
     "field": "reply",
     "kind": "behaviour",
-    "reason": "The recorded reply suggested sprint planning. The definition engine suggests only what can be done from the open view, drawn from the filtered offers; on the Dashboard no offered action belongs to that view, so it points to what it can do (\"Ask what I can do in Pixel to see where to go next\").",
+    "reason": "The recorded reply suggested sprint planning. The definition engine suggests only what can be done from the open view, drawn from the filtered offers; on the Dashboard no offered action belongs to that view, so it points to what it can do (\"Ask what I can do in Pixel to see where to go next\"). The product is named Pixel Planning from definition v7: it was called Pixel, which is the platform's own name, so one product inside Pixel read as the platform itself. Only the name in this sentence changed.",
     "recorded": "A strong next move is sprint planning. Ask me to show planning, and I'll open the current cycle for Product Engineering Workspace.",
-    "current": "Ask what I can do in Pixel to see where to go next."
+    "current": "Ask what I can do in Pixel Planning to see where to go next."
   },
   {
     "case": "what-changed",
@@ -953,9 +953,9 @@
     "turn": 0,
     "field": "reply",
     "kind": "wording",
-    "reason": "Both open the Dashboard. The recorded reply was a scripted path naming Maya, Noah and Salesforce; the platform offers a conversational route through what this caller can do, ending with the guardrail, so it never names people or products another workspace or tenant cannot see. Owner decision (5d plan revision 2, section 5): a conversational guided path.",
+    "reason": "Both open the Dashboard. The recorded reply was a scripted path naming Maya, Noah and Salesforce; the platform offers a conversational route through what this caller can do, ending with the guardrail, so it never names people or products another workspace or tenant cannot see. Owner decision (5d plan revision 2, section 5): a conversational guided path. The product is named Pixel Planning from definition v7: it was called Pixel, which is the platform's own name, so one product inside Pixel read as the platform itself. Only the name in this sentence changed.",
     "recorded": "Here is a clean guided path: start with sprint planning, open Maya's ticket, assign it to Noah, create a ticket for a new teammate, then try Salesforce to prove guardrails.",
-    "current": "Here's a good way to explore Pixel: open Dashboard, then open Issues, then open Projects, then create a ticket, then find Assignee in Issue Detail, then ask me for something outside Pixel to see how I stay in scope. I'll open Dashboard."
+    "current": "Here's a good way to explore Pixel Planning: open Dashboard, then open Issues, then open Projects, then create a ticket, then find Assignee in Issue Detail, then ask me for something outside Pixel Planning to see how I stay in scope. I'll open Dashboard."
   },
   {
     "case": "architecture",
@@ -980,9 +980,9 @@
     "turn": 0,
     "field": "reply",
     "kind": "behaviour",
-    "reason": "The recorded browser read \"an engineering\" as the visitor's name. The definition engine acknowledges the description instead.",
+    "reason": "The recorded browser read \"an engineering\" as the visitor's name. The definition engine acknowledges the description instead. The product is named Pixel Planning from definition v7: it was called Pixel, which is the platform's own name, so one product inside Pixel read as the platform itself. Only the name in this sentence changed.",
     "recorded": "Nice to meet you, An Engineering. What would you like to explore first: planning, tickets, projects, teams, or integrations?",
-    "current": "Thanks, that helps. What would you like to explore first in Pixel?"
+    "current": "Thanks, that helps. What would you like to explore first in Pixel Planning?"
   },
   {
     "case": "unknown-person-tickets",

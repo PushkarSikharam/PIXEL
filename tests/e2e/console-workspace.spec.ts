@@ -83,6 +83,12 @@ for (const mobile of [false, true]) {
     await page.goto("/console/products/alpha");
     const assistant = page.getByRole("complementary", { name: /^Edith, answering for / });
     await expect(assistant).toBeVisible();
+    if (mobile) {
+      // Folded on a phone: the page is what somebody came for, and the assistant is a tap away.
+      await expect(assistant.getByLabel("Ask Edith")).toHaveCount(0);
+      await assistant.getByRole("button", { name: "Show Edith" }).click();
+    }
+    await expect(assistant.getByLabel("Ask Edith")).toBeVisible();
     expect(speechCalls).toBe(0);
     await assistant.getByLabel("Ask Edith").fill("Tell me about alpha");
     await assistant.getByRole("button", { name: "Send message" }).click();
@@ -98,11 +104,12 @@ for (const mobile of [false, true]) {
     await assistant.getByRole("button", { name: "Send message" }).click();
     await expect(page.getByRole("region", { name: "Selected record" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "alpha record" })).toBeVisible();
-    await assistant.getByRole("button", { name: "Collapse assistant" }).click();
+    await assistant.getByRole("button", { name: "Hide Edith" }).click();
     await expect(assistant.getByLabel("Ask Edith")).toHaveCount(0);
-    await assistant.getByRole("button", { name: "Expand assistant" }).click();
+    await assistant.getByRole("button", { name: "Show Edith" }).click();
     await page.goto("/console/products/beta");
     await expect(assistant).toBeVisible();
+    if (mobile) await assistant.getByRole("button", { name: "Show Edith" }).click();
     await expect(assistant.getByText("Only alpha content.")).toHaveCount(0);
     await assistant.getByLabel("Ask Edith").fill("Tell me about beta");
     await assistant.getByRole("button", { name: "Send message" }).click();
@@ -111,7 +118,7 @@ for (const mobile of [false, true]) {
     expect(turns[0].session_id).toBe(turns[1].session_id);
     expect(turns[0].session_id).not.toBe(turns[2].session_id);
     expect(speechCalls).toBe(0);
-    await assistant.getByRole("button", { name: "Start microphone" }).click();
+    await assistant.getByRole("button", { name: "Start Voice input" }).click();
     await expect(assistant.getByText("A spoken question", { exact: true })).toBeVisible();
     await expect(assistant.getByText("Voice is unavailable. Text remains available.").first()).toBeVisible();
     expect(speechCalls).toBe(1);

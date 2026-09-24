@@ -278,5 +278,74 @@ class ShippedDocumentsTest(ConsoleAssistantFixture):
         self.assertEqual(version, binding.knowledge_version)
 
 
+class WhoIsInThisOrganizationTest(ConsoleAssistantFixture):
+    """The people screen has to show the people who are really there.
+
+    A sample list is the right thing when the console has no Pixel behind it, and the wrong thing
+    the moment it does: somebody signing in to see who is in their workspace must not be shown
+    colleagues who do not exist, and must never be shown another organization's.
+    """
+
+    def members(self, user: str = "demo-admin", tenant: str = TENANT):
+        return self.client.get(f"/api/organizations/{tenant}/members", headers={
+            "Authorization": f"Bearer {create_token(user, tenant)}"})
+
+    def test_it_lists_this_organization(self):
+        found = self.members()
+        self.assertEqual(found.status_code, 200, found.text)
+        listed = {member["user_id"] for member in found.json()["members"]}
+        self.assertIn("demo-admin", listed)
+        self.assertEqual(found.json()["tenant_id"], TENANT)
+
+    def test_every_person_carries_their_role_and_team(self):
+        for member in self.members().json()["members"]:
+            self.assertTrue(member["role"])
+            if member["team_id"]:
+                self.assertTrue(member["team_name"], member)
+
+    def test_another_organization_is_not_available(self):
+        self.directory.create_organization("somebody-else", "Somebody Else")
+        self.directory.add_member("somebody-else", "their-admin", "org_admin")
+        theirs = self.client.get(f"/api/organizations/{TENANT}/members", headers={
+            "Authorization": f"Bearer {create_token('their-admin', 'somebody-else')}"})
+        self.assertEqual(theirs.status_code, 404, theirs.text)
+        mine = self.members("their-admin", "somebody-else")
+        self.assertEqual({m["user_id"] for m in mine.json()["members"]}, {"their-admin"})
+
+    def test_it_agrees_with_what_the_assistant_counts(self):
+        spoken = self.ask("how many people are in my organization")["speech"]
+        self.assertIn(str(len(self.members().json()["members"])), spoken)
+
+
+class GoingBackTest(ConsoleAssistantFixture):
+    """Going back means the screen somebody was on.
+
+    A product can say which of its screens a phrase means; it cannot know where this person has
+    been. So a bare request to go back is answered by the platform from the conversation itself,
+    and a phrase that names a destination still goes to that destination.
+    """
+
+    def test_it_returns_to_the_screen_before_this_one(self):
+        self.ask("open products", session="back")
+        self.ask("open members", session="back")
+        self.assertIn("Products", self.ask("go back", session="back")["speech"])
+
+    def test_going_back_twice_returns_to_where_that_started(self):
+        self.ask("open products", session="twice")
+        self.ask("open members", session="twice")
+        self.assertIn("Products", self.ask("go back", session="twice")["speech"])
+        self.assertIn("Members", self.ask("go back", session="twice")["speech"])
+
+    def test_a_named_destination_is_still_that_destination(self):
+        self.ask("open members", session="named")
+        self.assertIn("Products", self.ask("back to my products", session="named")["speech"])
+
+    def test_with_nowhere_to_go_back_to_the_product_decides(self):
+        """The first thing somebody says has no screen behind it, so the definition answers."""
+        answer = self.ask("go back", session="first")
+        self.assertIsNotNone(self.action(answer))
+        self.assertIn("open", answer["speech"].lower())
+
+
 if __name__ == "__main__":
     unittest.main()

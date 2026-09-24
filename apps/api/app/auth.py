@@ -23,7 +23,7 @@ import time
 from dataclasses import dataclass
 from uuid import uuid4
 
-from fastapi import Depends, Header, HTTPException
+from fastapi import Cookie, Depends, Header, HTTPException, Request
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from app.db import get_connection
@@ -45,6 +45,9 @@ from app.installed_products import PackageMissing, package_for
 _SECRET = env_value("PIXEL_AUTH_SECRET") or os.urandom(32).hex()
 _SERIALIZER = URLSafeTimedSerializer(_SECRET)
 _TOKEN_MAX_AGE_SECONDS = int(os.environ.get("PIXEL_TOKEN_MAX_AGE", "86400"))
+SESSION_COOKIE = "pixel_session"
+CSRF_COOKIE = "pixel_csrf"
+CSRF_HEADER = "X-Pixel-CSRF"
 
 
 @dataclass(frozen=True)
@@ -213,13 +216,24 @@ def replace_visitor_token(user: AuthUser, context: DemoContext, seed_version: st
     return token
 
 
-def require_auth(authorization: str | None = Header(default=None)) -> AuthUser:
+def require_auth(request: Request, authorization: str | None = Header(default=None),
+                 pixel_session: str | None = Cookie(default=None),
+                 x_pixel_csrf: str | None = Header(default=None, alias=CSRF_HEADER),
+                 pixel_csrf: str | None = Cookie(default=None)) -> AuthUser:
     """FastAPI dependency: validate a member or visitor bearer token.
 
     Raises 401 for missing, malformed, expired or revoked tokens, and 403 when the
     organization is suspended.
     """
-    payload, token = _decode(authorization)
+    if authorization:
+        payload, token = _decode(authorization)
+    else:
+        if not pixel_session:
+            raise HTTPException(status_code=401, detail="Authorization header is required.")
+        if _unsafe_method(request) and (not pixel_csrf or not x_pixel_csrf
+                                       or not secrets.compare_digest(pixel_csrf, x_pixel_csrf)):
+            raise HTTPException(status_code=403, detail="CSRF token is missing or invalid.")
+        payload, token = _decode_cookie(pixel_session)
     kind = payload.get("k", "member")
     if kind == "visitor":
         user = _visitor_from(payload, token)
@@ -234,6 +248,10 @@ def require_auth(authorization: str | None = Header(default=None)) -> AuthUser:
     if organization.state != "active":
         raise HTTPException(status_code=403, detail="This organization is suspended.")
     return user
+
+
+def _unsafe_method(request: Request) -> bool:
+    return request.method.upper() not in {"GET", "HEAD", "OPTIONS"}
 
 
 def require_member(user: AuthUser = Depends(require_auth)) -> AuthUser:
@@ -310,6 +328,24 @@ def _decode(authorization: str | None) -> tuple[dict, str]:
     scheme, _, token = authorization.partition(" ")
     if scheme.lower() != "bearer" or not token:
         raise HTTPException(status_code=401, detail="Missing or malformed bearer token.")
+    try:
+        payload = _SERIALIZER.loads(token, max_age=_TOKEN_MAX_AGE_SECONDS)
+    except SignatureExpired:
+        raise HTTPException(status_code=401, detail="Token has expired.")
+    except BadSignature:
+        raise HTTPException(status_code=401, detail="Invalid token.")
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=401, detail="Invalid token payload.")
+    return payload, token
+
+
+def _decode_cookie(token: str | None) -> tuple[dict, str]:
+    if not token:
+        raise HTTPException(status_code=401, detail="Authorization header is required.")
+    return _loads_token(token)
+
+
+def _loads_token(token: str) -> tuple[dict, str]:
     try:
         payload = _SERIALIZER.loads(token, max_age=_TOKEN_MAX_AGE_SECONDS)
     except SignatureExpired:

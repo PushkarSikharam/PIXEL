@@ -20,6 +20,12 @@ export const CONSOLE_ROUTES: Record<string, string> = {
   audit: "/console/audit",
 };
 
+export function viewForRoute(pathname: string | null | undefined): string | null {
+  const path = pathname?.replace(/\/$/, "") || "/console";
+  const found = Object.entries(CONSOLE_ROUTES).find(([, route]) => route.replace(/\/$/, "") === path);
+  return found?.[0] ?? null;
+}
+
 /** The places a definition declares that this client could not actually open. */
 export function unroutableViews(views: readonly string[]): string[] {
   return views.filter((view) => !(view in CONSOLE_ROUTES));

@@ -125,7 +125,8 @@ def _apply(directory: OrganizationDirectory, definition_id: str, seed: DemoOrgan
 
 def _apply_product(directory: OrganizationDirectory, definition_id: str, tenant_id: str,
                    team_id: str, product: _SeedProduct) -> None:
-    if directory.product(tenant_id, product.product_id) is None:
+    existing = directory.product(tenant_id, product.product_id)
+    if existing is None:
         publish_lineage(directory.definitions, definition_id, product.definition_version)
         directory.bind_product(
             tenant_id,
@@ -136,6 +137,13 @@ def _apply_product(directory: OrganizationDirectory, definition_id: str, tenant_
             knowledge_version=product.knowledge_version,
             visitor_access=product.visitor_access,
         )
+    elif existing.definition_version < product.definition_version:
+        # A seeded product follows its seed. The seed is the platform's own declaration of a
+        # product the platform installs, so a deployment that already has it should not be left
+        # on an older version of something we ship. A product somebody added themselves is in no
+        # seed and is never moved this way.
+        publish_lineage(directory.definitions, definition_id, product.definition_version)
+        directory.move_product_version(tenant_id, product.product_id, product.definition_version)
     if product.legacy_records:
         designate_legacy_owner(tenant_id, product.product_id)
     for grant in product.grants:

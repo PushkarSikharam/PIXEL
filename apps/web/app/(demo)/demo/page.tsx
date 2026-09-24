@@ -137,7 +137,7 @@ type SpeechRecognitionWindow = Window &
 const initialTranscript: TranscriptMessage[] = [
   {
     speaker: "Agent",
-    text: "Welcome to Pixel. I'm Edith, your guide to planning work, tracking tickets, and connecting your team's tools. What brought you to check us out today?"
+    text: "Welcome to Pixel Planning. I'm Edith, your guide to planning work, tracking tickets, and connecting your team's tools. What brought you to check us out today?"
   }
 ];
 

@@ -34,11 +34,11 @@ export function ProductKnowledge({ session, productId, onPublished }: {
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Source could not be published."); }
     finally { setBusy(false); }
   }
-  return <Panel title="Approved sources">
+  return <Panel title="What Edith can answer from">
     {error ? <Alert tone="warn">{error}</Alert> : null}
     {knowledge ? <ul>{knowledge.documents.map((doc) => <li key={doc.document_id}>{doc.title} <span className="px-small px-muted">{doc.characters.toLocaleString()} characters</span></li>)}</ul> : null}
-    {knowledge?.documents.length === 0 ? <p className="px-muted">No approved sources.</p> : null}
-    {canPublish ? <details><summary>Add source</summary><form className="px-stack" onSubmit={publish}>
+    {knowledge?.documents.length === 0 ? <p className="px-muted">Nothing yet. Until you add something here, Edith answers questions about this product by saying she has nothing to answer from.</p> : null}
+    {canPublish ? <details><summary>Add something she can answer from</summary><form className="px-stack" onSubmit={publish}>
       <Field label="Title">{(f) => <Input id={f.id} value={title} maxLength={120} required onChange={(e) => setTitle(e.target.value)} />}</Field>
       <Field label="Text or Markdown file">{(f) => <Input id={f.id} type="file" accept=".txt,.md" onChange={async (e) => {
         const file = e.target.files?.[0];

@@ -14,9 +14,16 @@
 export type Step = "details" | "sources" | "analyzing" | "review" | "actions" | "validation" | "ready" | "published";
 export const STEPS: Step[] = ["details", "sources", "analyzing", "review", "actions", "validation", "ready", "published"];
 
+/**
+ * What each step is called, in the words of the person doing it.
+ *
+ * A step's name has to say what happens on it. "Approved sources" described an earlier design
+ * where somebody uploaded documents; the step now asks what the product keeps, and a rail that
+ * disagrees with the panel beside it reads as a bug even when nothing is broken.
+ */
 export const STEP_LABELS: Record<Step, string> = {
-  details: "Product details", sources: "Approved sources", analyzing: "Analyze", review: "Review understanding",
-  actions: "Configure actions", validation: "Validation", ready: "Ready to publish", published: "Published",
+  details: "Name it", sources: "What it keeps", analyzing: "Writing it", review: "Read it back",
+  actions: "What it can do", validation: "Checks", ready: "Publish", published: "Published",
 };
 
 export interface Source { id: string; name: string; kind: "document" | "openapi" | "url"; status: "accepted" | "refused"; reason?: string }
@@ -47,6 +54,8 @@ export interface Understanding {
 }
 
 export interface OnboardingState {
+  /** Whether somebody edited the address themselves, so their name no longer rewrites it. */
+  slugChosen?: boolean;
   step: Step;
   name: string;
   slug: string;
@@ -95,8 +104,20 @@ export function goTo(state: OnboardingState, step: Step): OnboardingState {
   return { ...state, step };
 }
 
-export function setDetails(state: OnboardingState, name: string, slug: string): OnboardingState {
-  return { ...state, name, slug };
+/**
+ * A product's address, from its name.
+ *
+ * Asking somebody to invent one is asking them to do a job the computer can do: they came here to
+ * add their product, not to choose an identifier. It stays editable, and once they have edited it
+ * their choice is theirs to keep - typing the name again does not overwrite it.
+ */
+export function addressFor(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 63);
+}
+
+export function setDetails(state: OnboardingState, name: string, slug: string,
+                           options: { derived?: boolean } = {}): OnboardingState {
+  return { ...state, name, slug, slugChosen: options.derived ? false : state.slugChosen || slug !== "" };
 }
 
 const REFUSED_EXTENSIONS = [".exe", ".sh", ".js", ".py", ".bat", ".ps1", ".jar", ".zip"];

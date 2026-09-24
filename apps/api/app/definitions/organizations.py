@@ -109,6 +109,14 @@ class OrganizationDirectory:
             ).fetchone()
         return Team(row["tenant_id"], row["team_id"], row["name"], row["state"]) if row else None
 
+    def teams(self, tenant_id: str) -> list[Team]:
+        """Every team of one organization, in name order."""
+        with use_connection(self._connection) as connection:
+            rows = connection.execute(
+                "select * from teams where tenant_id = ? order by name", (tenant_id,)
+            ).fetchall()
+        return [Team(row["tenant_id"], row["team_id"], row["name"], row["state"]) for row in rows]
+
     def set_team_state(self, tenant_id: str, team_id: str, state: str) -> Team:
         self._require(state, TEAM_STATES, "team state")
         self._update("teams", "state = ?", (state,), "tenant_id = ? and team_id = ?", (tenant_id, team_id))
@@ -145,6 +153,16 @@ class OrganizationDirectory:
                 "select * from memberships where tenant_id = ? and user_id = ?", (tenant_id, user_id)
             ).fetchone()
         return Membership(row["tenant_id"], row["user_id"], row["role"], row["team_id"]) if row else None
+
+    def members(self, tenant_id: str) -> list[Membership]:
+        """Everyone in one organization. One organization only: the caller names it, and rows of
+        any other are not filtered out afterwards, they are never selected."""
+        with use_connection(self._connection) as connection:
+            rows = connection.execute(
+                "select * from memberships where tenant_id = ? order by user_id", (tenant_id,)
+            ).fetchall()
+        return [Membership(row["tenant_id"], row["user_id"], row["role"], row["team_id"])
+                for row in rows]
 
     def organizations_of(self, user_id: str) -> list[str]:
         with use_connection(self._connection) as connection:

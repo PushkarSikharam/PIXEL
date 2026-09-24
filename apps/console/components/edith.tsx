@@ -14,8 +14,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bot, RotateCcw, SendHorizonal, PanelLeftClose, PanelLeftOpen, Volume2, VolumeX, Mic, Square } from "lucide-react";
-import { Button, Input, Panel } from "@pixel-console/components/ui";
 import {
   closeConversation, executeProductAction, sendProductTurn, productSpeech,
   type ApiActionShape, type ApiProductShape, type ApiSession, type ApiTurnResponse,
@@ -24,16 +22,46 @@ import { speechInputConstructor, type SpeechInput } from "@pixel-console/lib/spe
 import { CONSOLE_ROUTES } from "@pixel-console/lib/console-routes";
 
 /**
- * Things worth suggesting, by where the assistant is answering from. Each one is a message
- * somebody could have typed, so a chip can never ask for something the assistant cannot do.
+ * A short route through whichever product is answering, drawn from what that product declares.
+ *
+ * The demo shows somebody five things to try, and it is the clearest part of it. The same thing
+ * here cannot be a list written in this file, because the product answering might have been added
+ * this morning: the steps are its own navigable actions, in the order its definition declares
+ * them, which is the order its author meant somebody to meet them in.
  */
-const PLATFORM_PROMPTS = ["Add a product", "How many products do I have?", "Show me the demo", "How does Pixel work?"];
-const PRODUCT_PROMPTS = ["What can you do?", "Take me back to my products"];
+function starterSteps(shape: ApiProductShape): string[] {
+  const places = shape.actions
+    .filter((action) => action.capability === "NAVIGATE_VIEW")
+    .map((action) => action.description.replace(/\.$/, "").trim())
+    .filter(Boolean);
+  return Array.from(new Set(places)).slice(0, 4);
+}
 
-export function EdithPanel({ session, shape, productId, scope = "product", onRecordsChanged, onUiAction }: {
+/**
+ * Questions worth offering, in this product's own words.
+ *
+ * Each one is a message somebody could have typed, phrased from the product's own name and its
+ * own labels, so a chip can never ask for something the assistant has no idea about.
+ */
+function starterPrompts(shape: ApiProductShape): string[] {
+  const things = shape.entities.slice(0, 2).map((entity) => entity.plural.toLowerCase());
+  return [
+    "What can you do?",
+    ...things.map((plural) => `How many ${plural} are there?`),
+    `How does ${shape.product_name} work?`,
+    "Show me around",
+  ];
+}
+
+export function EdithPanel({
+  session, shape, productId, currentPage = null, selectedRecordId = null,
+  scope = "product", onRecordsChanged, onUiAction,
+}: {
   session: ApiSession;
   shape: ApiProductShape;
   productId: string;
+  currentPage?: string | null;
+  selectedRecordId?: string | null;
   /** Whether this panel is answering for Pixel itself or for a product inside it. */
   scope?: "platform" | "product";
   onRecordsChanged?: () => Promise<void>;
@@ -84,6 +112,14 @@ export function EdithPanel({ session, shape, productId, scope = "product", onRec
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => { log.current?.scrollTo({ top: log.current.scrollHeight }); }, [messages, busy]);
+  // On a phone the assistant is a full screen of its own, so opening a page would mean scrolling
+  // past all of it to reach the page. It starts folded there and opens when somebody asks for it.
+  // Set after mount, so the server and the browser render the same thing first.
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 1000px)").matches) {
+      setCollapsed(true);
+    }
+  }, []);
   const actions = useMemo(() => Object.fromEntries(shape.actions.map((action) => [action.client_type, action])), [shape.actions]);
 
   async function send(spoken?: string) {
@@ -103,6 +139,8 @@ export function EdithPanel({ session, shape, productId, scope = "product", onRec
         turnId: turn.current,
         productId,
         message,
+        currentPage,
+        selectedRecordId,
         signal: controller.signal,
       });
       if (!alive.current || controller.signal.aborted) return;
@@ -176,59 +214,121 @@ export function EdithPanel({ session, shape, productId, scope = "product", onRec
     catch { setVoiceStatus("Microphone unavailable. Please type your message."); }
   }
 
+  const steps = useMemo(() => starterSteps(shape), [shape]);
+  const prompts = useMemo(() => starterPrompts(shape), [shape]);
+  const kicker = scope === "platform" ? "Pixel" : shape.product_name;
+  const state = busy ? "Thinking" : listening ? "Listening" : voice ? voiceStatus : "Ready";
+
+  function restart() {
+    stopAudio();
+    recognition.current?.abort();
+    sessionId.current = crypto.randomUUID();
+    turn.current = 0;
+    setMessages([{ role: "agent", text: `Welcome to ${shape.product_name}. I'm ${shape.assistant_name}.` }]);
+  }
+
   return (
-    <aside className="px-product-assistant" data-scope={scope} data-collapsed={collapsed}
+    <aside className="px-product-assistant px-edith" data-scope={scope} data-collapsed={collapsed}
       aria-label={scope === "platform"
-        ? `${shape.assistant_name}, your assistant across Pixel`
+        ? `${shape.assistant_name}, your assistant across ${shape.product_name}`
         : `${shape.assistant_name}, answering for ${shape.product_name}`}>
-    <Panel title={<span className="px-row"><Bot aria-hidden size={16} />{collapsed ? null : shape.assistant_name}</span>}
-      actions={<Button aria-label={collapsed ? "Expand assistant" : "Collapse assistant"} title={collapsed ? "Expand assistant" : "Collapse assistant"}
-        variant="ghost" size="sm" onClick={() => setCollapsed(!collapsed)}>{collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</Button>}>
-      {!collapsed ? <>
-      <div className="px-row px-small px-muted" style={{ justifyContent: "space-between" }}>
-        <span>{scope === "platform" ? "Across Pixel" : shape.product_name}</span>
-        <span role="status">{busy ? "Thinking" : voice ? voiceStatus : "Ready"}</span>
+
+      <div className="px-edith-topbar">
+        <span className="px-edith-brand">
+          <span className="px-edith-mark" aria-hidden>P</span>
+          {collapsed ? null : kicker}
+        </span>
+        <span className="px-edith-controls">
+          <button type="button" className="px-edith-chip" onClick={() => setCollapsed(!collapsed)}
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? `Show ${shape.assistant_name}` : `Hide ${shape.assistant_name}`}>
+            {collapsed ? "Show" : "Hide"}</button>
+          {collapsed ? null : <>
+            <button type="button" className="px-edith-chip" disabled={busy} onClick={restart}
+              aria-label="Restart this conversation">Restart</button>
+            <span className="px-edith-state" role="status">{state}</span>
+          </>}
+        </span>
       </div>
-      <div className="px-stack">
-        <div ref={log} className="px-chat-log" role="log" aria-live="polite" aria-label="Conversation">
-          {messages.map((message, index) => (
-            <div key={index} className="px-console-message" data-role={message.role}>
-              <strong>{message.role === "visitor" ? "You" : shape.assistant_name}</strong>
-              <p>{message.text}</p>
+
+      {collapsed ? null : <>
+        <div className="px-edith-intro">
+          <div className="px-edith-title-row">
+            <div>
+              <p className="px-edith-kicker">{scope === "platform" ? "Your guide to Pixel" : "Product guide"}</p>
+              <h2>{shape.assistant_name}</h2>
             </div>
-          ))}
-          {busy ? <p className="px-muted" role="status">Thinking...</p> : null}
+            {voice ? <span className="px-edith-voice-badge">Voice</span> : null}
+          </div>
         </div>
-        {messages.length <= 1 ? (
-          <div className="px-row" style={{ flexWrap: "wrap", gap: 6 }}>
-            {(scope === "platform" ? PLATFORM_PROMPTS : PRODUCT_PROMPTS).map((prompt) => (
-              <Button key={prompt} size="sm" disabled={busy} onClick={() => void send(prompt)}>{prompt}</Button>
-            ))}
+
+        <div ref={log} className="px-edith-transcript" role="log" aria-live="polite"
+          aria-label="Conversation">
+          {messages.map((message, index) => (
+            <article key={index} className="px-edith-message" data-role={message.role}>
+              <span>{message.role === "visitor" ? "You" : "Agent"}</span>
+              <p>{message.text}</p>
+            </article>
+          ))}
+        </div>
+
+        {steps.length ? (
+          <div className="px-edith-path" aria-label={`Where to start in ${shape.product_name}`}>
+            <div className="px-edith-path-header">
+              <span>Where to start</span>
+              <strong>{steps.length} steps</strong>
+            </div>
+            <div className="px-edith-path-list">
+              {steps.map((step, index) => (
+                <button key={step} type="button" disabled={busy} onClick={() => void send(step)}>
+                  <i aria-hidden>{index + 1}</i>
+                  {step}
+                </button>
+              ))}
+            </div>
           </div>
         ) : null}
-        <form className="px-row" onSubmit={(event) => { event.preventDefault(); void send(); }}>
-          <Input value={input} onChange={(event) => setInput(event.target.value)}
-            placeholder={`Ask ${shape.assistant_name}`} aria-label={`Ask ${shape.assistant_name}`} />
-          <Button type="submit" variant="primary" loading={busy} disabled={!input.trim()} aria-label="Send message" title="Send message"><SendHorizonal aria-hidden /></Button>
-        </form>
-        <div className="px-row">
-          <Button size="sm" variant="ghost" disabled={busy || !micAvailable} aria-label={listening ? "Stop microphone" : "Start microphone"}
-            title={!micAvailable ? "Speech input is not supported in this browser" : listening ? "Stop microphone" : "Start microphone"} onClick={microphone}>
-            {listening ? <Square aria-hidden /> : <Mic aria-hidden />}
-          </Button>
-          <Button size="sm" variant="ghost" aria-label={voice ? "Disable voice" : "Enable voice"} title={voice ? "Disable voice" : "Enable voice"}
-            aria-pressed={voice} onClick={() => { stopAudio(); voiceEnabled.current = !voice; setVoice(!voice); setVoiceStatus(voice ? "Voice off" : "Voice ready"); }}>
-            {voice ? <Volume2 aria-hidden /> : <VolumeX aria-hidden />}
-          </Button>
-          <span className="px-small" role="status">{voiceStatus}</span>
-          <Button size="sm" variant="ghost" disabled={busy} aria-label="New conversation" title="New conversation" onClick={() => {
-            stopAudio(); sessionId.current = crypto.randomUUID(); turn.current = 0;
-            setMessages([{ role: "agent", text: `Welcome to ${shape.product_name}. I'm ${shape.assistant_name}.` }]);
-          }}><RotateCcw aria-hidden /></Button>
+
+        <div className="px-edith-prompts" aria-label="Suggested questions">
+          {prompts.map((prompt) => (
+            <button key={prompt} type="button" disabled={busy} onClick={() => void send(prompt)}>{prompt}</button>
+          ))}
         </div>
-      </div>
-      </> : null}
-    </Panel>
+
+        <form className="px-edith-form" onSubmit={(event) => { event.preventDefault(); void send(); }}>
+          <span className="px-edith-input-mark" aria-hidden>P</span>
+          <input value={input} onChange={(event) => setInput(event.target.value)}
+            placeholder={`Ask ${shape.assistant_name}`} aria-label={`Ask ${shape.assistant_name}`} />
+          <button type="submit" disabled={busy || !input.trim()} aria-label="Send message">Send</button>
+        </form>
+
+        <div className="px-edith-voice" data-active={listening || voice}>
+          <div className="px-edith-voice-top">
+            <button type="button" className="px-edith-mic" data-listening={listening}
+              aria-pressed={listening} disabled={busy || !micAvailable} onClick={microphone}
+              aria-label={listening ? "End Voice input" : "Start Voice input"}
+              title={micAvailable ? undefined : "Speech input is not supported in this browser"}>
+              <span className="px-edith-dot" aria-hidden />
+              {listening ? "End Voice" : "Start Voice"}
+            </button>
+            <button type="button" className="px-edith-tts" data-on={voice} aria-pressed={voice}
+              onClick={() => {
+                stopAudio();
+                voiceEnabled.current = !voice;
+                setVoice(!voice);
+                setVoiceStatus(voice ? "Voice off" : "Voice ready");
+              }}
+              aria-label={voice ? "Voice On: turn spoken replies off" : "Voice Off: turn spoken replies on"}>
+              {voice ? "Voice On" : "Voice Off"}
+            </button>
+          </div>
+          <div className="px-edith-voice-status">
+            <span>Voice: <strong>{voice || listening ? voiceStatus : "Off"}</strong></span>
+            <span className="px-edith-spectrum" data-animating={listening || busy}
+              aria-hidden><i /><i /><i /><i /><i /></span>
+          </div>
+        </div>
+      </>}
     </aside>
   );
 }

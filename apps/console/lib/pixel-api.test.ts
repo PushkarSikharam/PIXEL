@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { currentAccount, sendProductTurn, storedSession, verifyEmailCode } from "./pixel-api";
+import { ApiError, SERVER_UNAVAILABLE, currentAccount, sendProductTurn, serverUnavailable, storedSession, verifyEmailCode } from "./pixel-api";
 
 function installBrowser(cookie: string) {
   const storage = new Map<string, string>();
@@ -69,5 +69,43 @@ describe("Pixel API CSRF handling", () => {
     const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
     const init = fetchMock.mock.calls[0][1] as RequestInit;
     expect(new Headers(init.headers).get("X-Pixel-CSRF")).toBe("fresh-token");
+  });
+});
+
+describe("Pixel API outage detection", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("reports an unreachable server as unavailable, not as a refusal", async () => {
+    installBrowser("");
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("Failed to fetch"); }));
+    const caught = await currentAccount().catch((error: unknown) => error);
+    expect(serverUnavailable(caught)).toBe(true);
+    expect((caught as Error).message).toBe(SERVER_UNAVAILABLE);
+  });
+
+  it("replaces a hosting error page with a plain sentence", async () => {
+    installBrowser("");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("<html>Application failed to respond</html>", { status: 502 })));
+    const caught = await currentAccount().catch((error: unknown) => error);
+    expect(serverUnavailable(caught)).toBe(true);
+    expect((caught as Error).message).toBe(SERVER_UNAVAILABLE);
+  });
+
+  it("keeps Pixel's own wording for a 503 it wrote itself", async () => {
+    installBrowser("");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ detail: "Invalid engine authority mode." }), { status: 503 })));
+    const caught = await currentAccount().catch((error: unknown) => error);
+    expect(serverUnavailable(caught)).toBe(true);
+    expect((caught as Error).message).toBe("Invalid engine authority mode.");
+  });
+
+  it("does not treat being signed out as an outage", async () => {
+    installBrowser("");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ detail: "Sign in to continue." }), { status: 401 })));
+    const caught = await currentAccount().catch((error: unknown) => error);
+    expect(serverUnavailable(caught)).toBe(false);
+    expect((caught as ApiError).status).toBe(401);
   });
 });

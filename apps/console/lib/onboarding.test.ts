@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  acceptUnderstanding, addSource, addThing, approveGeneratedUnderstanding, canEnter,
+  PRODUCT_TEMPLATES, acceptUnderstanding, addSource, addThing, applyTemplate, approveGeneratedUnderstanding, canEnter,
   completeAnalysis, goTo, initialOnboarding,
   keyForName, publish, removeSource, setConfirmation, setDetails, toggleAction, updateField, updateThing,
   understood, validate,
@@ -112,5 +112,38 @@ describe("onboarding flow", () => {
     expect(canEnter(state, "ready")).toBe(false);
     state = validate(state);
     expect(publish(goTo(state, "ready")).step).toBe("published");
+  });
+});
+
+describe("product templates", () => {
+  it.each(PRODUCT_TEMPLATES.map((template) => [template.id]))("%s can be written into a product as it is", (id) => {
+    const state = applyTemplate(goTo(started(), "sources"), id);
+    expect(state.things.length).toBeGreaterThan(0);
+    expect(state.things.filter((thing) => thing.people).length).toBeLessThanOrEqual(1);
+    expect(canEnter(state, "analyzing")).toBe(true);
+    for (const thing of state.things) {
+      for (const field of thing.fields) {
+        if (field.type === "enum") expect(field.values.split(",").filter((v) => v.trim()).length).toBeGreaterThan(1);
+      }
+    }
+  });
+
+  it("choosing a template replaces the description and invalidates what was written from it", () => {
+    let state = acceptUnderstanding(analyzed());
+    state = applyTemplate(state, "support-desk");
+    expect(state.step).toBe("sources");
+    expect(state.understanding).toBeNull();
+    expect(state.things.map((thing) => thing.plural)).toEqual(["Tickets", "Customers", "Agents"]);
+  });
+
+  it("editing a template's records never changes the template itself", () => {
+    const state = updateThing(applyTemplate(goTo(started(), "sources"), "sales-crm"), 0, { label: "Opportunity" });
+    expect(state.things[0].label).toBe("Opportunity");
+    expect(PRODUCT_TEMPLATES[0].things[0].label).toBe("Deal");
+  });
+
+  it("an unknown template changes nothing", () => {
+    const state = described();
+    expect(applyTemplate(state, "missing")).toBe(state);
   });
 });

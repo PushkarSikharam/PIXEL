@@ -15,6 +15,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  SERVER_UNAVAILABLE, serverUnavailable,
   closeConversation, executeProductAction, sendProductTurn, productSpeech,
   type ApiActionShape, type ApiProductShape, type ApiSession, type ApiTurnResponse,
 } from "@pixel-console/lib/pixel-api";
@@ -204,7 +205,9 @@ export function EdithPanel({
         }
       }
     } catch (caught) {
-      if (alive.current && !controller.signal.aborted) setMessages((all) => [...all, { role: "agent", text: caught instanceof Error ? caught.message : "That request failed." }]);
+      if (alive.current && !controller.signal.aborted) setMessages((all) => [...all, { role: "agent", text:
+        serverUnavailable(caught) ? `${SERVER_UNAVAILABLE} Your message was not sent. Please try again in a moment.`
+          : caught instanceof Error ? caught.message : "That request failed." }]);
     } finally {
       sending.current = false;
       if (alive.current) setBusy(false);

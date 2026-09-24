@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import type { Environment, Permission } from "@pixel-console/lib/contracts";
 import { DIRECTORY, ORGANIZATIONS, PERSONAS, PRODUCTS, productById } from "@pixel-console/lib/mock-data";
 import { authorize, type Resource } from "@pixel-console/lib/permissions";
-import { isLive, listProducts, currentAccount, storedSession, type ApiAccount, type ApiActionShape,
+import { isLive, listProducts, currentAccount, serverUnavailable, storedSession, type ApiAccount, type ApiActionShape,
   type ApiProduct, type ApiProductShape } from "@pixel-console/lib/pixel-api";
 
 /**
@@ -40,6 +40,8 @@ interface ConsoleApi extends ConsoleState {
   /** Set when this console is showing a running Pixel rather than its own sample data. */
   live: boolean;
   liveError: string | null;
+  /** Set when the last attempt failed because Pixel's server did not answer, not because of who asked. */
+  liveUnavailable: boolean;
   account: ApiAccount | null;
   loading: boolean;
   reloadProducts: () => void;
@@ -88,6 +90,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
   // answer arrives the sample catalogue is shown, so the console never renders half a page.
   const [live, setLive] = useState<ApiProduct[] | null>(null);
   const [liveError, setLiveError] = useState<string | null>(null);
+  const [liveUnavailable, setLiveUnavailable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [reloads, setReloads] = useState(0);
   const connected = isLive();
@@ -95,6 +98,8 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!connected) return;
     let cancelled = false;
+    // A retry after an outage shows that it is trying again rather than the old failure.
+    if (reloads > 0) setLoading(true);
     (async () => {
       try {
         // Ask the server, rather than looking for something this tab happens to remember. A new
@@ -108,9 +113,13 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
             productId: products.some((p) => p.product_id === current.productId) ? current.productId : null }));
           setLive(products);
           setLiveError(null);
+          setLiveUnavailable(false);
         }
       } catch (error) {
-        if (!cancelled) setLiveError(error instanceof Error ? error.message : "Products could not be loaded.");
+        if (!cancelled) {
+          setLiveError(error instanceof Error ? error.message : "Products could not be loaded.");
+          setLiveUnavailable(serverUnavailable(error));
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -164,10 +173,10 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const api = useMemo<ConsoleApi>(() => ({
-    ...state, persona, can, visibleProducts, live: connected, liveError, account, loading, reloadProducts,
+    ...state, persona, can, visibleProducts, live: connected, liveError, liveUnavailable, account, loading, reloadProducts,
     productSurface, setProductSurface,
     setPersona, selectProduct, setEnvironment, setActiveWork, setTheme,
-  }), [state, persona, can, visibleProducts, connected, liveError, account, loading, reloadProducts,
+  }), [state, persona, can, visibleProducts, connected, liveError, liveUnavailable, account, loading, reloadProducts,
        productSurface,
        setPersona, selectProduct, setEnvironment, setActiveWork, setTheme]);
   return <Context.Provider value={api}>{children}</Context.Provider>;

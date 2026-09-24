@@ -11,7 +11,8 @@ import { TEAMS } from "@pixel-console/lib/mock-data";
 // Pixel's own guide, named here because the console may name her and core may not.
 const ASSISTANT_NAME = "Edith";
 import {
-  STEP_LABELS, STEPS, acceptUnderstanding, addField, addThing, addressFor, approveGeneratedUnderstanding,
+  PRODUCT_TEMPLATES, STEP_LABELS, STEPS, acceptUnderstanding, addField, addThing, addressFor, applyTemplate,
+  approveGeneratedUnderstanding,
   canEnter, completeAnalysis,
   definitionIdFor, goTo, initialOnboarding, keyForName, publish, removeField, removeThing, setConfirmation,
   setDetails, starterDefinitionText, understood, updateField, updateThing,
@@ -49,6 +50,8 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
   // Which box a refusal was about, so it can be shown there instead of as a notice at the foot
   // of a step the person may not even be on any more.
   const [draftField, setDraftField] = useState<string | null>(null);
+  // The template the current description started from, if any, so its card shows as chosen.
+  const [templateId, setTemplateId] = useState<string | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const { setActiveWork } = c;
   const visibleSteps: Step[] = STEPS.filter((step) => step !== "published"
@@ -66,6 +69,7 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
     if (c.discardEpoch === epoch.current) return;
     epoch.current = c.discardEpoch;
     setState(initialOnboarding(teams[0]?.id ?? ""));
+    setTemplateId(null);
     setSourceName("");
     toast("warn", "The onboarding draft was discarded.");
   }, [c.discardEpoch, teams, toast]);
@@ -125,7 +129,7 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
 
   return (
     <>
-      <PageHead title="Add a product" description="Describe your product in plain language. Pixel turns it into screens, records and an assistant you can review before launch."
+      <PageHead title="Add a product" description="Start from a template or describe what your product keeps. Pixel turns it into screens, records and an assistant you can review before launch."
         actions={onAdvanced ? <Button onClick={onAdvanced}>Advanced import</Button> : undefined} />
       <div className="px-onboarding">
         <nav aria-label="Onboarding steps">
@@ -179,9 +183,36 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
           {state.step === "sources" && (
             <Panel>
               <div className="px-stack">
-                <p className="px-muted">
-                  Add the main things people work with in this product. Pixel turns each one into a
-                  screen, and Edith can open it, count it and change it when the product allows that.
+                <div className="px-stack" style={{ gap: 6 }}>
+                  <h3 style={{ margin: 0 }}>Start from a template</h3>
+                  <p className="px-muted" style={{ margin: 0 }}>
+                    Pick the closest match and Pixel fills in the rest. You can launch it as it is
+                    or change anything below first.
+                    {state.things.length && !templateId ? " Choosing one replaces what you have described." : null}
+                  </p>
+                </div>
+                <div className="px-template-grid" role="group" aria-label="Product templates">
+                  {PRODUCT_TEMPLATES.map((template) => (
+                    <button key={template.id} type="button" className="px-template-card"
+                      aria-pressed={templateId === template.id}
+                      onClick={() => {
+                        setDraftError(null); setDraftField(null);
+                        setTemplateId(template.id);
+                        setState((st) => applyTemplate(st, template.id));
+                      }}>
+                      <strong>{template.name}</strong>
+                      <span>{template.summary}</span>
+                      <span className="px-template-things">
+                        {template.things.map((described) => described.plural).join(" · ")}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <h3 style={{ margin: "8px 0 0" }}>{templateId ? "Adjust what it keeps" : "Or describe it yourself"}</h3>
+                <p className="px-muted" style={{ margin: 0 }}>
+                  List the kinds of record people work with, like deals or tickets, and the details
+                  each one has. Pixel turns each into a screen, and {ASSISTANT_NAME} can open, count
+                  and change them when the product allows it.
                 </p>
                 {state.things.map((thing, index) => (
                   <fieldset key={index} className="px-stack"

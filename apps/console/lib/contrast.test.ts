@@ -30,6 +30,7 @@ const TEXT_PAIRS: Array<[string, string]> = [
   ["--px-text", "--px-bg"], ["--px-text", "--px-surface"], ["--px-text", "--px-surface-2"],
   ["--px-text-2", "--px-bg"], ["--px-text-2", "--px-surface"], ["--px-text-2", "--px-surface-2"],
   ["--px-text-3", "--px-bg"], ["--px-text-3", "--px-surface"],
+  ["--px-text", "--px-page"], ["--px-text-2", "--px-page"], ["--px-text-3", "--px-page"], ["--px-accent", "--px-page"],
   ["--px-accent", "--px-bg"], ["--px-accent", "--px-accent-soft"], ["--px-on-accent", "--px-accent"],
   ["--px-ok", "--px-ok-soft"], ["--px-warn", "--px-warn-soft"], ["--px-danger", "--px-danger-soft"],
   ["--px-text", "--px-warn-soft"], ["--px-danger", "--px-bg"],

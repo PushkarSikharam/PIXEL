@@ -109,12 +109,29 @@ export interface ApiSession {
 export class ApiError extends Error {
   /** The refusal as the server sent it, when it was more than a sentence. */
   readonly detail: unknown;
+  /** The HTTP status, or 0 when no answer came back at all. */
+  readonly status: number | null;
 
-  constructor(message: string, detail?: unknown) {
+  constructor(message: string, detail?: unknown, status: number | null = null) {
     super(message);
     this.detail = detail;
+    this.status = status;
   }
 }
+
+/**
+ * Whether a failure means Pixel's server is down rather than that the request was refused.
+ *
+ * A server that is stopped, restarting or unreachable answers nothing (0), or the hosting in
+ * front of it answers for it (502, 503, 504). Telling somebody in that state to sign in again
+ * sends them round a loop that cannot work, so screens ask this before choosing what to say.
+ */
+export function serverUnavailable(error: unknown): boolean {
+  return error instanceof ApiError && (error.status === 0 || error.status === 502
+    || error.status === 503 || error.status === 504);
+}
+
+export const SERVER_UNAVAILABLE = "Pixel's server is not responding right now.";
 
 /** A refusal about one thing somebody typed, and which thing it was. */
 export class FieldError extends ApiError {
@@ -255,16 +272,28 @@ async function call<T>(path: string, init: RequestInit = {}, _session?: ApiSessi
   const base = apiBaseUrl();
   if (!base) throw new ApiError("This console is not connected to a Pixel API.");
   const method = (init.method ?? "GET").toUpperCase();
-  const response = await fetch(`${base}${path}`, {
-    ...init,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(["GET", "HEAD", "OPTIONS"].includes(method) ? {} : { "X-Pixel-CSRF": csrfToken() || _session?.csrfToken || "" }),
-      ...(init.headers ?? {}),
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${base}${path}`, {
+      ...init,
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...(["GET", "HEAD", "OPTIONS"].includes(method) ? {} : { "X-Pixel-CSRF": csrfToken() || _session?.csrfToken || "" }),
+        ...(init.headers ?? {}),
+      },
+    });
+  } catch (caught) {
+    // An aborted request is somebody moving on, not an outage; it keeps its own error.
+    if (caught instanceof DOMException && caught.name === "AbortError") throw caught;
+    throw new ApiError(SERVER_UNAVAILABLE, null, 0);
+  }
   const body = await response.text();
+  if (!response.ok && [502, 503, 504].includes(response.status) && !fromPixel(body)) {
+    // The hosting in front of the API answers for it with a page of its own, which is no use to
+    // read out. Say what it means instead. A refusal Pixel itself wrote keeps its own words.
+    throw new ApiError(SERVER_UNAVAILABLE, body, response.status);
+  }
   if (!response.ok) {
     let detail: unknown = body;
     try {
@@ -291,11 +320,21 @@ async function call<T>(path: string, init: RequestInit = {}, _session?: ApiSessi
     if (detail && typeof detail === "object" && "message" in detail) {
       const structured = detail as { message: string; record?: ApiRecord | null };
       if (response.status === 409) throw new RecordConflictError(structured.message, structured.record ?? null);
-      throw new ApiError(structured.message, detail);
+      throw new ApiError(structured.message, detail, response.status);
     }
-    throw new ApiError(typeof detail === "string" && detail ? detail : `Request failed (${response.status})`, detail);
+    throw new ApiError(typeof detail === "string" && detail ? detail : `Request failed (${response.status})`, detail, response.status);
   }
   return body ? (JSON.parse(body) as T) : ({} as T);
+}
+
+/** Whether an error body was written by Pixel's API (JSON with a `detail`), not by its hosting. */
+function fromPixel(body: string): boolean {
+  try {
+    const parsed = JSON.parse(body) as { detail?: unknown } | null;
+    return Boolean(parsed && typeof parsed === "object" && "detail" in parsed);
+  } catch {
+    return false;
+  }
 }
 
 export function signOut(): void {

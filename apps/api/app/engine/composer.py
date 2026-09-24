@@ -118,9 +118,15 @@ LIFECYCLE_STAGES = frozenset({
 PLATFORM_FAILURE = "I couldn't complete that request."
 # A control the definition does not name is described, never spoken as its identifier.
 UNNAMED_CONTROL = "the requested control"
-PLATFORM_KNOWLEDGE_UNAVAILABLE = (
-    "I don't have approved {product} information to answer that, so I won't guess."
+KNOWLEDGE_UNAVAILABLE_WORDINGS = (
+    "Sorry, I can't answer that. I only know about {product}, and I'd rather not guess.",
+    "That's not something I can tell you. I can only answer from approved {product} "
+    "information, and it doesn't cover that.",
+    "I'm not able to answer that one. Ask me anything about {product} and I'll do my best.",
+    "I don't have an answer for that, and I won't make one up. I can help with anything in "
+    "{product}.",
 )
+PLATFORM_KNOWLEDGE_UNAVAILABLE = KNOWLEDGE_UNAVAILABLE_WORDINGS[0]
 # Unknown and inaccessible people read identically, so a refusal never reveals that someone
 # exists outside the caller's scope.
 PLATFORM_PERSON_NOT_FOUND = "I can't find {person} in {scope}."
@@ -191,6 +197,39 @@ PLATFORM_CONVERSATION_TEMPLATES: Mapping[tuple[Stage, str], str] = {
 }
 
 
+# Replies that say "not here" come in several wordings, and a conversation moves through them
+# turn by turn. The same refusal twice in a row reads like a machine that has stopped listening;
+# every wording still says plainly what the assistant cannot do and what it can.
+VARIED_TEMPLATES: Mapping[tuple[Stage, str], tuple[str, ...]] = {
+    (Stage.ANSWER, "fallback"): (
+        "Sorry, I can't help with that in {product}. I can {capabilities}. What would you like to do?",
+        "That's outside what I can do here, I'm afraid. In {product} I can {capabilities}. "
+        "What would you like to try?",
+        "I didn't quite follow that one. I can {capabilities}. Where would you like to start?",
+        "I'm not able to help with that in {product}, but I can {capabilities}. "
+        "What should we do next?",
+    ),
+    (Stage.REFUSED, "out_of_scope"): (
+        "Sorry, I can't do that. I can only help with {product} here.",
+        "That's outside {product}, so it isn't something I can do for you.",
+        "I'm afraid I can't help with that. My work is limited to {product}.",
+        "I can't do that from here. I only have access to {product}.",
+    ),
+    (Stage.REFUSED, "fallback"): (
+        "Sorry, I can't help with that here.",
+        "That isn't something I can do here.",
+        "I'm afraid I can't help with that one.",
+    ),
+    (Stage.REFUSED, "destructive_refused"): (
+        "Sorry, I can't delete or erase anything here.",
+        "Deleting isn't something I'm able to do, so nothing has been removed.",
+        "I can't delete or erase anything, so everything stays as it is.",
+    ),
+    (Stage.ANSWER, "knowledge_unavailable"): KNOWLEDGE_UNAVAILABLE_WORDINGS,
+    (Stage.UNGROUNDED, "knowledge_unavailable"): KNOWLEDGE_UNAVAILABLE_WORDINGS,
+}
+
+
 class TemplateNotAllowed(ValueError):
     """A stage was asked to speak with wording that does not belong to it."""
 
@@ -239,12 +278,16 @@ class Reply:
 class ResponseComposer:
     """Turns verified state into platform wording; products contribute names only."""
 
-    def __init__(self, definition: ProductDefinition, *, visitor_name: str | None = None) -> None:
+    def __init__(self, definition: ProductDefinition, *, visitor_name: str | None = None,
+                 turn: int = 1) -> None:
         for name in (definition.identity.product_name, definition.identity.assistant_name):
             if name_problems(name):
                 raise UnsafeProductCopy("identity must contain plain names")
         self._definition = definition
         self._visitor = visitor_name
+        # Which wording a varied reply uses: the first on a conversation's first turn, the next
+        # on the next, so two refusals in a row never read the same.
+        self._turn = max(turn, 1)
 
     # --- the lifecycle ---
 
@@ -410,6 +453,9 @@ class ResponseComposer:
     def _render_platform(
         self, stage: Stage, key: str, template: str, values: Mapping[str, str],
     ) -> Reply:
+        wordings = VARIED_TEMPLATES.get((stage, key))
+        if wordings:
+            template = wordings[(self._turn - 1) % len(wordings)]
         return Reply(self._fill(template, values), stage, key)
 
     def _fill(self, template: str, values: Mapping[str, str]) -> str:

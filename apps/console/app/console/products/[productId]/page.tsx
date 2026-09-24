@@ -162,7 +162,7 @@ function LiveProductWorkspace({ productId }: { productId: string }) {
               {recordFilter ? <Button size="sm" onClick={() => setRecordFilter(null)}>Clear filter</Button> : null}
               {selectedRecord ? <section aria-label="Selected record" className="px-stack">
                 <h2>{String(selectedRecord[currentEntity.title_field] ?? selectedRecord.id)}</h2>
-                <dl>{currentEntity.fields.filter((field) => field.display).map((field) => (
+                <dl className="px-record-fields">{currentEntity.fields.filter((field) => field.display).map((field) => (
                   <div key={field.name}><dt>{field.label}</dt>
                     <dd>{renderValue(named(shape, records, currentEntity.fields, field.name, selectedRecord[field.name]))}</dd>
                   </div>
@@ -387,8 +387,11 @@ function named(shape: ApiProductShape, records: ApiRecords,
 }
 
 function renderValue(value: unknown) {
-  if (value === undefined || value === null || value === "") return <span className="px-muted">None</span>;
-  if (Array.isArray(value)) return value.length ? value.join(", ") : <span className="px-muted">None</span>;
+  // "None" read as a value somebody had typed. An empty field says it has not been filled in.
+  const empty = <span className="px-muted">Not set</span>;
+  if (value === undefined || value === null || value === "") return empty;
+  if (Array.isArray(value)) return value.length ? value.join(", ") : empty;
+  if (typeof value === "boolean") return value ? "Yes" : "No";
   return String(value);
 }
 

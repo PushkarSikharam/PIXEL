@@ -211,7 +211,7 @@ class ConversationEngine:
         # A router per turn: it keeps working state while routing, and turns never share it.
         router = IntentRouter(self._definition, self._snapshot)
         text = router.normalizer.normalize(message)
-        composer = ResponseComposer(self._definition)
+        composer = ResponseComposer(self._definition, turn=context.turn)
         validated: ValidatedAction | None = None
         refusal: Refusal | None = None
         passages: tuple[KnowledgePassage, ...] = ()
@@ -531,7 +531,7 @@ class ConversationEngine:
         conversation = self._platform_conversation(text, context, memory)
         if conversation is not None:
             return conversation
-        composer = ResponseComposer(self._definition)
+        composer = ResponseComposer(self._definition, turn=context.turn)
         if _describes_visitor(message):
             # "I'm a manager moving from another tool": context, recorded as signals. It is
             # acknowledged, and never answered as a failed request (the v2 prospect-signal decision).
@@ -557,7 +557,8 @@ class ConversationEngine:
             # Let the knowledge stage answer it, or decline honestly if no approved text exists.
             return None
         if conversational is not None:
-            composer = ResponseComposer(self._definition, visitor_name=conversational.visitor_name)
+            composer = ResponseComposer(self._definition, visitor_name=conversational.visitor_name,
+                                        turn=context.turn)
             if conversational.kind == Conversational.CAPABILITIES:
                 offers = offerable(self._definition, self._snapshot, self._policy)
                 return TurnStage.ANSWER, composer.capabilities(offers), (), True

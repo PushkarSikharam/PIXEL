@@ -1,0 +1,220 @@
+# Product Definition: Pixel's own console.
+#
+# Pixel is a place a person moves around in, so the ways of moving around it are described here
+# rather than decided in the browser. One engine then answers both "open my products" and
+# whatever the product they are inside is asked, and the assistant is the same assistant in both.
+#
+# v6 makes two changes. v1 to v5 are published and unchanged.
+#
+# - The screen of the people in an organization is called People, as the navigation and the page
+#   itself call it. It was Members here, so the assistant said "I'll take you to Members" and
+#   somebody looking for it saw only People.
+# - Asking for a tool Pixel does not reach ("open salesforce", "check my gmail") is declined as
+#   outside Pixel, as the guided demo already declines it, instead of being answered with a list
+#   of everything Pixel can do.
+
+definition:
+  definition_id: pixel_console
+  version: 6
+  ownership: platform_shared
+
+identity:
+  product_name: Pixel
+  assistant_name: Edith
+  persona: >-
+    A calm guide to Pixel itself, who takes someone to the part of it they asked for and says
+    plainly when something is not hers to do.
+  voice_style: >-
+    You are Edith, a soft-spoken, warm and natural conversational assistant for Pixel. Speak
+    clearly and unhurriedly.
+  greeting: Welcome to {product}. I'm {assistant}.
+
+vocabulary:
+  terms: [architecture, audit, build, demo, deploy, home, knowledge, login, member, members,
+          onboarding, operate, organization, overview, people, product, products, project,
+          projects, records, screens, settings, sign in, signup, team, teams, test, workspace]
+  corrections:
+    prodcut: product
+    prodcuts: products
+    setings: settings
+    hii: hi
+    hiii: hi
+    hai: hi
+    helo: hello
+    hellow: hello
+    ther: there
+    thier: there
+    architecure: architecture
+    arcitecture: architecture
+    demmo: demo
+    prodcts: products
+    projct: project
+    organisation: organization
+    orgainzation: organization
+  negatable_terms: [audit, members, products, settings]
+  correction_markers: [actually, instead, rather, i mean, sorry]
+
+# The contract asks every product to declare what it keeps. Pixel keeps products, and they are
+# named here so its screens can be described; no action reads or changes them.
+entities:
+  product:
+    label: Product
+    plural: Products
+    id: { strategy: slug, from_field: name }
+    title_field: name
+    summary_fields: [state]
+    fields:
+      name: { type: text, required: true, min: 1, max: 120, editable: false }
+      state: { type: text, max: 40, editable: false }
+      version: { type: integer, min: 1, editable: false }
+
+  member:
+    label: Person
+    plural: People
+    id: { strategy: slug, from_field: name }
+    title_field: name
+    summary_fields: [role]
+    fields:
+      name: { type: text, required: true, min: 1, max: 254, editable: false }
+      role: { type: text, max: 40, editable: false }
+      products: { type: refs, target: product }
+
+people:
+  entity: member
+  match_on: [name]
+
+scope:
+  anchor: product
+  paths:
+    product: []
+    member: [products]
+
+views:
+  overview:
+    label: Overview
+    kind: dashboard
+    shortcut: O
+  products:
+    label: Products
+    kind: list
+    entity: product
+    shortcut: P
+    columns: [name]
+  members:
+    label: People
+    kind: list
+    entity: member
+    shortcut: M
+    columns: [name, role]
+  audit:
+    label: Audit
+    kind: dashboard
+    shortcut: A
+  settings:
+    label: Settings
+    kind: dashboard
+    shortcut: S
+  build:
+    label: New product
+    kind: dashboard
+    shortcut: B
+  test:
+    label: Test
+    kind: dashboard
+    shortcut: T
+  deploy:
+    label: Deploy
+    kind: dashboard
+    shortcut: D
+  operate:
+    label: Operate
+    kind: dashboard
+    shortcut: E
+  demo:
+    label: Demo
+    kind: dashboard
+    shortcut: G
+
+# Declared in the order somebody new to Pixel needs them, because this is the order the
+# assistant offers them in: what to do first comes first, and the machinery of running a
+# product comes after.
+actions:
+  open_build: { capability: NAVIGATE_VIEW, view: build, description: Add a product. }
+  open_products: { capability: NAVIGATE_VIEW, view: products, description: Open your products. }
+  open_demo: { capability: NAVIGATE_VIEW, view: demo, description: Open the guided demo. }
+  open_architecture: { capability: NAVIGATE_VIEW, view: architecture, description: Open the system architecture. }
+  open_overview: { capability: NAVIGATE_VIEW, view: overview, description: Open the overview. }
+  open_members: { capability: NAVIGATE_VIEW, view: members, description: Open the people in this organization. }
+  open_settings: { capability: NAVIGATE_VIEW, view: settings, description: Open the settings. }
+  open_test: { capability: NAVIGATE_VIEW, view: test, description: Open the test area. }
+  open_deploy: { capability: NAVIGATE_VIEW, view: deploy, description: Open the deploy area. }
+  open_operate: { capability: NAVIGATE_VIEW, view: operate, description: Open the operate area. }
+  open_audit: { capability: NAVIGATE_VIEW, view: audit, description: Open the audit log. }
+
+intents:
+  - action: open_build
+    response: view_opened
+    match: [[add, create, make, new, start, set up, onboard, import],
+            [product, products, my product, our product, project, projects]]
+  - action: open_demo
+    response: view_opened
+    match: [[demo, demo mode, guided demo, the demo, try it, example, sample product]]
+  - action: open_architecture
+    match: [[architecture, system architecture, technical architecture, architecture page,
+             architecture diagram]]
+  - action: open_products
+    response: anchor_count
+    match: [[how many, count, number of, how much, how product, how products],
+            [product, products]]
+  - action: open_members
+    response: people_count
+    match: [[how many, count, number of, how much, who is, whos, how people, how member,
+             how members],
+            [member, members, people, person, team, teams, organization,
+             in my organization, in this organization]]
+  - action: open_products
+    response: view_opened
+    match: [[product, products, my products, all products, out of this, out of here, leave this,
+             back to products, take me out, exit this product, another product, switch product]]
+  - action: open_overview
+    response: view_opened
+    match: [[overview, home, dashboard, start, workspace, go back, back, get started,
+             where do i start, what do i do]]
+  - action: open_members
+    response: view_opened
+    match: [[member, members, people, team, teams, team members, who is in, organization]]
+  - action: open_audit
+    response: view_opened
+    match: [[audit, audit log, history, what happened]]
+  - action: open_settings
+    response: view_opened
+    match: [[setting, settings, preferences, configuration]]
+  - action: open_build
+    response: view_opened
+    match: [[build, new product, definition, definitions]]
+  - action: open_test
+    response: view_opened
+    match: [[test, playground, try it]]
+  - action: open_deploy
+    response: view_opened
+    match: [[deploy, deployment, deployments, release, releases, publish]]
+  - action: open_operate
+    response: view_opened
+    match: [[operate, usage, spending, budget, health]]
+
+guardrails:
+  - topic: destructive_change
+    response: destructive_refused
+    match: [[delete, erase, wipe, remove all, delete all]]
+  - topic: external_tools
+    response: out_of_scope
+    match: [[salesforce, hubspot, zendesk, jira, gmail, outlook, slack, notion, trello, asana,
+             google sheets, excel, quickbooks, stripe]]
+
+# Which replies this product uses. The words themselves are the platform's, so that what an
+# assistant says about what it did cannot be written by the product it is speaking for; these
+# names only declare which of those replies this product means to use.
+responses:
+  view_opened: "I'll take you to {view}."
+  out_of_scope: "I can only help with {product} here, so I can't do that."
+  destructive_refused: "I can't delete or erase anything here."

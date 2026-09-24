@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
+import re
 from types import MappingProxyType
 from typing import Any
 
@@ -55,6 +56,12 @@ CLARIFICATION_SLOTS: Mapping[str, str] = MappingProxyType({
 })
 # The platform questions used when a slot is missing or ambiguous and no clarification rule matched.
 RECORD_QUESTION = "clarify_update_target"
+# A follow-up says it is one: "what about Ben", "and Cara?", "Dana too". Any other message that
+# happens to contain a name ("what's the weather in Paris?") is its own request, not "the same
+# again for Paris".
+_FOLLOW_UP = re.compile(
+    r"^\s*(?:(?:what|how)\s+about|and|also|same\s+for)\b|\b(?:too|as\s+well)\W*$", re.IGNORECASE,
+)
 SLOT_QUESTIONS: Mapping[str, str] = MappingProxyType({
     "record": RECORD_QUESTION, "person": "clarify_assign", "choice": "clarify_change",
 })
@@ -475,6 +482,33 @@ class IntentRouter:
                 if self._lookup.get(spec.entity, record_id) is None:
                     continue
                 return self._build(key, target=RecordRef(spec.entity, record_id))
+        return self._titled_record(text)
+
+    def _titled_record(self, text: NormalizedMessage) -> GenericAction | None:
+        """A visible record the message names by its whole title ("open Acme renewal").
+
+        People name what they made by what they called it, not by the identifier Pixel gave it.
+        The longest run of words that is exactly one visible record's title wins; a title shared
+        by two records, or matching only part of a title, names nothing, so nothing is guessed.
+        """
+        openers = {spec.entity: key for key, spec in sorted(self._definition.actions.items())
+                   if spec.capability == Capability.OPEN_RECORD and spec.entity is not None}
+        words = re.findall(r"[\w'-]+", text.original.casefold())
+        for length in range(min(len(words), 8), 0, -1):
+            found: dict[tuple[str, str], str] = {}
+            for start in range(len(words) - length + 1):
+                phrase = " ".join(words[start:start + length])
+                if len(phrase) < 4:
+                    continue
+                for entity, key in openers.items():
+                    for record in self._lookup.search(entity, phrase, 25):
+                        if record.title.casefold() == phrase:
+                            found[(entity, record.id)] = key
+            if len(found) == 1:
+                (entity, record_id), key = next(iter(found.items()))
+                return self._build(key, target=RecordRef(entity, record_id))
+            if found:
+                return None
         return None
 
     def _person_follow_up(
@@ -490,7 +524,7 @@ class IntentRouter:
         out of scope gets `unknown_person`.
         """
         last = memory.person_follow_up
-        if last is None or last.turn != context.turn - 1:
+        if last is None or last.turn != context.turn - 1 or not _FOLLOW_UP.search(text.original):
             return None
         # Here the word after "about" is the person, so it counts as a name even when nobody by
         # that name is visible; otherwise "what about Cara" and "Ben and Cara" would lose Cara.

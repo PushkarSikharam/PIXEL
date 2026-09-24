@@ -230,7 +230,7 @@ class DefinitionAuthorityConversationTest(EngineCutoverFixture):
             body = self.say(message, session=f"request-{index}")
             self.assertTrue(body["speech"].startswith("Which project should the new ticket have"), message)
         refused = self.say("help me delete all issues", session="refusal")
-        self.assertEqual(refused["speech"], "I can't delete or erase anything here.")
+        self.assertIn("can't delete or erase anything", refused["speech"])
         self.assertEqual(self.say("delete the tickets, what can you do?", session="refusal-2")["status"], "denied")
 
     def test_a_conversational_question_beats_only_a_question_back(self):
@@ -343,7 +343,7 @@ class DefinitionAuthorityConversationTest(EngineCutoverFixture):
                         capable["speech"])
         self.assertIsNone(capable["execution"], "a question never proposes a change")
         self.assertEqual(self.say("who build pixel?", session="who")["speech"],
-                         f"I don't have approved {PRODUCT_NAME} information to answer that, so I won't guess.")
+                         f"Sorry, I can't answer that. I only know about {PRODUCT_NAME}, and I'd rather not guess.")
         self.assertTrue(self.say("who is edith?", session="edith")["speech"].startswith("I'm Edith"))
 
     def test_an_unknown_person_is_offered_for_adding_in_every_request(self):
@@ -365,7 +365,7 @@ class DefinitionAuthorityConversationTest(EngineCutoverFixture):
         for index, message in enumerate(("what is pixel?", "what does Pixel do?")):
             self.assertEqual(
                 self.say(message, session=f"product-{index}")["speech"],
-                f"I don't have approved {PRODUCT_NAME} information to answer that, so I won't guess.",
+                f"Sorry, I can't answer that. I only know about {PRODUCT_NAME}, and I'd rather not guess.",
                 message,
             )
 

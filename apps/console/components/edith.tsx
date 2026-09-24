@@ -117,14 +117,14 @@ export function EdithPanel({
     alive.current = true;
     sessionId.current = crypto.randomUUID();
     setMicAvailable(speechInputConstructor() !== null);
-    const ending = sessionId.current;
     return () => {
       alive.current = false;
       request.current?.abort();
       recognition.current?.abort();
       stopAudio();
       // Leaving takes the conversation with it, including anything it proposed and nobody did.
-      void closeConversation(session, ending);
+      // A conversation nobody spoke in does not exist on the server, so there is nothing to close.
+      if (turn.current > 0) void closeConversation(session, sessionId.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -241,6 +241,7 @@ export function EdithPanel({
   function restart() {
     stopAudio();
     recognition.current?.abort();
+    if (turn.current > 0) void closeConversation(session, sessionId.current);
     sessionId.current = crypto.randomUUID();
     turn.current = 0;
     setMessages([{ role: "agent", text: openingMessage(shape, scope) }]);
@@ -255,7 +256,7 @@ export function EdithPanel({
       <div className="px-edith-topbar">
         <span className="px-edith-brand">
           <span className="px-edith-mark" aria-hidden>P</span>
-          {collapsed ? null : kicker}
+          {collapsed ? <span className="px-edith-folded-name">Ask {shape.assistant_name}</span> : kicker}
         </span>
         <span className="px-edith-controls">
           <button type="button" className="px-edith-chip" onClick={() => setCollapsed(!collapsed)}

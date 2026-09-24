@@ -270,7 +270,7 @@ function summarise(entity: ApiEntityShape, record: ApiRecord): string {
     .map((name) => {
       const field = entity.fields.find((candidate) => candidate.name === name);
       const value = record[name];
-      const shown = Array.isArray(value) ? value.join(", ") : String(value ?? "none");
+      const shown = Array.isArray(value) ? value.join(", ") || "not set" : String(value ?? "not set");
       return `${field?.label ?? name}: ${shown}`;
     });
   return parts.join("; ");

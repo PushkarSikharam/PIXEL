@@ -1609,6 +1609,9 @@ def _or_platform_navigation(request: TurnRequest, http: Request, background: Bac
         "session_id": f"{request.session_id}{PLATFORM_SESSION}",
         "workspace_scope_id": PRIMARY,
         "selected_issue_id": None,
+        # The screen open is one of the product's, which the application has never heard of; sent
+        # along, it made the application refuse and the product's "not sure" was all anyone heard.
+        "current_page": None,
     })
     try:
         elsewhere = _answer_turn(moved, http, background, user, engine)

@@ -328,6 +328,29 @@ class KnowledgeFallbackTest(unittest.TestCase):
         for invented in ("probably", "i think", "maybe", "as far as i know"):
             self.assertNotIn(invented, reply.speech.lower())
 
+    def test_saying_no_changes_its_words_from_one_turn_to_the_next(self):
+        """The same refusal twice in a row reads like a machine that stopped listening."""
+        definition = load_engine_definition(document=engine_definition())
+        for key in (KNOWLEDGE_UNAVAILABLE_KEY,):
+            spoken = [ResponseComposer(definition, turn=turn).answer(key).speech for turn in range(1, 5)]
+            self.assertEqual(len(set(spoken)), 4, spoken)
+            for speech in spoken:
+                self.assertIn("Sample Desk", speech)
+                self.assertNotIn("{", speech)
+        again = ResponseComposer(definition, turn=5).answer(KNOWLEDGE_UNAVAILABLE_KEY).speech
+        self.assertEqual(again, spoken[0], "the wordings cycle rather than run out")
+
+    def test_every_varied_wording_fills_and_stays_polite(self):
+        from app.engine.composer import VARIED_TEMPLATES
+        for (stage, key), wordings in VARIED_TEMPLATES.items():
+            self.assertGreaterEqual(len(wordings), 3, key)
+            self.assertEqual(len(set(wordings)), len(wordings), key)
+            for wording in wordings:
+                with self.subTest(key=key, wording=wording):
+                    self.assertTrue(wording.endswith((".", "?")))
+                    for rude in ("can't you", "stupid", "invalid", "error"):
+                        self.assertNotIn(rude, wording.lower())
+
     def test_the_product_cannot_reword_knowledge_availability(self):
         """Declared, reworded or absent: the product's text for this key is never spoken."""
         for wording in (None, "Our docs cover everything; ask me anything about {product}."):
@@ -339,8 +362,8 @@ class KnowledgeFallbackTest(unittest.TestCase):
                     document["responses"][KNOWLEDGE_UNAVAILABLE_KEY] = wording
                 reply = ResponseComposer(load_engine_definition(document=document)).answer(
                     KNOWLEDGE_UNAVAILABLE_KEY)
-                self.assertEqual(reply.speech, "I don't have approved Sample Desk information to "
-                                               "answer that, so I won't guess.")
+                self.assertEqual(reply.speech, "Sorry, I can't answer that. I only know about "
+                                               "Sample Desk, and I'd rather not guess.")
 
 
 #: The 5c definition-turn service and its shared assembly legitimately reach the pure engine

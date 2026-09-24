@@ -180,6 +180,8 @@ code, .px-mono { font-family: var(--px-mono); font-size: var(--px-text-sm); }
   display: inline-flex; align-items: center; gap: var(--px-space-1); height: 22px; padding: 0 var(--px-space-2);
   border-radius: var(--px-radius-sm); font-size: var(--px-text-xs); font-weight: 600;
   background: var(--px-surface-2); color: var(--px-text-2); border: 1px solid var(--px-border);
+  /* A fixed-height label: wrapped, its second line spilled out of the box on a phone. */
+  white-space: nowrap; flex: none;
 }
 .px-badge svg { width: 12px; height: 12px; }
 .px-badge[data-tone="ok"] { background: var(--px-ok-soft); color: var(--px-ok); border-color: transparent; }
@@ -214,7 +216,9 @@ code, .px-mono { font-family: var(--px-mono); font-size: var(--px-text-sm); }
 .px-stat-value { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
 
 /* ---- Tables ---- */
-.px-table-wrap { width: 100%; overflow-x: auto; border: 1px solid var(--px-border); border-radius: var(--px-radius); }
+/* Positioned, so a visually hidden label inside a wide table is clipped by this scroller rather
+   than pushing the whole page sideways on a phone. */
+.px-table-wrap { position: relative; width: 100%; overflow-x: auto; border: 1px solid var(--px-border); border-radius: var(--px-radius); }
 .px-table { width: 100%; border-collapse: collapse; font-size: var(--px-text-md); }
 .px-table th { text-align: left; font-size: var(--px-text-sm); font-weight: 500; color: var(--px-text-2); background: var(--px-surface); padding: var(--px-space-2) var(--px-space-3); border-bottom: 1px solid var(--px-border); white-space: nowrap; }
 .px-table td { padding: var(--px-space-2) var(--px-space-3); border-bottom: 1px solid var(--px-border); vertical-align: middle; }
@@ -437,6 +441,16 @@ code, .px-mono { font-family: var(--px-mono); font-size: var(--px-text-sm); }
 
 .px-edith[data-collapsed="true"] .px-edith-brand {
   font-size: 0;
+}
+
+/* The mark keeps its letter when the name beside it is hidden. */
+.px-edith[data-collapsed="true"] .px-edith-mark {
+  font-size: 14px;
+}
+
+/* Folded beside the page there is only room for the mark; on a phone it is a bar and says who. */
+.px-edith-folded-name {
+  display: none;
 }
 
 .px-edith[data-collapsed="true"] .px-edith-controls {
@@ -963,11 +977,20 @@ code, .px-mono { font-family: var(--px-mono); font-size: var(--px-text-sm); }
 
   /* Folded on a narrow screen it is a bar, not a column: the page is what somebody came for. */
   .px-edith[data-collapsed="true"] {
+    width: auto;
     padding: 10px 12px;
   }
 
   .px-edith[data-collapsed="true"] .px-edith-topbar {
+    display: flex;
+    justify-content: space-between;
     margin: 0;
+  }
+
+  .px-edith[data-collapsed="true"] .px-edith-folded-name {
+    display: inline;
+    font-size: 15px;
+    font-weight: 650;
   }
 }
 
@@ -1004,3 +1027,18 @@ code, .px-mono { font-family: var(--px-mono); font-size: var(--px-text-sm); }
 
 /* Why the assistant is not there, readable on the assistant's own dark panel. */
 .px-edith-note { margin: 6px 0 0; color: #d4d4d8; font-size: var(--px-text-sm); line-height: 1.5; }
+
+/* A selected record's details: label and value side by side, not the browser's indented list. */
+.px-record-fields {
+  display: grid;
+  grid-template-columns: minmax(120px, max-content) 1fr;
+  gap: var(--px-space-2) var(--px-space-6);
+  margin: 0;
+}
+.px-record-fields > div { display: contents; }
+.px-record-fields dt { color: var(--px-text-2); font-size: var(--px-text-sm); }
+.px-record-fields dd { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 520px) {
+  .px-record-fields { grid-template-columns: 1fr; gap: 2px; }
+  .px-record-fields dd { margin-bottom: var(--px-space-2); }
+}

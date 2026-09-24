@@ -71,7 +71,7 @@ class AddedProductFixture(EngineCutoverFixture):
             "title": "Harbour Charts", "status": "On loan", "keeper": self.otto.id})
 
     def ask(self, message: str, *, product: str = PRODUCT, scope: str = PRIMARY,
-            session: str = "added") -> dict:
+            session: str = "added", current_page: str | None = None) -> dict:
         """One turn of a conversation. Messages sharing a session continue it, as a visitor's do."""
         self.turns[session] = self.turns.get(session, 0) + 1
         response = self.client.post("/api/turn", headers={
@@ -79,6 +79,7 @@ class AddedProductFixture(EngineCutoverFixture):
         }, json={
             "session_id": session, "turn_id": self.turns[session], "product_id": product,
             "message": message, "workspace_scope_id": scope,
+            **({"current_page": current_page} if current_page else {}),
         })
         self.assertEqual(response.status_code, 200, response.text)
         return response.json()
@@ -309,6 +310,12 @@ class LeavingAProductTest(AddedProductFixture):
             with self.subTest(message=message):
                 answered = self.ask(message, session=f"leave-{message[:10]}")
                 self.assertEqual(self.action(answered), "OPEN_PRODUCTS", answered["speech"])
+
+    def test_leaving_works_from_whichever_screen_is_open(self):
+        """The console sends the product screen that is open. Passed on to the application, which
+        has no such screen, it made leaving fail from every product page in a real browser."""
+        answered = self.ask("take me back to my products", session="from-a-screen", current_page="catalogue")
+        self.assertEqual(self.action(answered), "OPEN_PRODUCTS", answered["speech"])
 
     def test_the_product_still_answers_its_own_questions(self):
         """Nothing the product can answer is handed to the application instead."""

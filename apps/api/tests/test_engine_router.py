@@ -439,6 +439,24 @@ class PersonFollowUpTest(RouterFixture):
         self.assertEqual((result.kind, result.proposal.action_key, result.proposal.filter.value),
                          (RouteKind.PROPOSE, "contacts_by_owner", "ben-okafor"))
 
+    def test_a_message_that_merely_contains_a_name_is_not_a_follow_up(self):
+        """Right after a person request, "what's the weather in Paris?" was answered as if Paris
+        were someone to look up, and got "I can't find Paris"."""
+        for message in ("what's the weather in Paris?", "tell me about Rome", "Zed"):
+            with self.subTest(message=message):
+                chat = self.chat()
+                chat.say("show me the contacts")
+                self.assertNotEqual(chat.say(message).response_key, "unknown_person")
+
+    def test_follow_ups_can_be_phrased_several_ways(self):
+        for message in ("what about Ben", "how about Ben?", "and Ben", "same for Ben", "Ben too"):
+            with self.subTest(message=message):
+                chat = self.chat()
+                chat.say("show me the contacts")
+                result = chat.say(message)
+                self.assertEqual((result.kind, result.proposal.action_key),
+                                 (RouteKind.PROPOSE, "contacts_by_owner"))
+
     def test_a_person_based_request_is_reapplied_to_the_new_person(self):
         chat = self.chat()
         chat.say("contacts for Cara")
@@ -632,3 +650,22 @@ class ReproducedDefectTest(RouterFixture):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RecordNamedByTitleTest(RouterFixture):
+    """People name what they made by what they called it, not by the identifier Pixel gave it."""
+
+    def test_a_visible_record_opens_by_its_whole_title(self):
+        for message in ("open Eli Moss", "show me eli moss", "Eli Moss"):
+            with self.subTest(message=message):
+                result = self.chat().say(message)
+                self.assertEqual(result.kind, RouteKind.PROPOSE, result)
+                self.assertEqual(result.proposal.target, RecordRef("contact", "CON-2"))
+
+    def test_a_record_the_caller_cannot_see_is_never_opened(self):
+        result = self.chat().say("open Fay Chu")
+        self.assertTrue(result.proposal is None or result.proposal.target != RecordRef("contact", "CON-3"))
+
+    def test_part_of_a_title_names_nothing(self):
+        result = self.chat().say("open Moss")
+        self.assertTrue(result.proposal is None or result.proposal.target is None)

@@ -29,6 +29,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
+        with:
+          # The definition immutability check compares each version with the commit that
+          # introduced it, so it needs the whole history rather than the latest commit alone.
+          fetch-depth: 0
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}

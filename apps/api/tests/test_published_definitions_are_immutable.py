@@ -85,6 +85,16 @@ class PublishedDefinitionsAreImmutableTest(unittest.TestCase):
         """A check that silently guards nothing is worse than no check at all."""
         self.assertTrue(self.definitions(), "no definitions were found, so nothing was checked")
 
+    def test_the_check_can_see_the_history_it_compares_against(self):
+        """In a shallow clone every version appears to have been added in the latest commit, so
+        the comparison above would pass whatever had been edited. Refuse to run blind instead."""
+        code, shallow = _git("rev-parse", "--is-shallow-repository")
+        self.assertEqual(code, 0, "could not read the repository's history")
+        self.assertEqual(shallow, "false", (
+            "This clone is shallow, so a definition's first commit cannot be found. Fetch the "
+            "full history (actions/checkout needs fetch-depth: 0) before running this check."
+        ))
+
 
 if __name__ == "__main__":
     unittest.main()

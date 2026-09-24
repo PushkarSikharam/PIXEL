@@ -2846,6 +2846,7 @@ function ConversationCard({
   const onSendRef = useRef(onSend);
   const sessionIdRef = useRef(sessionId);
   const isTTSEnabledRef = useRef(isTTSEnabled);
+  const voiceEngineStatusRef = useRef(voiceEngineStatus);
   const mockVoiceTranscriptRef = useRef("");
   const mockVoiceTimerRef = useRef<number | null>(null);
   const isSubmittingVoiceRef = useRef(false);
@@ -2861,6 +2862,10 @@ function ConversationCard({
   useEffect(() => {
     sessionIdRef.current = sessionId;
   }, [sessionId]);
+
+  useEffect(() => {
+    voiceEngineStatusRef.current = voiceEngineStatus;
+  }, [voiceEngineStatus]);
 
   useEffect(() => {
     isTTSEnabledRef.current = isTTSEnabled;
@@ -2962,7 +2967,9 @@ function ConversationCard({
             setVoiceEngineStatus(result?.speech ? "Speaking" : "Idle");
             if (result?.speech) {
               void speakAgentReply(result.speech, "voice", () => {
-                setVoiceEngineStatus("Idle");
+                if (voiceEngineStatusRef.current === "Speaking") {
+                  setVoiceEngineStatus("Idle");
+                }
               });
             }
           })();

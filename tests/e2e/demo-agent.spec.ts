@@ -6,7 +6,7 @@ import {
   apiPort,
   browserAuthHeaders,
   delay,
-  escapedRequests,
+  drainEscapedRequests,
   forwardToFreshBackend,
   freshBackendUrl,
   installMockVoice,
@@ -192,7 +192,7 @@ test("milestone 1 requests that escape interception never reach a real backend",
   const response = await request.get("/api/agent/demo-data");
   // Only the sentinel answers 503; the development backend would have served data.
   expect(response.status()).toBe(503);
-  expect(escapedRequests.splice(0)).toEqual(["GET /api/demo-data"]);
+  expect(drainEscapedRequests()).toEqual(["GET /api/demo-data"]);
 });
 
 test("milestone 1 removing a page override preserves backend isolation", async ({ page }) => {
@@ -210,7 +210,7 @@ test("milestone 1 removing a page override preserves backend isolation", async (
     })).status;
   });
   expect(status).toBe(200);
-  expect(escapedRequests).toEqual([]);
+  expect(drainEscapedRequests()).toEqual([]);
 });
 
 test("milestone 2 speech is only requested after the visitor turns voice on", async ({ page }) => {

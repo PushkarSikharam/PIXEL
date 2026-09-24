@@ -1,12 +1,12 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { createServer as createHttpServer, type Server } from "node:http";
+import { join, resolve } from "node:path";
 import { createServer } from "node:net";
 import { expect, test, type Page, type Route } from "@playwright/test";
 import { venvPython } from "../../scripts/venv-python.mjs";
-import { E2E_SENTINEL_PORT } from "./ports";
+import { E2E_SENTINEL_LOG } from "./ports";
 
 // Shared isolation harness for browser tests: a fresh API process with its own database,
 // paid providers switched off, external requests blocked, and a sentinel that records any
@@ -28,24 +28,12 @@ declare global {
 let apiProcess: ChildProcess | null = null;
 let apiDataDir: string | null = null;
 const browserErrors = new WeakMap<Page, string[]>();
-let sentinel: Server | null = null;
-export const escapedRequests: string[] = [];
 const externalRequests: string[] = [];
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1"]);
 
 /** Registers the isolation hooks for the calling spec file. */
 export function setupIsolatedApp() {
   test.beforeAll(async () => {
-    sentinel = createHttpServer((request, response) => {
-      escapedRequests.push(`${request.method} ${request.url}`);
-      response.writeHead(503, { "Content-Type": "application/json" });
-      response.end(JSON.stringify({ detail: "E2E sentinel: request escaped test isolation." }));
-    });
-    await new Promise<void>((resolve, reject) => {
-      sentinel!.once("error", reject);
-      sentinel!.listen(E2E_SENTINEL_PORT, "127.0.0.1", () => resolve());
-    });
-
     apiPort = await new Promise<number>((resolve, reject) => {
       const server = createServer();
       server.once("error", reject);
@@ -100,11 +88,6 @@ export function setupIsolatedApp() {
       }
     }
     apiProcess = null;
-    // A Next.js proxy connection can stay alive after the last page closes. End it explicitly so
-    // an otherwise successful suite cannot wait forever in Server.close().
-    sentinel?.close();
-    sentinel?.closeAllConnections();
-    sentinel = null;
     if (apiDataDir) {
       await rm(apiDataDir, { recursive: true, force: true, maxRetries: 3 });
       apiDataDir = null;
@@ -114,7 +97,7 @@ export function setupIsolatedApp() {
   test.afterEach(async ({ page, context }) => {
     // Context routes remain installed until every page has stopped issuing requests.
     await context.close();
-    const escaped = escapedRequests.splice(0);
+    const escaped = drainEscapedRequests();
     expect(escaped, "Requests escaped the isolated test backend").toEqual([]);
     expect(externalRequests.splice(0), "Browser contacted an external host").toEqual([]);
     expect(browserErrors.get(page) ?? [], "Unexpected browser runtime errors").toEqual([]);
@@ -203,6 +186,18 @@ export function delay(ms: number) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+export function drainEscapedRequests() {
+  const logPath = resolve(process.cwd(), E2E_SENTINEL_LOG);
+  let contents = "";
+  try {
+    contents = readFileSync(logPath, "utf8");
+  } catch {
+    contents = "";
+  }
+  writeFileSync(logPath, "", "utf8");
+  return contents.split(/\r?\n/).filter(Boolean);
 }
 
 export async function sendChat(page: Page, message: string) {

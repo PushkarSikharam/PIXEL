@@ -141,6 +141,9 @@ function LiveProductWorkspace({ productId }: { productId: string }) {
         actions={<StatusBadge status="active" />} />
       <div className="px-product-workspace">
         <div className="px-stack">
+          <ProductCommandCenter shape={shape} records={records}
+            onOpen={(view) => { setActiveView(view); setRecordSelection(null); setRecordFilter(null); }}
+            onAdd={(entity) => setWriting({ entity, record: null })} />
           <Panel title="Screens" actions={<Badge>{records.scope}</Badge>}>
             <div className="px-row" role="tablist" aria-label="Product screens">
               {shape.views.filter((view) => view.navigable).map((view) => (
@@ -219,6 +222,49 @@ function firstWorthOpening(shape: ApiProductShape, records: ApiRecords): string 
   const navigable = shape.views.filter((view) => view.navigable);
   const withRecords = navigable.find((view) => view.entity && (records.records[view.entity]?.length ?? 0) > 0);
   return (withRecords ?? navigable[0] ?? shape.views[0])?.name ?? null;
+}
+
+function ProductCommandCenter({ shape, records, onOpen, onAdd }: {
+  shape: ApiProductShape;
+  records: ApiRecords;
+  onOpen: (view: string) => void;
+  onAdd: (entity: string) => void;
+}) {
+  const metrics = shape.entities.slice(0, 4).map((entity) => ({
+    entity,
+    count: records.records[entity.name]?.length ?? 0,
+    view: shape.views.find((view) => view.entity === entity.name && view.navigable)?.name ?? null,
+  }));
+  const firstRecordEntity = shape.entities.find((entity) => shape.views.some((view) => view.entity === entity.name && view.navigable));
+  return (
+    <Panel title="Product command center" actions={<Badge>{shape.assistant_name} is scoped here</Badge>}>
+      <div className="px-stack">
+        <div className="px-stats" aria-label="Product record counts">
+          {metrics.length ? metrics.map(({ entity, count, view }) => (
+            <button key={entity.name} type="button" className="px-stat px-stat-button"
+              disabled={!view} onClick={() => view ? onOpen(view) : undefined}>
+              <span className="px-stat-label">{entity.plural}</span>
+              <strong className="px-stat-value">{count}</strong>
+            </button>
+          )) : <p className="px-muted">This product has no record types yet.</p>}
+        </div>
+        <div className="px-row">
+          {shape.views.filter((view) => view.navigable).slice(0, 3).map((view) => (
+            <Button key={view.name} size="sm" onClick={() => onOpen(view.name)}>Open {view.label}</Button>
+          ))}
+          {firstRecordEntity ? (
+            <Button size="sm" variant="primary" onClick={() => onAdd(firstRecordEntity.name)}>
+              <Plus aria-hidden />Add {firstRecordEntity.label.toLowerCase()}
+            </Button>
+          ) : null}
+        </div>
+        <p className="px-small px-muted">
+          Try asking Edith: "how many {metrics[0]?.entity.plural.toLowerCase() ?? "records"} are there",
+          "create a {firstRecordEntity?.label.toLowerCase() ?? "record"}", or "show me around".
+        </p>
+      </div>
+    </Panel>
+  );
 }
 
 /**

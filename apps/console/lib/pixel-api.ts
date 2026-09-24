@@ -169,7 +169,8 @@ export async function verifyEmailCode(challengeId: string, code: string): Promis
  */
 export async function currentAccount(): Promise<ApiAccount> {
   const account = await call<ApiAccount>("/account/session");
-  remember({ csrfToken: csrfToken(), userId: account.user_id, tenantId: account.tenant_id });
+  const previous = storedSession();
+  remember({ csrfToken: csrfToken() || previous?.csrfToken || "", userId: account.user_id, tenantId: account.tenant_id });
   return account;
 }
 
@@ -220,7 +221,7 @@ export function storedSession(): ApiSession | null {
   try {
     const raw = window.sessionStorage.getItem(TOKEN_KEY);
     const kept = raw ? (JSON.parse(raw) as ApiSession) : null;
-    return kept ? { ...kept, csrfToken: csrfToken() } : null;
+    return kept ? { ...kept, csrfToken: csrfToken() || kept.csrfToken } : null;
   } catch {
     // A browser that refuses storage still works; it just asks the server again.
     return null;
@@ -259,7 +260,7 @@ async function call<T>(path: string, init: RequestInit = {}, _session?: ApiSessi
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...(["GET", "HEAD", "OPTIONS"].includes(method) ? {} : { "X-Pixel-CSRF": csrfToken() }),
+      ...(["GET", "HEAD", "OPTIONS"].includes(method) ? {} : { "X-Pixel-CSRF": csrfToken() || _session?.csrfToken || "" }),
       ...(init.headers ?? {}),
     },
   });
@@ -409,7 +410,7 @@ export async function productSpeech(session: ApiSession, productId: string, sess
   const response = await fetch(`${apiBaseUrl()}/speech`, {
     method: "POST", signal,
     credentials: "include",
-    headers: { "Content-Type": "application/json", "X-Pixel-CSRF": session.csrfToken },
+    headers: { "Content-Type": "application/json", "X-Pixel-CSRF": csrfToken() || session.csrfToken },
     body: JSON.stringify({ product_id: productId, session_id: sessionId, text }),
   });
   if (!response.ok) throw new ApiError(response.status === 429 ? "Voice limit reached. Text remains available." : "Voice is unavailable. Text remains available.");

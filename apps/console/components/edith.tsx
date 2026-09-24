@@ -43,14 +43,30 @@ function starterSteps(shape: ApiProductShape): string[] {
  * Each one is a message somebody could have typed, phrased from the product's own name and its
  * own labels, so a chip can never ask for something the assistant has no idea about.
  */
-function starterPrompts(shape: ApiProductShape): string[] {
+function starterPrompts(shape: ApiProductShape, scope: "platform" | "product"): string[] {
+  if (scope === "platform") {
+    return [
+      "What is Pixel?",
+      "Help me add a product",
+      "How many products do I have?",
+      "Open demo mode",
+      "Show me around",
+    ];
+  }
   const things = shape.entities.slice(0, 2).map((entity) => entity.plural.toLowerCase());
   return [
     "What can you do?",
     ...things.map((plural) => `How many ${plural} are there?`),
-    `How does ${shape.product_name} work?`,
+    `What does ${shape.product_name} know?`,
     "Show me around",
   ];
+}
+
+function openingMessage(shape: ApiProductShape, scope: "platform" | "product"): string {
+  if (scope === "platform") {
+    return `Welcome to Pixel. I'm ${shape.assistant_name}. I can help you add products, open your workspace, answer approved Pixel questions, and take you to the guided demo.`;
+  }
+  return `Welcome to ${shape.product_name}. I'm ${shape.assistant_name}. Ask me to open screens, count records, create records, or explain what this product knows.`;
 }
 
 export function EdithPanel({
@@ -69,7 +85,7 @@ export function EdithPanel({
 }) {
   const router = useRouter();
   const [messages, setMessages] = useState<Array<{ role: "visitor" | "agent"; text: string }>>([
-    { role: "agent", text: `Welcome to ${shape.product_name}. I'm ${shape.assistant_name}.` },
+    { role: "agent", text: openingMessage(shape, scope) },
   ]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -215,7 +231,7 @@ export function EdithPanel({
   }
 
   const steps = useMemo(() => starterSteps(shape), [shape]);
-  const prompts = useMemo(() => starterPrompts(shape), [shape]);
+  const prompts = useMemo(() => starterPrompts(shape, scope), [shape, scope]);
   const kicker = scope === "platform" ? "Pixel" : shape.product_name;
   const state = busy ? "Thinking" : listening ? "Listening" : voice ? voiceStatus : "Ready";
 
@@ -224,7 +240,7 @@ export function EdithPanel({
     recognition.current?.abort();
     sessionId.current = crypto.randomUUID();
     turn.current = 0;
-    setMessages([{ role: "agent", text: `Welcome to ${shape.product_name}. I'm ${shape.assistant_name}.` }]);
+    setMessages([{ role: "agent", text: openingMessage(shape, scope) }]);
   }
 
   return (

@@ -13,7 +13,7 @@ const ASSISTANT_NAME = "Edith";
 import {
   STEP_LABELS, STEPS, acceptUnderstanding, addField, addThing, addressFor, approveGeneratedUnderstanding,
   canEnter, completeAnalysis,
-  definitionIdFor, goTo, initialOnboarding, publish, removeField, removeThing, setConfirmation,
+  definitionIdFor, goTo, initialOnboarding, keyForName, publish, removeField, removeThing, setConfirmation,
   setDetails, starterDefinitionText, understood, updateField, updateThing,
   toggleAction, validate, type OnboardingState, type Step,
 } from "@pixel-console/lib/onboarding";
@@ -77,6 +77,7 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
 
   async function runAnalysis() {
     setDraftError(null);
+    setDraftField(null);
     if (!c.live) {
       setState((s) => goTo(s, "analyzing"));
       window.setTimeout(() => setState((s) => completeAnalysis(s)), 1200);
@@ -94,9 +95,14 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
         assistantName: ASSISTANT_NAME,
         definitionId: definitionIdFor(state),
         things: state.things.map((thing) => ({
-          name: thing.id, label: thing.label.trim(), plural: thing.plural.trim(), people: thing.people,
+          name: keyForName(thing.label.trim() || thing.id),
+          label: thing.label.trim(),
+          plural: thing.plural.trim(),
+          people: thing.people,
           fields: thing.fields.filter((field) => field.name.trim()).map((field) => ({
-            name: field.name.trim(), type: field.type, required: field.required,
+            name: keyForName(field.name.trim()),
+            type: field.type,
+            required: field.required,
             values: field.values.split(",").map((value) => value.trim()).filter(Boolean),
           })),
         })),
@@ -106,7 +112,7 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
         screens: drafted.screens, canDo: drafted.can_do,
       }));
     } catch (caught) {
-      setDraftError(caught instanceof Error ? caught.message : "Pixel could not write that product.");
+      setDraftError(friendlyDraftError(caught));
       // A refusal that named a box goes back to the step that box is on, and is shown beside it.
       // Anything else stays with the description, which is where it was most likely written.
       const named = caught instanceof FieldError ? caught.field : null;
@@ -119,8 +125,8 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
 
   return (
     <>
-      <PageHead title="New product" description="Describe what your product keeps, review Pixel's understanding, and publish it for your organization."
-        actions={onAdvanced ? <Button onClick={onAdvanced}>Upload a definition</Button> : undefined} />
+      <PageHead title="Add a product" description="Describe your product in plain language. Pixel turns it into screens, records and an assistant you can review before launch."
+        actions={onAdvanced ? <Button onClick={onAdvanced}>Advanced import</Button> : undefined} />
       <div className="px-onboarding">
         <nav aria-label="Onboarding steps">
           <ol className="px-steps">
@@ -152,8 +158,8 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
                         s.slugChosen ? s.slug : addressFor(e.target.value), { derived: !s.slugChosen }));
                     }} />
                 )}</Field>
-                <Field label="Address"
-                  hint="Where this product lives in Pixel. Taken from the name; change it now if you want something else, because it cannot be changed later."
+                <Field label="Short link"
+                  hint="Pixel creates this from the name. Change it only if you want a different address inside Pixel."
                   error={slugError}>{(f) => (
                   <Input id={f.id} describedBy={f.describedBy} invalid={f.invalid} value={state.slug} required
                     onChange={(e) => setState((s) => setDetails(s, s.name, e.target.value.toLowerCase()))} />
@@ -174,41 +180,40 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
             <Panel>
               <div className="px-stack">
                 <p className="px-muted">
-                  Tell Pixel what your product keeps. Each kind of record becomes a screen you can
-                  open, ask about and change. Mark the one that is your people, and Edith will be
-                  able to assign work to them.
+                  Add the main things people work with in this product. Pixel turns each one into a
+                  screen, and Edith can open it, count it and change it when the product allows that.
                 </p>
                 {state.things.map((thing, index) => (
                   <fieldset key={index} className="px-stack"
                     style={{ border: "1px solid var(--px-border)", borderRadius: 8, padding: 12, gap: 10 }}>
                     <legend className="px-label">{thing.label.trim() || `Record ${index + 1}`}</legend>
                     <div className="px-row" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
-                      <Field label="One of them is called" hint="For example: Deal">{(f) => (
+                      <Field label="One item is called" hint="For example: Deal">{(f) => (
                         <Input id={f.id} describedBy={f.describedBy} value={thing.label}
                           onChange={(e) => setState((st) => updateThing(st, index, {
                             label: e.target.value,
                             id: thing.id || e.target.value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, ""),
                           }))} />
                       )}</Field>
-                      <Field label="Many of them are called" hint="For example: Deals">{(f) => (
+                      <Field label="Many are called" hint="For example: Deals">{(f) => (
                         <Input id={f.id} describedBy={f.describedBy} value={thing.plural}
                           onChange={(e) => setState((st) => updateThing(st, index, { plural: e.target.value }))} />
                       )}</Field>
                       <label className="px-row px-small">
                         <input type="checkbox" checked={thing.people}
                           onChange={(e) => setState((st) => updateThing(st, index, { people: e.target.checked }))} />
-                        These are my people
+                        People who do the work
                       </label>
                       <Button size="sm" variant="ghost" aria-label={`Remove ${thing.label || "record"}`}
                         onClick={() => setState((st) => removeThing(st, index))}><Trash2 aria-hidden /></Button>
                     </div>
                     {thing.fields.map((field, fieldIndex) => (
                       <div key={fieldIndex} className="px-row" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
-                        <Field label="Carries">{(f) => (
+                        <Field label="Detail to store">{(f) => (
                           <Input id={f.id} describedBy={f.describedBy} value={field.name} placeholder="title"
                             onChange={(e) => setState((st) => updateField(st, index, fieldIndex, { name: e.target.value }))} />
                         )}</Field>
-                        <Field label="Which is">{(f) => (
+                        <Field label="Answer type">{(f) => (
                           <select id={f.id} className="px-select" value={field.type}
                             onChange={(e) => setState((st) => updateField(st, index, fieldIndex, { type: e.target.value as typeof field.type }))}>
                             <option value="text">Text</option><option value="enum">One of a few choices</option>
@@ -225,17 +230,17 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
                         <label className="px-row px-small">
                           <input type="checkbox" checked={field.required}
                             onChange={(e) => setState((st) => updateField(st, index, fieldIndex, { required: e.target.checked }))} />
-                          Always needed
+                          Required
                         </label>
                         <Button size="sm" variant="ghost" aria-label={`Remove ${field.name || "field"}`}
                           disabled={thing.fields.length === 1}
                           onClick={() => setState((st) => removeField(st, index, fieldIndex))}><Trash2 aria-hidden /></Button>
                       </div>
                     ))}
-                    <div><Button size="sm" onClick={() => setState((st) => addField(st, index))}>Add something it carries</Button></div>
+                    <div><Button size="sm" onClick={() => setState((st) => addField(st, index))}>Add another detail</Button></div>
                   </fieldset>
                 ))}
-                <div><Button onClick={() => setState((st) => addThing(st))}><Plus aria-hidden />Add a kind of record</Button></div>
+                <div><Button onClick={() => setState((st) => addThing(st))}><Plus aria-hidden />Add another thing this product tracks</Button></div>
                 {draftError && !draftField ? <Alert tone="danger">{draftError}</Alert> : null}
                 <div className="px-row">
                   <Button onClick={() => setState((s) => goTo(s, "details"))}>Back</Button>
@@ -257,7 +262,7 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
           {state.step === "review" && (
             <Panel>
               <div className="px-stack">
-                <Alert>This is what Pixel understood. Nothing runs on it until you accept it.</Alert>
+                <Alert>This is what Pixel understood. Nothing is live until you accept it.</Alert>
                 <dl className="px-stack" style={{ gap: 8 }}>
                   <div><dt className="px-label">It keeps</dt><dd style={{ margin: 0 }} className="px-row">
                     {(state.understanding?.things ?? []).map((thing) => <Badge key={thing}>{thing}</Badge>)}
@@ -272,13 +277,13 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
                   </dd></div>
                 </dl>
                 <details>
-                  <summary className="px-small">Read the definition Pixel wrote</summary>
+                  <summary className="px-small">Advanced: see the generated product contract</summary>
                   <pre className="px-small" style={{ maxHeight: 280, overflow: "auto", whiteSpace: "pre-wrap" }}>
                     {state.understanding?.definition}
                   </pre>
                 </details>
                 <div className="px-row">
-                  <Button onClick={() => setState((s) => goTo(s, "sources"))}>Change the description</Button>
+                  <Button onClick={() => setState((s) => goTo(s, "sources"))}>Change what you described</Button>
                   <Button variant="primary" onClick={() => setState((s) => c.live
                     ? approveGeneratedUnderstanding(s) : acceptUnderstanding(s))}>
                     {c.live ? "Accept and continue" : "Accept and configure actions"}
@@ -336,7 +341,7 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
           {state.step === "ready" && (
             <Panel>
               <div className="px-stack">
-                <p>Publishing creates immutable release v1 of <strong>{state.name}</strong>. It is not deployed anywhere until you deploy it to an environment.</p>
+                <p>Launching creates version 1 of <strong>{state.name}</strong> for your organization. You can open it right away and keep improving it later.</p>
                 <div className="px-row">
                   <Button onClick={() => setState((s) => goTo(s, "actions"))}>Back</Button>
                   <Button variant="primary" loading={publishing} onClick={async () => {
@@ -369,7 +374,7 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
                     } finally {
                       setPublishing(false);
                     }
-                  }}>Publish v1</Button>
+                  }}>Launch product</Button>
                 </div>
               </div>
             </Panel>
@@ -378,4 +383,23 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
       </div>
     </>
   );
+}
+
+function friendlyDraftError(caught: unknown): string {
+  if (caught instanceof FieldError) {
+    if (caught.field === "product_name") return "Use a plain product name, like Customer Portal.";
+    if (caught.field === "definition_id") return "Use a simple short link with letters, numbers and hyphens.";
+  }
+  const message = caught instanceof Error ? caught.message : "";
+  const lower = message.toLowerCase();
+  if (lower.includes("enum") || lower.includes("choices")) {
+    return "Choice fields need choices such as New, Active, Closed.";
+  }
+  if (lower.includes("duplicate") || lower.includes("twice")) {
+    return "Use a different name for each thing and each detail.";
+  }
+  if (lower.includes("validation error") || lower.includes("pydantic") || lower.includes("definition is invalid")) {
+    return "Pixel could not understand one of the names. Use simple labels like Customer, Customers, Status or Due date.";
+  }
+  return message || "Pixel could not write that product.";
 }

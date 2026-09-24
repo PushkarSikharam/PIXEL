@@ -553,8 +553,9 @@ class ConversationEngine:
         if conversational is None and self._asks_about(text, self._definition.identity.assistant_name):
             conversational = ConversationalTurn(Conversational.IDENTITY, "identity")
         if conversational is None and self._asks_about(text, self._definition.identity.product_name):
-            # "What is <product>?" is answered with what this caller can actually do in it.
-            conversational = ConversationalTurn(Conversational.CAPABILITIES, "capabilities")
+            # "What is <product>?" asks for approved product knowledge, not a list of routes.
+            # Let the knowledge stage answer it, or decline honestly if no approved text exists.
+            return None
         if conversational is not None:
             composer = ResponseComposer(self._definition, visitor_name=conversational.visitor_name)
             if conversational.kind == Conversational.CAPABILITIES:

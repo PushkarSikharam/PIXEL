@@ -22,6 +22,18 @@ export function viewForRoute(pathname: string | null | undefined): string | null
   return found?.[0] ?? null;
 }
 
+/**
+ * Where one record of Pixel's own product lives.
+ *
+ * Pixel keeps products and people, and only a product has a screen of its own. Anything else is
+ * shown on the list it belongs to, so this says so rather than inventing an address that would
+ * answer with nothing.
+ */
+export function consoleRecordRoute(entity: string, recordId: string): string | null {
+  if (entity !== "product" || !recordId) return null;
+  return `/console/products/${encodeURIComponent(recordId)}`;
+}
+
 /** The places a definition declares that this client could not actually open. */
 export function unroutableViews(views: readonly string[]): string[] {
   return views.filter((view) => !(view in CONSOLE_ROUTES));

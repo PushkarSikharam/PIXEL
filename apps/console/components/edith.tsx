@@ -20,7 +20,7 @@ import {
   type ApiActionShape, type ApiProductShape, type ApiSession, type ApiTurnResponse,
 } from "@pixel-console/lib/pixel-api";
 import { speechInputConstructor, type SpeechInput } from "@pixel-console/lib/speech-input";
-import { CONSOLE_ROUTES } from "@pixel-console/lib/console-routes";
+import { CONSOLE_ROUTES, consoleRecordRoute } from "@pixel-console/lib/console-routes";
 
 /**
  * A short route through whichever product is answering, drawn from what that product declares.
@@ -174,10 +174,17 @@ export function EdithPanel({
         // A place in the application is somewhere to go; anything else is for the screen showing
         // this product. An action this product does not declare came from Pixel itself, which
         // happens when somebody asks to leave the product they are in.
-        const payload = response.validated_action.payload as { view?: string };
+        const payload = response.validated_action.payload as { view?: string; record_id?: string };
         const view = action?.capability === "NAVIGATE_VIEW" ? action.view : payload.view;
         const route = typeof view === "string" ? CONSOLE_ROUTES[view] : undefined;
-        if (route && (!action || action.capability === "NAVIGATE_VIEW")) router.push(route);
+        // One of Pixel's own records is a place too: asked for a product by name, Pixel opens
+        // that product rather than the list it appears in. Inside a product the same reply is
+        // about that product's own records, which belong to the screen showing them.
+        const record = scope === "platform" && action?.capability === "OPEN_RECORD" && action.entity
+          ? consoleRecordRoute(action.entity, String(payload.record_id ?? ""))
+          : null;
+        if (record) router.push(record);
+        else if (route && (!action || action.capability === "NAVIGATE_VIEW")) router.push(route);
         else if (action) onUiAction?.(action, response.validated_action.payload);
       }
       const receipt = await maybeExecute(session, productId, response, actions);

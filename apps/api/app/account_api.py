@@ -41,6 +41,8 @@ router = APIRouter(prefix="/api/account", tags=["account"])
 # bounds a stolen cookie, not a short window: signing out deletes the session row, and every
 # request checks that row exists.
 SESSION_COOKIE_MAX_AGE = 7 * 86400
+# How long to wait for a mail server to accept a code.
+SMTP_TIMEOUT_SECONDS = 20
 
 
 class EmailRequest(BaseModel):
@@ -81,9 +83,26 @@ def send_code(email: str, code: str, settings: tuple[str, ...]) -> None:
     message["From"], message["To"], message["Subject"] = sender, email, "Your Pixel sign-in code"
     message.set_content(f"Your Pixel code is {code}. It expires in 10 minutes. "
                         "Do not share this code. If you did not request it, ignore this email.")
-    with smtplib.SMTP_SSL(host, 465, timeout=10, context=ssl.create_default_context()) as smtp:
-        smtp.login(username, password)
-        smtp.send_message(message)
+    try:
+        # Long enough for a provider that authenticates slowly on a cold connection. Ten seconds
+        # was enough for an API call and is tight for a full SMTP handshake and login.
+        with smtplib.SMTP_SSL(host, 465, timeout=SMTP_TIMEOUT_SECONDS,
+                              context=ssl.create_default_context()) as smtp:
+            smtp.login(username, password)
+            smtp.send_message(message)
+    except smtplib.SMTPException as refused:
+        # What the mail server actually said, in the operator log only - never the code, never
+        # the password. A refusal here is nearly always a configuration somebody has to change:
+        # a sender that is not the account that authenticated, a password that is not an
+        # application password, a provider that will not send to this recipient. Without this
+        # the only evidence is "could not be delivered", which says none of that.
+        logger.warning("email_delivery_refused",
+                       extra={"host": host, "reason": f"{type(refused).__name__}: {refused}"[:400]})
+        raise
+    except OSError as unreachable:
+        logger.warning("email_delivery_unreachable",
+                       extra={"host": host, "reason": str(unreachable)[:400]})
+        raise
 
 
 def send_code_with_resend_api(email: str, code: str, api_key: str, sender: str) -> None:
@@ -108,8 +127,23 @@ def send_code_with_resend_api(email: str, code: str, api_key: str, sender: str) 
         with url_request.urlopen(request, timeout=10) as response:
             if response.status >= 400:
                 raise OSError("Resend rejected the email")
-    except (url_error.HTTPError, url_error.URLError, TimeoutError) as exc:
-        raise OSError("Resend delivery failed") from exc
+    except url_error.HTTPError as refused:
+        # What the provider actually said, in the operator log only. A refusal here is usually a
+        # configuration somebody has to change rather than anything the person signing in did -
+        # a sending domain that was never verified, for instance, which quietly limits delivery
+        # to the account owner's own address and makes every other sign-in look broken. Without
+        # this the only evidence was "could not be delivered", which reads like a passing fault
+        # and is not one.
+        detail = ""
+        try:
+            detail = refused.read().decode("utf-8", "replace")[:400]
+        except Exception:  # noqa: BLE001 - the reason for the reason is not worth failing over
+            detail = "(no body)"
+        logger.warning("email_delivery_refused", extra={"status": refused.code, "detail": detail})
+        raise OSError("Resend delivery failed") from refused
+    except (url_error.URLError, TimeoutError) as unreachable:
+        logger.warning("email_delivery_unreachable", extra={"reason": str(unreachable)})
+        raise OSError("Resend delivery failed") from unreachable
 
 
 @router.post("/email-code")
@@ -156,7 +190,11 @@ def request_code(body: EmailRequest, response: Response) -> dict:
             connection.execute(
                 "update email_login_limits set attempts = max(attempts - 1, 0) where bucket = ?",
                 (_digest(settings[0], email),))
-        raise HTTPException(503, "Email could not be delivered. Please try again later.") from None
+        raise HTTPException(
+            503,
+            "We could not send a code to that address. Check the address is right - and if it is, "
+            "this Pixel cannot send email to it yet, so tell whoever runs it.",
+        ) from None
     response.headers["Cache-Control"] = "no-store"
     return {"challenge_id": challenge_id, "expires_in": 600}
 

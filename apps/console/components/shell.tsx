@@ -60,7 +60,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const [pendingHref, setPendingHref] = useState<string | null>(null);
   const organization = c.live ? { name: c.account?.organization_name ?? "Your organization" } : ORGANIZATIONS.find((o) => o.id === c.organizationId);
   const product = c.visibleProducts.find((p) => p.id === c.productId);
-  const hasAssistant = Boolean(c.live && c.account && (c.productSurface || c.account.console_product_id));
+  const hasAssistant = Boolean(c.live && c.account);
   const [logoutError, setLogoutError] = useState<string | null>(null);
 
   function requestProduct(id: string | null) {

@@ -948,3 +948,37 @@ code, .px-mono { font-family: var(--px-mono); font-size: var(--px-text-sm); }
     margin: 0;
   }
 }
+
+/* ---- Edith unavailable placeholder ---- */
+.px-edith-unavailable {
+  justify-content: center;
+  align-items: center;
+  min-height: 280px;
+}
+
+.px-edith-unavailable-body {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 12px;
+  padding: 20px 16px;
+}
+
+.px-edith-unavailable-body svg {
+  color: #8b8d94;
+}
+
+.px-edith-unavailable-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #f2f2f4;
+}
+
+.px-edith-unavailable-detail {
+  margin: 0;
+  font-size: 13px;
+  color: #8b8d94;
+  line-height: 1.5;
+  max-width: 280px;
+}

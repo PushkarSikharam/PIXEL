@@ -22,7 +22,7 @@ export const STEPS: Step[] = ["details", "sources", "analyzing", "review", "acti
  * disagrees with the panel beside it reads as a bug even when nothing is broken.
  */
 export const STEP_LABELS: Record<Step, string> = {
-  details: "Start", sources: "Describe it", analyzing: "Pixel is writing it", review: "Review",
+  details: "Start", sources: "What it tracks", analyzing: "Pixel is writing it", review: "Review",
   actions: "Choose what it can do", validation: "Check it", ready: "Launch", published: "Live",
 };
 

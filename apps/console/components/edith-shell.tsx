@@ -12,12 +12,39 @@
  * pending question or execution key from the product just left can reach the new one.
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useConsole } from "./console-context";
 import { EdithPanel } from "./edith";
 import { productShape, storedSession, type ApiProductShape, type ApiSession } from "@pixel-console/lib/pixel-api";
 import { viewForRoute } from "@pixel-console/lib/console-routes";
+
+/** Visible placeholder when the assistant cannot reach the backend. */
+function EdithUnavailable({ onRetry, loading }: { onRetry: () => void; loading: boolean }) {
+  return (
+    <div className="px-edith px-edith-unavailable" role="status">
+      <div className="px-edith-topbar">
+        <span className="px-edith-brand">
+          <span className="px-edith-mark" aria-hidden>P</span>
+          Pixel
+        </span>
+      </div>
+      <div className="px-edith-unavailable-body">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 8v4M12 16h.01" />
+        </svg>
+        <p className="px-edith-unavailable-title">Edith is unavailable</p>
+        <p className="px-edith-unavailable-detail">
+          The assistant could not connect to the Pixel service. Chat, voice, and actions are temporarily disabled.
+        </p>
+        <button type="button" className="px-edith-chip" onClick={onRetry} disabled={loading}>
+          {loading ? "Connecting\u2026" : "Retry"}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function Edith() {
   const c = useConsole();
@@ -26,17 +53,29 @@ export function Edith() {
   const consoleProductId = c.account?.console_product_id ?? null;
   const [session, setSession] = useState<ApiSession | null>(null);
   const [consoleShape, setConsoleShape] = useState<ApiProductShape | null>(null);
+  const [shapeFailed, setShapeFailed] = useState(false);
+  const [retrying, setRetrying] = useState(false);
 
   useEffect(() => { setSession(storedSession()); }, [c.account]);
 
+  const loadConsoleShape = useCallback(() => {
+    if (!consoleProductId || !session) return;
+    setShapeFailed(false);
+    setRetrying(true);
+    productShape(session, consoleProductId)
+      .then((shape) => { setConsoleShape(shape); setShapeFailed(false); })
+      .catch(() => { setConsoleShape(null); setShapeFailed(true); })
+      .finally(() => setRetrying(false));
+  }, [consoleProductId, session]);
+
   useEffect(() => {
     setConsoleShape(null);
+    setShapeFailed(false);
     if (!consoleProductId || !session) return;
     let cancelled = false;
     productShape(session, consoleProductId)
-      .then((shape) => { if (!cancelled) setConsoleShape(shape); })
-      // Without it she simply is not there, which is better than a panel that answers nothing.
-      .catch(() => { if (!cancelled) setConsoleShape(null); });
+      .then((shape) => { if (!cancelled) { setConsoleShape(shape); setShapeFailed(false); } })
+      .catch(() => { if (!cancelled) { setConsoleShape(null); setShapeFailed(true); } });
     return () => { cancelled = true; };
   }, [consoleProductId, session]);
 
@@ -49,7 +88,13 @@ export function Edith() {
         onUiAction={surface.showAction} />
     );
   }
-  if (!consoleProductId || !consoleShape) return null;
+
+  // Show a visible placeholder when the assistant can't load, instead of blank space.
+  if (!consoleProductId || shapeFailed) {
+    return <EdithUnavailable onRetry={loadConsoleShape} loading={retrying} />;
+  }
+
+  if (!consoleShape) return null;
   return <EdithPanel key="pixel" session={session} shape={consoleShape}
     productId={consoleProductId} currentPage={viewForRoute(pathname)} scope="platform" />;
 }

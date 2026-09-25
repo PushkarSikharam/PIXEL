@@ -125,7 +125,7 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
 
   return (
     <>
-      <PageHead title="Add a product" description="Describe your product in plain language. Pixel turns it into screens, records and an assistant you can review before launch."
+      <PageHead title="Add a product" description="Tell Pixel what your product keeps track of. It creates screens, records and an assistant you can review before launch."
         actions={onAdvanced ? <Button onClick={onAdvanced}>Advanced import</Button> : undefined} />
       <div className="px-onboarding">
         <nav aria-label="Onboarding steps">
@@ -179,51 +179,82 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
           {state.step === "sources" && (
             <Panel>
               <div className="px-stack">
+                {state.things.length === 0 || (!state.things[0].label && !state.things[0].plural) ? (
+                  <div className="px-stack" style={{ gap: 12 }}>
+                    <p className="px-muted">Start from a template, or describe your own from scratch.</p>
+                    <div className="px-row" style={{ gap: 8, flexWrap: "wrap" }}>
+                      {[
+                        { label: "CRM", things: [{ singular: "Deal", plural: "Deals", people: false }, { singular: "Contact", plural: "Contacts", people: true }] },
+                        { label: "Project Tracker", things: [{ singular: "Task", plural: "Tasks", people: false }, { singular: "Member", plural: "Members", people: true }] },
+                        { label: "Support Desk", things: [{ singular: "Ticket", plural: "Tickets", people: false }, { singular: "Agent", plural: "Agents", people: true }] },
+                        { label: "Inventory", things: [{ singular: "Item", plural: "Items", people: false }, { singular: "Supplier", plural: "Suppliers", people: false }] },
+                      ].map((template) => (
+                        <Button key={template.label} size="sm" onClick={() => {
+                          setState((st) => {
+                            let s = st;
+                            // Clear default empty things
+                            while (s.things.length > 0) s = removeThing(s, 0);
+                            for (const t of template.things) {
+                              s = addThing(s);
+                              const idx = s.things.length - 1;
+                              s = updateThing(s, idx, { label: t.singular, plural: t.plural, people: t.people,
+                                id: t.singular.toLowerCase().replace(/[^a-z0-9]+/g, "_") });
+                            }
+                            return s;
+                          });
+                        }}>{template.label}</Button>
+                      ))}
+                    </div>
+                    <div style={{ borderTop: "1px solid var(--px-border)", paddingTop: 12 }}>
+                      <p className="px-muted px-small">Or start from scratch:</p>
+                    </div>
+                  </div>
+                ) : null}
                 <p className="px-muted">
-                  Add the main things people work with in this product. Pixel turns each one into a
-                  screen, and Edith can open it, count it and change it when the product allows that.
+                  What does this product keep track of? Add each type of record below.
+                  Pixel creates a screen for each one, and Edith can navigate, count, and manage them.
                 </p>
                 {state.things.map((thing, index) => (
                   <fieldset key={index} className="px-stack"
                     style={{ border: "1px solid var(--px-border)", borderRadius: 8, padding: 12, gap: 10 }}>
-                    <legend className="px-label">{thing.label.trim() || `Record ${index + 1}`}</legend>
+                    <legend className="px-label">{thing.label.trim() || `Record type ${index + 1}`}</legend>
                     <div className="px-row" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
-                      <Field label="One item is called" hint="For example: Deal">{(f) => (
+                      <Field label="Singular name" hint="e.g. Deal, Ticket, Contact">{(f) => (
                         <Input id={f.id} describedBy={f.describedBy} value={thing.label}
                           onChange={(e) => setState((st) => updateThing(st, index, {
                             label: e.target.value,
                             id: thing.id || e.target.value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, ""),
                           }))} />
                       )}</Field>
-                      <Field label="Many are called" hint="For example: Deals">{(f) => (
+                      <Field label="Plural name" hint="e.g. Deals, Tickets, Contacts">{(f) => (
                         <Input id={f.id} describedBy={f.describedBy} value={thing.plural}
                           onChange={(e) => setState((st) => updateThing(st, index, { plural: e.target.value }))} />
                       )}</Field>
                       <label className="px-row px-small">
                         <input type="checkbox" checked={thing.people}
                           onChange={(e) => setState((st) => updateThing(st, index, { people: e.target.checked }))} />
-                        People who do the work
+                        This represents people
                       </label>
-                      <Button size="sm" variant="ghost" aria-label={`Remove ${thing.label || "record"}`}
+                      <Button size="sm" variant="ghost" aria-label={`Remove ${thing.label || "record type"}`}
                         onClick={() => setState((st) => removeThing(st, index))}><Trash2 aria-hidden /></Button>
                     </div>
                     {thing.fields.map((field, fieldIndex) => (
                       <div key={fieldIndex} className="px-row" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
-                        <Field label="Detail to store">{(f) => (
-                          <Input id={f.id} describedBy={f.describedBy} value={field.name} placeholder="title"
+                        <Field label="Field name" hint="e.g. Status, Priority, Due date">{(f) => (
+                          <Input id={f.id} describedBy={f.describedBy} value={field.name} placeholder="e.g. Status"
                             onChange={(e) => setState((st) => updateField(st, index, fieldIndex, { name: e.target.value }))} />
                         )}</Field>
-                        <Field label="Answer type">{(f) => (
+                        <Field label="Field type">{(f) => (
                           <select id={f.id} className="px-select" value={field.type}
                             onChange={(e) => setState((st) => updateField(st, index, fieldIndex, { type: e.target.value as typeof field.type }))}>
-                            <option value="text">Text</option><option value="enum">One of a few choices</option>
-                            <option value="integer">A whole number</option><option value="date">A date</option>
-                            <option value="boolean">Yes or no</option>
+                            <option value="text">Text</option><option value="enum">Multiple choice</option>
+                            <option value="integer">Number</option><option value="date">Date</option>
+                            <option value="boolean">Yes / No</option>
                           </select>
                         )}</Field>
                         {field.type === "enum" ? (
-                          <Field label="Choices" hint="Separated by commas">{(f) => (
-                            <Input id={f.id} describedBy={f.describedBy} value={field.values} placeholder="New, Won, Lost"
+                          <Field label="Options" hint="Comma-separated, e.g. New, Active, Closed">{(f) => (
+                            <Input id={f.id} describedBy={f.describedBy} value={field.values} placeholder="New, Active, Closed"
                               onChange={(e) => setState((st) => updateField(st, index, fieldIndex, { values: e.target.value }))} />
                           )}</Field>
                         ) : null}
@@ -237,10 +268,10 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
                           onClick={() => setState((st) => removeField(st, index, fieldIndex))}><Trash2 aria-hidden /></Button>
                       </div>
                     ))}
-                    <div><Button size="sm" onClick={() => setState((st) => addField(st, index))}>Add another detail</Button></div>
+                    <div><Button size="sm" onClick={() => setState((st) => addField(st, index))}>Add a field</Button></div>
                   </fieldset>
                 ))}
-                <div><Button onClick={() => setState((st) => addThing(st))}><Plus aria-hidden />Add another thing this product tracks</Button></div>
+                <div><Button onClick={() => setState((st) => addThing(st))}><Plus aria-hidden />Add another record type</Button></div>
                 {draftError && !draftField ? <Alert tone="danger">{draftError}</Alert> : null}
                 <div className="px-row">
                   <Button onClick={() => setState((s) => goTo(s, "details"))}>Back</Button>

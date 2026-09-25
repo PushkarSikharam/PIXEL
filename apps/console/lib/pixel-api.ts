@@ -39,6 +39,8 @@ export interface ApiEntityShape {
   title_field: string;
   summary_fields: string[];
   fields: ApiFieldShape[];
+  /** Whether these records are the product's people (agents, salespeople, teammates). */
+  is_people?: boolean;
 }
 
 export interface ApiViewShape {

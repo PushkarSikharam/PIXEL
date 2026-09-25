@@ -383,6 +383,17 @@ function thing(label: string, plural: string, fields: FieldSpec[], people = fals
 
 export const PRODUCT_TEMPLATES: ProductTemplate[] = [
   {
+    id: "team-planning", name: "Team planning", summary: "Tickets, projects and cycles for a team, like the guided demo.",
+    things: [
+      thing("Ticket", "Tickets", [["Title", "text", true], ["Priority", "enum", true, "Low, Medium, High, Urgent"],
+        ["Status", "enum", true, "Backlog, Todo, In progress, Done"], ["Due date", "date"]]),
+      thing("Project", "Projects", [["Name", "text", true], ["Status", "enum", true, "Planned, Active, Complete"],
+        ["Target date", "date"]]),
+      thing("Cycle", "Cycles", [["Name", "text", true], ["Starts on", "date"], ["Ends on", "date"]]),
+      thing("Team member", "Team members", [["Name", "text", true], ["Role", "text"]], true),
+    ],
+  },
+  {
     id: "sales-crm", name: "Sales CRM", summary: "Deals, the companies behind them and who owns each one.",
     things: [
       thing("Deal", "Deals", [["Title", "text", true], ["Stage", "enum", true, "New, Qualified, Proposal, Won, Lost"],

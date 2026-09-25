@@ -1046,3 +1046,36 @@ code, .px-mono { font-family: var(--px-mono); font-size: var(--px-text-sm); }
 /* A heading focused by the page, so a screen reader announces the new step, is not something a
    person can type into; outlined, it looked like a text box. Keyboard focus rings are unchanged. */
 h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus { outline: none; }
+
+/* Records and people as cards, the way the guided demo shows tickets and its team. */
+.px-record-cards, .px-people-cards { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--px-space-3); }
+.px-record-card {
+  display: grid; gap: 4px; padding: var(--px-space-4);
+  border: 1px solid var(--px-border); border-radius: 8px; background: var(--px-bg);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.px-record-card:hover { border-color: var(--px-border-strong); box-shadow: var(--px-shadow-card); }
+.px-record-card-title { font-size: var(--px-text-lg); font-weight: 650; overflow-wrap: anywhere; }
+.px-record-card-detail { color: var(--px-text-2); overflow-wrap: anywhere; }
+.px-record-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--px-space-2); margin-top: var(--px-space-2); }
+.px-state-badge {
+  display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px;
+  font-size: var(--px-text-xs); font-weight: 650; white-space: nowrap;
+  background: var(--px-surface-2); color: var(--px-text-2); border: 1px solid var(--px-border);
+}
+.px-state-badge[data-tone="ok"] { background: var(--px-ok-soft); color: var(--px-ok); border-color: transparent; }
+.px-state-badge[data-tone="warn"] { background: var(--px-warn-soft); color: var(--px-warn); border-color: transparent; }
+.px-state-badge[data-tone="danger"] { background: var(--px-danger-soft); color: var(--px-danger); border-color: transparent; }
+.px-state-badge[data-tone="info"] { background: var(--px-accent-soft); color: var(--px-accent); border-color: transparent; }
+.px-people-cards { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.px-person-card {
+  display: flex; align-items: center; gap: var(--px-space-3); padding: var(--px-space-3) var(--px-space-4);
+  border: 1px solid var(--px-border); border-radius: 8px; background: var(--px-bg);
+}
+.px-avatar {
+  display: grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: 8px;
+  background: var(--px-accent-soft); color: var(--px-accent); font-size: var(--px-text-sm); font-weight: 750;
+}
+.px-person-text { display: grid; min-width: 0; flex: 1; }
+.px-person-text strong { overflow-wrap: anywhere; }
+.px-person-text span { color: var(--px-text-2); font-size: var(--px-text-sm); overflow-wrap: anywhere; }

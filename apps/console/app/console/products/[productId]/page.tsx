@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Pencil, Plus, RotateCcw } from "lucide-react";
+import { RecordCards } from "@pixel-console/components/record-cards";
 import { useConsole } from "@pixel-console/components/console-context";
 import { ProductKnowledge } from "@pixel-console/components/product-knowledge";
 import { RecordFormDialog } from "@pixel-console/components/record-form";
@@ -175,9 +176,10 @@ function LiveProductWorkspace({ productId }: { productId: string }) {
                       <Pencil aria-hidden />Edit</Button>
                   ) : null}
                 </div>
-              </section> : <GenericRecordTable shape={shape} records={records} entity={currentEntity.name} rows={filteredRecords}
+              </section> : <RecordCards shape={shape} records={records} entity={currentEntity.name} rows={filteredRecords}
                 columns={currentView.columns.length ? currentView.columns : currentEntity.summary_fields}
                 onAdd={() => setWriting({ entity: currentEntity!.name, record: null })}
+                onOpen={(row) => setRecordSelection({ entity: currentEntity!.name, id: row.id })}
                 onEdit={(row) => setWriting({ entity: currentEntity!.name, record: row })} />
               }
             </Panel>
@@ -310,55 +312,6 @@ function ProductSummary({ shape, records, onOpen }: {
     </div>
   );
 }
-
-function GenericRecordTable({ shape, records, entity, rows, columns, onAdd, onEdit }: {
-  shape: ApiProductShape;
-  records: ApiRecords;
-  entity: string;
-  rows: ApiRecord[];
-  columns: string[];
-  onAdd?: () => void;
-  onEdit?: (row: ApiRecord) => void;
-}) {
-  const entityShape = shape.entities.find((candidate) => candidate.name === entity);
-  const fields = entityShape?.fields ?? [];
-  const visibleColumns = ["id", ...(columns.length ? columns : fields.filter((field) => field.display).map((field) => field.name))];
-  if (rows.length === 0) {
-    // An empty screen that only says it is empty is a dead end. Both ways of filling it are
-    // offered, because somebody meeting this product for the first time may want either.
-    return (
-      <EmptyState title={`No ${entityShape?.plural.toLowerCase() ?? "records"} yet`}
-        action={onAdd ? <Button variant="primary" onClick={onAdd}>
-          <Plus aria-hidden />Add the first {entityShape?.label.toLowerCase() ?? "record"}</Button> : undefined}>
-        Add one here, or ask {shape.assistant_name} to create it for you.
-      </EmptyState>
-    );
-  }
-  return (
-    <div className="px-table-wrap">
-      <table className="px-table">
-        <thead><tr>{visibleColumns.map((column) => <th key={column} scope="col">{labelFor(fields, column)}</th>)}
-          {onEdit ? <th scope="col"><span className="px-sr-only">Actions</span></th> : null}</tr></thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.id}>
-              {visibleColumns.map((column) => (
-                <td key={column}>{renderValue(named(shape, records, fields, column, row[column]))}</td>
-              ))}
-              {onEdit ? <td style={{ textAlign: "right" }}>
-                {Number(row.revision ?? 0) >= 1 ? (
-                  <Button size="sm" aria-label={`Edit ${String(row.title || row.id)}`}
-                    onClick={() => onEdit(row)}><Pencil aria-hidden />Edit</Button>
-                ) : null}
-              </td> : null}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 
 function labelFor(fields: ApiProductShape["entities"][number]["fields"], column: string): string {
   if (column === "id") return "ID";

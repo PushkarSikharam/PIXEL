@@ -747,6 +747,8 @@ class EntityShape(BaseModel):
     title_field: str
     summary_fields: list[str] = []
     fields: list[FieldShape] = []
+    # Whether these records are the product's people, so a screen can show them as people.
+    is_people: bool = False
 
 
 class ControlShape(BaseModel):
@@ -825,6 +827,7 @@ def product_shape(product_id: str, user: AuthUser = Depends(require_auth)) -> Pr
             EntityShape(
                 name=name, label=entity.label, plural=entity.plural,
                 title_field=entity.title_field, summary_fields=list(entity.summary_fields),
+                is_people=bool(definition.people and definition.people.entity == name),
                 fields=[
                     FieldShape(
                         name=field_name, label=spec.label or field_name.replace("_", " "),

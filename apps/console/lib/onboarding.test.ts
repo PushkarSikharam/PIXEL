@@ -139,7 +139,7 @@ describe("product templates", () => {
   it("editing a template's records never changes the template itself", () => {
     const state = updateThing(applyTemplate(goTo(started(), "sources"), "sales-crm"), 0, { label: "Opportunity" });
     expect(state.things[0].label).toBe("Opportunity");
-    expect(PRODUCT_TEMPLATES[0].things[0].label).toBe("Deal");
+    expect(PRODUCT_TEMPLATES.find((template) => template.id === "sales-crm")!.things[0].label).toBe("Deal");
   });
 
   it("an unknown template changes nothing", () => {

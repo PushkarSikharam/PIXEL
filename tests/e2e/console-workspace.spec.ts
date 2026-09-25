@@ -106,7 +106,7 @@ for (const mobile of [false, true]) {
     await expect(assistant.getByText("Only alpha content.")).toBeVisible();
     if (!mobile) {
       const chatBox = await assistant.boundingBox();
-      const tableBox = await page.getByRole("table").boundingBox();
+      const tableBox = await page.getByRole("list", { name: "Entries" }).boundingBox();
       expect(chatBox!.x + chatBox!.width).toBeLessThanOrEqual(tableBox!.x);
     }
     await page.screenshot({ path: `test-results/product-assistant-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });

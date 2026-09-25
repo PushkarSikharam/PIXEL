@@ -187,7 +187,7 @@ function LivePeople() {
                 <span className="px-person-text">
                   <strong>{team.name}</strong>
                   <span>{team.people === 1 ? "1 person" : `${team.people} people`}
-                    {" · "}{team.products.length ? `runs ${team.products.map(productName).join(", ")}` : "no products yet"}</span>
+                    {" / "}{team.products.length ? `runs ${team.products.map(productName).join(", ")}` : "no products yet"}</span>
                 </span>
               </li>
             ))}

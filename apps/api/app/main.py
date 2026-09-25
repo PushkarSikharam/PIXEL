@@ -1068,6 +1068,7 @@ def _keyed_record(execution_key: str, session_id: str, user: AuthUser, product_i
             record_id=result.record_id,
             changes=_committed_values(change_set.get("changes") or change_set.get("fields"),
                                       result.record),
+            title_field=definition.entities[entity].title_field if entity in definition.entities else "title",
         ),
         record=result.record,
     )

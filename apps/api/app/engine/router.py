@@ -37,6 +37,7 @@ from app.engine.memory import ConversationMemory, PendingClarification, PendingC
 from app.engine.mentions import (
     NameMention,
     enum_values,
+    title_and_details,
     name_mentions,
     person_search_words,
     record_ids,
@@ -747,9 +748,16 @@ class IntentRouter:
             people_fields = self._people_fields(spec)
             if person is not None and people_fields:
                 fields[people_fields[0]] = person.id
-            title = title_text(text.original)
+            if entity is not None:
+                title, named_values = title_and_details(text.original, entity, list(spec.fields))
+            else:
+                title, named_values = title_text(text.original), {}
             if entity is not None and title and entity.title_field in spec.fields:
                 fields[entity.title_field] = title
+            for name, values in named_values.items():
+                # A choice named once is taken; one named twice is left for the form to ask.
+                if len(values) == 1 and name not in fields:
+                    fields[name] = values[0]
             if not fields:
                 return unmet("missing", slot="person" if people_fields else "choice")
             params["fields"] = fields

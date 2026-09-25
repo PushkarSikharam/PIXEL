@@ -213,7 +213,7 @@
     "turn": 0,
     "field": "reply",
     "recorded": "I created PIX-143 and assigned it to Noah Patel. I'll open the new demo ticket.",
-    "current": "Created PIX-143: assignee to Noah Patel, priority to Medium, project to Issue Triage, status to Todo, title to Login errors.",
+    "current": "Created PIX-143: “Login errors” with assignee Noah Patel, priority Medium, project Issue Triage and status Todo.",
     "kind": "behaviour",
     "reason": "5b/5c route assistant creates through execution keys, so the visible reply is now the committed backend receipt with the server-created record."
   },

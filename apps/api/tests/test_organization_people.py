@@ -86,3 +86,96 @@ class OrganizationPeopleTest(AddedProductFixture):
         self.assertEqual(self.directory.organization(TENANT).name, "Northwind Labs")
         self.assertEqual(self.client.patch(f"/api/organizations/{TENANT}", headers=self.headers,
                                            json={"name": "   "}).status_code, 422)
+
+
+class OrganizationTeamsTest(AddedProductFixture):
+    """An administrator makes teams, puts people in them and chooses which team runs a product."""
+
+    def setUp(self):
+        super().setUp()
+        self.add_product()
+
+    def as_user(self, user_id: str) -> dict:
+        return {"Authorization": f"Bearer {create_token(user_id, TENANT)}"}
+
+    def new_team(self, name: str, headers: dict | None = None):
+        return self.client.post(f"/api/organizations/{TENANT}/teams", headers=headers or self.headers,
+                                json={"name": name})
+
+    def teams(self) -> dict[str, dict]:
+        listed = self.client.get(f"/api/organizations/{TENANT}/teams", headers=self.headers)
+        self.assertEqual(listed.status_code, 200, listed.text)
+        return {team["name"]: team for team in listed.json()["teams"]}
+
+    def records(self, user_id: str) -> int:
+        return self.client.get(f"/api/products/{PRODUCT}/records?scope=primary",
+                               headers=self.as_user(user_id)).status_code
+
+    def test_a_team_is_made_listed_and_named_only_once(self):
+        made = self.new_team("  Mobile   Apps ")
+        self.assertEqual(made.status_code, 201, made.text)
+        self.assertEqual((made.json()["team_id"], made.json()["name"]), ("mobile-apps", "Mobile Apps"))
+        self.assertEqual(self.teams()["Mobile Apps"]["people"], 0)
+        self.assertEqual(self.new_team("mobile apps").status_code, 409)
+        self.assertEqual(self.new_team("   ").status_code, 422)
+
+    def test_the_team_list_says_who_works_there_and_what_it_runs(self):
+        self.client.post(f"/api/organizations/{TENANT}/people", headers=self.headers,
+                         json={"email": "a@example.test"})
+        home = [team for team in self.teams().values() if PRODUCT in team["products"]]
+        self.assertEqual(len(home), 1)
+        self.assertGreaterEqual(home[0]["people"], 1)
+
+    def test_somebody_can_be_added_straight_into_a_team(self):
+        team = self.new_team("Design").json()["team_id"]
+        added = self.client.post(f"/api/organizations/{TENANT}/people", headers=self.headers,
+                                 json={"email": "d@example.test", "team_id": team})
+        self.assertEqual(added.status_code, 201, added.text)
+        self.assertEqual(self.directory.membership(TENANT, added.json()["user_id"]).team_id, team)
+        missing = self.client.post(f"/api/organizations/{TENANT}/people", headers=self.headers,
+                                   json={"email": "e@example.test", "team_id": "no-such-team"})
+        self.assertEqual(missing.status_code, 404)
+
+    def test_moving_a_person_changes_which_products_they_can_open(self):
+        added = self.client.post(f"/api/organizations/{TENANT}/people", headers=self.headers,
+                                 json={"email": "m@example.test"}).json()
+        self.assertEqual(self.records(added["user_id"]), 200)
+        design = self.new_team("Design").json()["team_id"]
+        moved = self.client.patch(f"/api/organizations/{TENANT}/people/{added['user_id']}",
+                                  headers=self.headers, json={"role": "team_member", "team_id": design})
+        self.assertEqual(moved.status_code, 200, moved.text)
+        self.assertNotEqual(self.records(added["user_id"]), 200)
+        # Moving the product to their team brings it back to them.
+        product = self.client.put(f"/api/organizations/{TENANT}/products/{PRODUCT}/team",
+                                  headers=self.headers, json={"team_id": design})
+        self.assertEqual(product.status_code, 200, product.text)
+        self.assertEqual(self.records(added["user_id"]), 200)
+        self.assertEqual(self.teams()["Design"]["products"], [PRODUCT])
+
+    def test_making_someone_an_admin_and_back_resets_their_reach(self):
+        added = self.client.post(f"/api/organizations/{TENANT}/people", headers=self.headers,
+                                 json={"email": "r@example.test"}).json()
+        up = self.client.patch(f"/api/organizations/{TENANT}/people/{added['user_id']}",
+                               headers=self.headers, json={"role": "org_admin"})
+        self.assertEqual(up.status_code, 200, up.text)
+        self.assertIsNone(self.directory.membership(TENANT, added["user_id"]).team_id)
+        down = self.client.patch(f"/api/organizations/{TENANT}/people/{added['user_id']}",
+                                 headers=self.headers, json={"role": "team_member"})
+        self.assertEqual(down.status_code, 200, down.text)
+        with get_connection() as connection:
+            grant = connection.execute("select is_admin from record_grants where user_id = ? and product_id = ?",
+                                       (added["user_id"], PRODUCT)).fetchone()
+        self.assertEqual(grant["is_admin"], 0)
+
+    def test_only_an_administrator_changes_teams_and_never_their_own_role(self):
+        member = self.client.post(f"/api/organizations/{TENANT}/people", headers=self.headers,
+                                  json={"email": "n@example.test"}).json()
+        theirs = self.as_user(member["user_id"])
+        self.assertEqual(self.new_team("Ops", headers=theirs).status_code, 403)
+        self.assertEqual(self.client.put(f"/api/organizations/{TENANT}/products/{PRODUCT}/team", headers=theirs,
+                                         json={"team_id": "planning-team"}).status_code, 403)
+        self_change = self.client.patch(f"/api/organizations/{TENANT}/people/demo-admin",
+                                        headers=self.headers, json={"role": "team_member"})
+        self.assertEqual(self_change.status_code, 409)
+        self.assertEqual(self.client.put(f"/api/organizations/{TENANT}/products/nothing-here/team",
+                                         headers=self.headers, json={"team_id": "planning-team"}).status_code, 404)

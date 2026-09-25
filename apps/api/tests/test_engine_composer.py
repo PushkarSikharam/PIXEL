@@ -721,3 +721,26 @@ class ReviewedDefectTest(ComposerFixture):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NaturalChangeWordingTest(unittest.TestCase):
+    """A new record reads by what it is called and what it has, not as a list of assignments."""
+
+    def test_a_new_record_is_named_then_described(self):
+        from app.engine.composer import describe_changes
+        said = describe_changes({"title": "Printer jam", "priority": "High", "due_date": "2026-10-01"},
+                                labels={"due_date": "Due date"}, creating=True, noun="case")
+        self.assertEqual(said, "a case called “Printer jam” with due date 2026-10-01 and priority High")
+
+    def test_a_new_record_without_details_or_title_still_reads(self):
+        from app.engine.composer import describe_changes
+        self.assertEqual(describe_changes({"name": "Ada"}, creating=True, title_field="name", noun="agent"),
+                         "an agent called “Ada”")
+        self.assertEqual(describe_changes({"status": "New"}, creating=True, noun="case"),
+                         "a case with status New")
+        self.assertEqual(describe_changes({"title": "X", "notes": ""}, creating=True), "“X”")
+
+    def test_a_change_still_says_what_moves_to_what(self):
+        from app.engine.composer import describe_changes
+        self.assertEqual(describe_changes({"status": "Done", "due_date": "2026-10-01"}),
+                         "due date to 2026-10-01, status to Done")

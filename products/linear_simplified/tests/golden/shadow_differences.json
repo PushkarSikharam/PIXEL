@@ -1386,7 +1386,28 @@
     "reason": "In legacy authority the live turn now carries a 5b execution envelope for this update (the legacy authority adapter, 5c plan section 3.3). The shadow proposes the same change and dispatches nothing, so the comparator sees one change at two lifecycle stages."
   },
   {
+    "case": "update-priority",
+    "turn": 1,
+    "field": "speech",
+    "kind": "platform_wording",
+    "reason": "The platform names the record it changes by its title (\"Should I update “Fix flaky webhook retry after deploy”: ...\") rather than its identifier. The proposed change and the record are identical."
+  },
+  {
     "case": "update-reassign",
+    "turn": 1,
+    "field": "execution",
+    "kind": "lifecycle",
+    "reason": "In legacy authority the live turn now carries a 5b execution envelope for this update (the legacy authority adapter, 5c plan section 3.3). The shadow proposes the same change and dispatches nothing, so the comparator sees one change at two lifecycle stages."
+  },
+  {
+    "case": "update-reassign",
+    "turn": 1,
+    "field": "speech",
+    "kind": "platform_wording",
+    "reason": "The platform names the record it changes by its title (\"Should I update “Fix flaky webhook retry after deploy”: ...\") rather than its identifier. The proposed change and the record are identical."
+  },
+  {
+    "case": "update-status",
     "turn": 1,
     "field": "execution",
     "kind": "lifecycle",
@@ -1395,9 +1416,9 @@
   {
     "case": "update-status",
     "turn": 1,
-    "field": "execution",
-    "kind": "lifecycle",
-    "reason": "In legacy authority the live turn now carries a 5b execution envelope for this update (the legacy authority adapter, 5c plan section 3.3). The shadow proposes the same change and dispatches nothing, so the comparator sees one change at two lifecycle stages."
+    "field": "speech",
+    "kind": "platform_wording",
+    "reason": "The platform names the record it changes by its title (\"Should I update “Fix flaky webhook retry after deploy”: ...\") rather than its identifier. The proposed change and the record are identical."
   },
   {
     "case": "create-start-assigned",

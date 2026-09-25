@@ -31,7 +31,7 @@ const NAV = [
     { href: "/console/products/new", label: "Add a product", icon: Hammer },
   ] },
   { section: "Your organization", items: [
-    { href: "/console/organization", label: "People", icon: Users },
+    { href: "/console/organization", label: "People and teams", icon: Users },
     { href: "/console/settings", label: "Settings", icon: Building2 },
   ] },
   { section: "Pixel", items: [

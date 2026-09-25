@@ -94,7 +94,7 @@ STAGE_TEMPLATES: Mapping[Stage, frozenset[str]] = {
 # Lifecycle assertions are platform-owned. A product may rename itself and its records, but a
 # customer-authored response template cannot turn "proposed" or "failed" into "completed".
 PLATFORM_LIFECYCLE_TEMPLATES: Mapping[tuple[Stage, str], str] = {
-    (Stage.PROPOSED, "record_create_proposed"): "I'll create this record with {changes}.",
+    (Stage.PROPOSED, "record_create_proposed"): "I'll create {changes}.",
     (Stage.PROPOSED, "record_update_proposed"): "I'll update {record_id}: {changes}.",
     (Stage.PROPOSED, "view_opened"): "I'll open {view}.",
     # Owner decision: a correction is acknowledged before the navigation it asks for.
@@ -323,7 +323,7 @@ class ResponseComposer:
         template = (
             "Should I update {record_id}: {changes}?"
             if action.target is not None
-            else "Should I create this record with {changes}?"
+            else "Should I create {changes}?"
         )
         return self._render_platform(Stage.AWAITING_CONFIRMATION, "confirm_action", template,
                                      described)
@@ -511,13 +511,43 @@ class ResponseComposer:
             control = view.controls.get(action.control) if view is not None else None
             described.setdefault("control", control.label if control is not None else UNNAMED_CONTROL)
         if action.fields:
-            described.setdefault("changes", describe_changes(action.fields))
+            described.setdefault("changes", describe_changes(action.fields, creating=action.target is None))
         return {name: value for name, value in described.items() if value != "" or name in values}
 
 
-def describe_changes(fields: Mapping[str, object]) -> str:
-    """"status to Closed, owner to Ana Lopez" — the exact change, in the visitor's terms."""
-    return ", ".join(f"{name} to {value}" for name, value in sorted(fields.items()))
+def describe_changes(fields: Mapping[str, object], *, labels: Mapping[str, str] | None = None,
+                     creating: bool = False, title_field: str = "title", noun: str | None = None) -> str:
+    """The exact change, in the words a person would use.
+
+    A change reads "status to Closed, owner to Ana Lopez". A new record reads by what it is called
+    and what it has: "a case called “Printer jam” with priority High and status New".
+    """
+    labels = labels or {}
+
+    def said(name: str) -> str:
+        return str(labels.get(name) or name.replace("_", " ")).lower()
+
+    if not creating:
+        return ", ".join(f"{said(name)} to {value}" for name, value in sorted(fields.items()))
+    title = fields.get(title_field)
+    title = str(title).strip() if title not in (None, "") else ""
+    details = [f"{said(name)} {value}" for name, value in sorted(fields.items())
+               if name != title_field and value not in (None, "", [], ())]
+    if noun:
+        head = f"{_article(noun)} {noun}" + (f" called “{title}”" if title else "")
+    else:
+        head = f"“{title}”" if title else ""
+    if not details:
+        return head or "a new record"
+    return f"{head} with {_listed(details)}" if head else _listed(details)
+
+
+def _article(noun: str) -> str:
+    return "an" if noun[:1].lower() in "aeiou" else "a"
+
+
+def _listed(parts: list[str]) -> str:
+    return parts[0] if len(parts) == 1 else f"{', '.join(parts[:-1])} and {parts[-1]}"
 
 
 def _claims_completion(speech: str) -> bool:
@@ -559,7 +589,7 @@ RECEIPT_REJECTED = RECEIPT_FAILURES["invalid_change"]
 
 def receipt_speech(
     code: str, *, executed: bool, replay: bool, created: bool = False, record_id: str | None = None,
-    changes: Mapping[str, object] | None = None,
+    changes: Mapping[str, object] | None = None, title_field: str = "title",
 ) -> str:
     """The platform sentence for one keyed-write outcome."""
     if executed:
@@ -570,5 +600,6 @@ def receipt_speech(
         template = PLATFORM_LIFECYCLE_TEMPLATES[
             (Stage.EXECUTED, "record_created" if created else "record_updated")
         ]
-        return template.format(record_id=record_id or "the record", changes=describe_changes(changes or {}))
+        return template.format(record_id=record_id or "the record",
+                               changes=describe_changes(changes or {}, creating=created, title_field=title_field))
     return RECEIPT_FAILURES.get(code, RECEIPT_REJECTED)

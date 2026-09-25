@@ -362,9 +362,39 @@ export async function listMembers(session: ApiSession): Promise<ApiMember[]> {
 export type PersonRole = "team_member" | "team_admin" | "org_admin";
 
 /** Give an email address a place in this organization. They sign in with it to arrive here. */
-export async function addPerson(session: ApiSession, email: string, role: PersonRole): Promise<ApiMember> {
+export async function addPerson(session: ApiSession, email: string, role: PersonRole,
+                                teamId?: string | null): Promise<ApiMember> {
   return call<ApiMember>(`/organizations/${encodeURIComponent(session.tenantId)}/people`, {
-    method: "POST", body: JSON.stringify({ email, role }),
+    method: "POST", body: JSON.stringify({ email, role, ...(teamId && role !== "org_admin" ? { team_id: teamId } : {}) }),
+  }, session);
+}
+
+/** Change what somebody can do and which team they work in. */
+export async function changePerson(session: ApiSession, userId: string, role: PersonRole,
+                                   teamId: string | null): Promise<void> {
+  await call(`/organizations/${encodeURIComponent(session.tenantId)}/people/${encodeURIComponent(userId)}`, {
+    method: "PATCH", body: JSON.stringify({ role, ...(teamId && role !== "org_admin" ? { team_id: teamId } : {}) }),
+  }, session);
+}
+
+export interface ApiTeam { team_id: string; name: string; people: number; products: string[] }
+
+export async function listTeams(session: ApiSession): Promise<ApiTeam[]> {
+  const answer = await call<{ teams: ApiTeam[] }>(
+    `/organizations/${encodeURIComponent(session.tenantId)}/teams`, {}, session);
+  return answer.teams;
+}
+
+export async function createTeam(session: ApiSession, name: string): Promise<ApiTeam> {
+  return call<ApiTeam>(`/organizations/${encodeURIComponent(session.tenantId)}/teams`, {
+    method: "POST", body: JSON.stringify({ name }),
+  }, session);
+}
+
+/** Choose which team runs a product; that team's people can open it. */
+export async function moveProductToTeam(session: ApiSession, productId: string, teamId: string): Promise<void> {
+  await call(`/organizations/${encodeURIComponent(session.tenantId)}/products/${encodeURIComponent(productId)}/team`, {
+    method: "PUT", body: JSON.stringify({ team_id: teamId }),
   }, session);
 }
 

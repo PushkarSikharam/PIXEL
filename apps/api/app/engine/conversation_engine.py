@@ -594,12 +594,22 @@ class ConversationEngine:
         values: dict[str, str] = {}
         if action.view is not None:
             values["view"] = self._view_label(action.view)
+        if action.target is not None:
+            # A record is spoken by what it is called; its identifier only when it has no title.
+            record = self._snapshot.get(action.target.entity, action.target.id)
+            if record is not None and record.title:
+                values["record_id"] = f"“{record.title}”"
         if action.fields:
             # People are named, never spoken as identifiers.
             entity = self._definition.actions[action.action_key].entity
-            values["changes"] = describe_changes({
-                name: self._display(entity, name, value) for name, value in action.fields.items()
-            })
+            spec = self._definition.entities.get(entity) if entity else None
+            shown = {name: self._display(entity, name, value) for name, value in action.fields.items()}
+            labels = {name: field.label for name, field in spec.fields.items()} if spec else {}
+            if action.target is None and spec is not None:
+                values["changes"] = describe_changes(shown, labels=labels, creating=True,
+                                                     title_field=spec.title_field, noun=spec.label.lower())
+            else:
+                values["changes"] = describe_changes(shown, labels=labels)
         return values
 
     def _display(self, entity: str | None, field: str, value: Any) -> Any:

@@ -67,9 +67,9 @@
     "turn": 0,
     "field": "reply",
     "kind": "wording",
-    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens (\"I'll open LIN-142\"). The misspelled name and record word are still read correctly.",
+    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens, by its title (\"I'll open “Fix flaky webhook retry after deploy”\"). The misspelled name and record word are still read correctly.",
     "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
-    "current": "I'll open LIN-142."
+    "current": "I'll open “Fix flaky webhook retry after deploy”."
   },
   {
     "case": "correction-clause",
@@ -103,9 +103,9 @@
     "turn": 0,
     "field": "reply",
     "kind": "wording",
-    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens (\"I'll open LIN-142\").",
+    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens, by its title (\"I'll open “Fix flaky webhook retry after deploy”\").",
     "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
-    "current": "I'll open LIN-142."
+    "current": "I'll open “Fix flaky webhook retry after deploy”."
   },
   {
     "case": "person-all-tickets",
@@ -166,18 +166,18 @@
     "turn": 0,
     "field": "reply",
     "kind": "wording",
-    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens (\"I'll open LIN-142\").",
+    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens, by its title (\"I'll open “Fix flaky webhook retry after deploy”\").",
     "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
-    "current": "I'll open LIN-142."
+    "current": "I'll open “Fix flaky webhook retry after deploy”."
   },
   {
     "case": "current-ticket",
     "turn": 1,
     "field": "reply",
     "kind": "wording",
-    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens (\"I'll open LIN-142\").",
+    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens, by its title (\"I'll open “Fix flaky webhook retry after deploy”\").",
     "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
-    "current": "I'll open LIN-142."
+    "current": "I'll open “Fix flaky webhook retry after deploy”."
   },
   {
     "case": "assignment-workflow",
@@ -202,9 +202,9 @@
     "turn": 0,
     "field": "reply",
     "kind": "wording",
-    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens (\"I'll open LIN-142\").",
+    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens, by its title (\"I'll open “Fix flaky webhook retry after deploy”\").",
     "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
-    "current": "I'll open LIN-142."
+    "current": "I'll open “Fix flaky webhook retry after deploy”."
   },
   {
     "case": "update-reassign",
@@ -238,9 +238,9 @@
     "turn": 0,
     "field": "reply",
     "kind": "wording",
-    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens (\"I'll open LIN-142\").",
+    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens, by its title (\"I'll open “Fix flaky webhook retry after deploy”\").",
     "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
-    "current": "I'll open LIN-142."
+    "current": "I'll open “Fix flaky webhook retry after deploy”."
   },
   {
     "case": "update-priority",
@@ -274,9 +274,9 @@
     "turn": 0,
     "field": "reply",
     "kind": "wording",
-    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens (\"I'll open LIN-142\").",
+    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens, by its title (\"I'll open “Fix flaky webhook retry after deploy”\").",
     "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
-    "current": "I'll open LIN-142."
+    "current": "I'll open “Fix flaky webhook retry after deploy”."
   },
   {
     "case": "update-status",
@@ -310,9 +310,9 @@
     "turn": 0,
     "field": "reply",
     "kind": "wording",
-    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens (\"I'll open LIN-142\").",
+    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens, by its title (\"I'll open “Fix flaky webhook retry after deploy”\").",
     "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
-    "current": "I'll open LIN-142."
+    "current": "I'll open “Fix flaky webhook retry after deploy”."
   },
   {
     "case": "update-outside-person",
@@ -375,9 +375,9 @@
     "turn": 0,
     "field": "reply",
     "kind": "wording",
-    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens (\"I'll open LIN-142\").",
+    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens, by its title (\"I'll open “Fix flaky webhook retry after deploy”\").",
     "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
-    "current": "I'll open LIN-142."
+    "current": "I'll open “Fix flaky webhook retry after deploy”."
   },
   {
     "case": "update-unknown-person",
@@ -917,9 +917,9 @@
     "turn": 0,
     "field": "reply",
     "kind": "wording",
-    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens (\"I'll open LIN-142\").",
+    "reason": "The same record opens. The recorded reply also named its assignee; the platform names only the record it opens, by its title (\"I'll open “Fix flaky webhook retry after deploy”\").",
     "recorded": "I found LIN-142, assigned to Maya Chen. I'll open that ticket.",
-    "current": "I'll open LIN-142."
+    "current": "I'll open “Fix flaky webhook retry after deploy”."
   },
   {
     "case": "what-changed",

@@ -1048,7 +1048,7 @@ code, .px-mono { font-family: var(--px-mono); font-size: var(--px-text-sm); }
 h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus { outline: none; }
 
 /* Records and people as cards, the way the guided demo shows tickets and its team. */
-.px-record-cards, .px-people-cards { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--px-space-3); }
+.px-record-cards, .px-people-cards, .px-team-cards { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--px-space-3); }
 .px-record-card {
   display: grid; gap: 4px; padding: var(--px-space-4);
   border: 1px solid var(--px-border); border-radius: 8px; background: var(--px-bg);
@@ -1067,8 +1067,8 @@ h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus { outline: none; }
 .px-state-badge[data-tone="warn"] { background: var(--px-warn-soft); color: var(--px-warn); border-color: transparent; }
 .px-state-badge[data-tone="danger"] { background: var(--px-danger-soft); color: var(--px-danger); border-color: transparent; }
 .px-state-badge[data-tone="info"] { background: var(--px-accent-soft); color: var(--px-accent); border-color: transparent; }
-.px-people-cards { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
-.px-person-card {
+.px-people-cards, .px-team-cards { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.px-person-card, .px-team-card {
   display: flex; align-items: center; gap: var(--px-space-3); padding: var(--px-space-3) var(--px-space-4);
   border: 1px solid var(--px-border); border-radius: 8px; background: var(--px-bg);
 }
@@ -1079,3 +1079,8 @@ h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus { outline: none; }
 .px-person-text { display: grid; min-width: 0; flex: 1; }
 .px-person-text strong { overflow-wrap: anywhere; }
 .px-person-text span { color: var(--px-text-2); font-size: var(--px-text-sm); overflow-wrap: anywhere; }
+.px-subhead { margin: var(--px-space-2) 0 0; font-size: var(--px-text-md, 1rem); }
+/* On a narrow screen a person's actions move under their name rather than squeezing it. */
+.px-person-card { flex-wrap: wrap; }
+.px-person-card .px-person-text { min-width: 170px; }
+.px-person-card > .px-row { margin-left: auto; }

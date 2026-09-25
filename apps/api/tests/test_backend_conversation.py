@@ -153,7 +153,7 @@ class DefinitionAuthorityConversationTest(EngineCutoverFixture):
     def test_opening_someones_ticket_still_opens_it(self):
         body = self.say("open a ticket for Noah")
         self.assertEqual(self.action(body)[0], "OPEN_DEMO_ISSUE")
-        self.assertEqual(body["speech"], "I'll open LIN-137.")
+        self.assertEqual(body["speech"], "I'll open “Add assignee keyboard shortcut”.")
 
     def test_an_unknown_person_beside_a_known_one_is_added_first(self):
         for index, message in enumerate(("Open a ticket for Maya and assign to Jen",
@@ -409,7 +409,7 @@ class DefinitionAuthorityConversationTest(EngineCutoverFixture):
         receipt = self.client.post("/api/demo-data/issues", json={"fields": fields}, headers=headers)
         self.assertEqual(receipt.status_code, 200, receipt.text)
         speech = receipt.json()["speech"]
-        self.assertIn("project to Issue Triage Workflow", speech)
+        self.assertIn("project Issue Triage Workflow", speech)
         self.assertNotIn("PRJ-", speech, "an identifier is evidence, never speech")
 
     def test_switching_workspace_keeps_the_conversation_alive(self):

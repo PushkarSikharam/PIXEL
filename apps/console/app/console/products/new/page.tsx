@@ -41,7 +41,12 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
   const teams = TEAMS.filter((t) => t.organizationId === c.organizationId && !t.suspended
     && c.can("products.manage", { teamId: t.id, productId: null }));
   const liveTeamId = c.account?.team_id ?? c.account?.teams[0]?.team_id ?? null;
-  const liveTeamName = c.account?.teams.find((team) => team.team_id === liveTeamId)?.name ?? "your team";
+  const liveTeams = c.account?.teams ?? [];
+  // An admin of an organization with several teams chooses which one runs the product.
+  const chooseLiveTeam = c.live && !c.account?.team_id && liveTeams.length > 1;
+  const [liveChosen, setLiveChosen] = useState<string | null>(null);
+  const liveTeam = chooseLiveTeam && liveTeams.some((team) => team.team_id === liveChosen) ? liveChosen : liveTeamId;
+  const liveTeamName = c.account?.teams.find((team) => team.team_id === liveTeam)?.name ?? "your team";
   const [state, setState] = useState<OnboardingState>(() => initialOnboarding(liveTeamId ?? teams[0]?.id ?? ""));
   const [sourceName, setSourceName] = useState("");
   const [sourceKind, setSourceKind] = useState<"document" | "openapi" | "url">("document");
@@ -163,7 +168,14 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
                         s.slugChosen ? s.slug : addressFor(e.target.value), { derived: !s.slugChosen }));
                     }} />
                 )}</Field>
-                {liveTeamId ? (
+                {chooseLiveTeam ? (
+                  <Field label="Which team runs it" hint="People in that team can use it. Admins can use every product.">{(f) => (
+                    <select id={f.id} aria-describedby={f.describedBy} className="px-select" value={liveTeam ?? ""}
+                      onChange={(e) => setLiveChosen(e.target.value)}>
+                      {liveTeams.map((team) => <option key={team.team_id} value={team.team_id}>{team.name}</option>)}
+                    </select>
+                  )}</Field>
+                ) : liveTeamId ? (
                   <p className="px-small px-muted" style={{ margin: 0 }}>
                     It will belong to <strong>{liveTeamName}</strong>, so everyone there can use it.
                   </p>
@@ -395,7 +407,7 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
                         const definitionId = definitionIdFor(state);
                         const created = await addProduct(session, {
                           productId: state.slug,
-                          teamId: liveTeamId ?? state.teamId,
+                          teamId: liveTeam ?? state.teamId,
                           definitionId,
                           definition: state.understanding?.definition ?? starterDefinitionText(state),
                           version: 1,

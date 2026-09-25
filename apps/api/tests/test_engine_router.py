@@ -669,3 +669,37 @@ class RecordNamedByTitleTest(RouterFixture):
     def test_part_of_a_title_names_nothing(self):
         result = self.chat().say("open Moss")
         self.assertTrue(result.proposal is None or result.proposal.target is None)
+
+
+class TitleDetailsTest(unittest.TestCase):
+    """Choices named after a new record's title set those fields instead of joining the title."""
+
+    def setUp(self):
+        from app.definitions.contract import EntitySpec
+        self.entity = EntitySpec.model_validate({
+            "label": "Case", "plural": "Cases", "id": {"strategy": "prefix", "prefix": "CASE"}, "title_field": "title",
+            "fields": {
+                "title": {"type": "text", "label": "Title"},
+                "priority": {"type": "enum", "label": "Priority", "values": ["Low", "High"]},
+                "status": {"type": "enum", "label": "Status", "values": ["New", "In progress", "Done"]},
+            },
+        })
+
+    def split(self, message: str):
+        from app.engine.mentions import title_and_details
+        return title_and_details(message, self.entity, ["title", "priority", "status"])
+
+    def test_a_trailing_choice_is_a_detail(self):
+        self.assertEqual(self.split("create a case called Checkout crash with high priority"),
+                         ("Checkout crash", {"priority": ["High"]}))
+        self.assertEqual(self.split("add a case called Printer jam, high priority and status in progress"),
+                         ("Printer jam", {"priority": ["High"], "status": ["In progress"]}))
+
+    def test_a_title_that_only_mentions_a_word_keeps_it(self):
+        self.assertEqual(self.split("create a case called Coffee with the new team"),
+                         ("Coffee with the new team", {}))
+        self.assertEqual(self.split("create a case about login errors"), ("Login errors", {}))
+
+    def test_a_choice_before_the_title_counts_too(self):
+        self.assertEqual(self.split("create a high priority case called Outage"),
+                         ("Outage", {"priority": ["High"]}))

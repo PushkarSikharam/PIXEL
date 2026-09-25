@@ -24,17 +24,17 @@ import { ProductImport } from "@pixel-console/components/product-import";
 export default function NewProduct() {
   const c = useConsole();
   const [advanced, setAdvanced] = useState(false);
-  if (!c.live) return <PrototypeNewProduct />;
+  if (!c.live) return <GuidedProductOnboarding />;
   if (advanced) return <>
     <div className="px-row" style={{ justifyContent: "flex-end" }}>
       <Button onClick={() => setAdvanced(false)}>Describe a product instead</Button>
     </div>
     <ProductImport />
   </>;
-  return <PrototypeNewProduct onAdvanced={() => setAdvanced(true)} />;
+  return <GuidedProductOnboarding onAdvanced={() => setAdvanced(true)} />;
 }
 
-function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
+function GuidedProductOnboarding({ onAdvanced }: { onAdvanced?: () => void }) {
   const c = useConsole();
   const toast = useToast();
   const router = useRouter();
@@ -225,7 +225,7 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
                       <strong>{template.name}</strong>
                       <span>{template.summary}</span>
                       <span className="px-template-things">
-                        {template.things.map((described) => described.plural).join(" · ")}
+                        {template.things.map((described) => described.plural).join(" / ")}
                       </span>
                     </button>
                   ))}

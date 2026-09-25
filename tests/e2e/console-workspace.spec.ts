@@ -91,7 +91,11 @@ for (const mobile of [false, true]) {
       if (path.endsWith("/speech")) { speechCalls++; return route.fulfill({ status: 503, json: { detail: "Unavailable" } }); }
       return route.fulfill({ status: 404, json: { detail: "Unexpected test request" } });
     });
-    await page.goto("/console/products/alpha");
+    // Enter through the product list. The product link must open its generated workspace before
+    // any assistant or isolation behavior can count as a customer-facing capability.
+    await page.goto("/console/products");
+    await page.getByRole("link", { name: "ALPHA" }).click();
+    await expect(page).toHaveURL(/\/console\/products\/alpha$/);
     if (mobile) {
       const navigation = page.getByRole("navigation", { name: "Primary" });
       await expect(navigation).not.toBeVisible();

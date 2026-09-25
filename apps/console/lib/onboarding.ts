@@ -1,9 +1,9 @@
 /**
- * Product onboarding as a state machine (prototype; analysis is mocked).
+ * Product onboarding as a state machine.
  *
  *   details -> sources -> analyzing -> review -> actions -> validation -> ready -> published
  *
- * Rules the prototype enforces, so the real flow inherits them:
+ * Rules enforced by both the guided live flow and the isolated design-preview flow:
  * - Each step has entry requirements; a step cannot be reached before its prerequisites hold.
  * - Changing sources after analysis invalidates the analysis and everything after it.
  * - Analysis is a proposal: nothing it produced is used until a person reviews and accepts it.
@@ -149,7 +149,7 @@ function invalidateFromSources(state: OnboardingState): OnboardingState {
     step: STEPS.indexOf(state.step) > STEPS.indexOf("sources") ? "sources" : state.step };
 }
 
-/** Mocked analysis: a fixed, synthetic proposal. Nothing is sent anywhere. */
+/** Deterministic analysis used only by the isolated design preview. */
 export function completeAnalysis(state: OnboardingState): OnboardingState {
   if (!canEnter(state, "analyzing")) throw new Error("cannot_analyze");
   const actions: ProposedAction[] = [
@@ -204,7 +204,7 @@ export function setConfirmation(state: OnboardingState, key: string, required: b
   return { ...state, actions, validatedRevision: null, configRevision: state.configRevision + 1 };
 }
 
-/** Mocked validation with the real rules' shape: errors block publishing, warnings do not. */
+/** Deterministic validation used only by the isolated design preview. */
 export function validate(state: OnboardingState): OnboardingState {
   if (!canEnter(state, "validation")) throw new Error("cannot_validate");
   const findings: Finding[] = [];

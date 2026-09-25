@@ -92,6 +92,14 @@ for (const mobile of [false, true]) {
       return route.fulfill({ status: 404, json: { detail: "Unexpected test request" } });
     });
     await page.goto("/console/products/alpha");
+    if (mobile) {
+      const navigation = page.getByRole("navigation", { name: "Primary" });
+      await expect(navigation).not.toBeVisible();
+      await page.getByRole("button", { name: "Open navigation" }).click();
+      await expect(navigation).toBeVisible();
+      await page.getByRole("button", { name: "Close navigation" }).click();
+      await expect(navigation).not.toBeVisible();
+    }
     const assistant = page.getByRole("complementary", { name: /^Edith, answering for / });
     await expect(assistant).toBeVisible();
     if (mobile) {

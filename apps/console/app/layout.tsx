@@ -6,8 +6,8 @@ import { ToastProvider } from "@pixel-console/components/toast";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: { default: "Pixel Console", template: "%s · Pixel Console" },
-  description: "Pixel SaaS console prototype. Mock data only.",
+  title: { default: "Pixel", template: "%s | Pixel" },
+  description: "Create product workspaces, manage records, and work with Edith inside each product.",
   robots: { index: false, follow: false },
 };
 

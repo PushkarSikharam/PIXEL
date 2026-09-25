@@ -96,6 +96,9 @@ export function EdithPanel({
   const [voiceStatus, setVoiceStatus] = useState("Voice off");
   const [listening, setListening] = useState(false);
   const [micAvailable, setMicAvailable] = useState(false);
+  // Why voice input did not start, shown whether or not spoken replies are on: a press that
+  // silently does nothing reads as a broken button.
+  const [micProblem, setMicProblem] = useState<string | null>(null);
   const recognition = useRef<SpeechInput | null>(null);
   const alive = useRef(true);
   const sending = useRef(false);
@@ -218,6 +221,7 @@ export function EdithPanel({
     if (listening) { recognition.current?.abort(); setListening(false); return; }
     const Constructor = speechInputConstructor();
     if (!Constructor || busy) return;
+    setMicProblem(null);
     stopAudio();
     const capture = new Constructor();
     recognition.current = capture;
@@ -227,10 +231,18 @@ export function EdithPanel({
       const transcript = event.results[0]?.[0]?.transcript?.trim();
       if (transcript) { voiceEnabled.current = true; setVoice(true); void send(transcript); }
     };
-    capture.onerror = (event) => { if (alive.current) setVoiceStatus(event.error === "not-allowed" ? "Microphone permission denied" : "Speech input unavailable. Please type your message."); };
+    capture.onerror = (event) => {
+      if (!alive.current) return;
+      const problem = event.error === "not-allowed" ? "Microphone permission denied" : "Speech input unavailable. Please type your message.";
+      setVoiceStatus(problem);
+      setMicProblem(problem);
+    };
     capture.onend = () => { if (alive.current) setListening(false); };
     try { capture.start(); setListening(true); }
-    catch { setVoiceStatus("Microphone unavailable. Please type your message."); }
+    catch {
+      setVoiceStatus("Microphone unavailable. Please type your message.");
+      setMicProblem("Microphone unavailable. Please type your message.");
+    }
   }
 
   const steps = useMemo(() => starterSteps(shape), [shape]);
@@ -264,8 +276,9 @@ export function EdithPanel({
             aria-label={collapsed ? `Show ${shape.assistant_name}` : `Hide ${shape.assistant_name}`}>
             {collapsed ? "Show" : "Hide"}</button>
           {collapsed ? null : <>
-            <button type="button" className="px-edith-chip" disabled={busy} onClick={restart}
-              aria-label="Restart this conversation">Restart</button>
+            <button type="button" className="px-edith-chip" disabled={busy || messages.length <= 1} onClick={restart}
+              aria-label="Restart this conversation"
+              title={messages.length <= 1 ? "Nothing to restart yet" : undefined}>Restart</button>
             <span className="px-edith-state" role="status">{state}</span>
           </>}
         </span>
@@ -343,7 +356,7 @@ export function EdithPanel({
             </button>
           </div>
           <div className="px-edith-voice-status">
-            <span>Voice: <strong>{voice || listening ? voiceStatus : "Off"}</strong></span>
+            <span>Voice: <strong>{micProblem && !listening ? micProblem : voice || listening ? voiceStatus : "Off"}</strong></span>
             <span className="px-edith-spectrum" data-animating={listening || busy}
               aria-hidden><i /><i /><i /><i /><i /></span>
           </div>

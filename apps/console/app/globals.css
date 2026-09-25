@@ -1095,3 +1095,5 @@ h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus { outline: none; }
 .px-person-card { flex-wrap: wrap; }
 .px-person-card .px-person-text { min-width: 170px; }
 .px-person-card > .px-row { margin-left: auto; }
+.px-switcher-trigger[data-static="true"] { cursor: default; }
+.px-switcher-trigger[data-static="true"]:hover { background: transparent; }

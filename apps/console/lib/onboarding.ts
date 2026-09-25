@@ -133,7 +133,7 @@ export function addSource(state: OnboardingState, name: string, kind: Source["ki
   let status: Source["status"] = "accepted";
   let reason: string | undefined;
   if (kind === "url" && !lower.startsWith("https://")) { status = "refused"; reason = "Only https:// links to public pages are accepted."; }
-  else if (REFUSED_EXTENSIONS.some((ext) => lower.endsWith(ext))) { status = "refused"; reason = "Executable, script and archive files are not accepted in this prototype."; }
+  else if (REFUSED_EXTENSIONS.some((ext) => lower.endsWith(ext))) { status = "refused"; reason = "Executable, script and archive files are not accepted."; }
   const source: Source = { id: `src-${state.sources.length + 1}-${lower.replace(/[^a-z0-9]+/g, "-")}`, name, kind, status, reason };
   return invalidateFromSources({ ...state, sources: [...state.sources, source] });
 }

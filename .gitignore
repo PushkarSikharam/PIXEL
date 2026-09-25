@@ -31,3 +31,12 @@ tmp-*.png
 .worktrees/
 .pytest_cache/
 playwright.local.config.ts
+
+# Written by Next.js on every build and by `next typegen` before each typecheck.
+next-env.d.ts
+
+# Claude Code's per-machine files. Shared project settings and skills, if the project ever adds
+# them, are the exceptions.
+.claude/*
+!.claude/settings.json
+!.claude/skills/

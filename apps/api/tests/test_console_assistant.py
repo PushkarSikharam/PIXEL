@@ -61,13 +61,22 @@ class MovingAroundTest(ConsoleAssistantFixture):
         for message, expected in (
             ("take me to my products", "OPEN_PRODUCTS"),
             ("open members", "OPEN_MEMBERS"),
-            ("show me the audit log", "OPEN_AUDIT"),
+            ("show me people and teams", "OPEN_MEMBERS"),
             ("go to settings", "OPEN_SETTINGS"),
             ("take me home", "OPEN_OVERVIEW"),
-            ("open deployments", "OPEN_DEPLOY"),
         ):
             with self.subTest(message=message):
                 self.assertEqual(self.action(self.ask(message, message[:8])), expected)
+
+    def test_a_screen_pixel_does_not_have_is_declined_not_opened(self):
+        """Test, Deploy, Operate and Audit were designs with nothing behind them; none is offered."""
+        for message in ("show me the audit log", "open deployments", "open the test playground",
+                        "show usage"):
+            with self.subTest(message=message):
+                body = self.ask(message, message[:10])
+                self.assertIsNone(self.action(body))
+                for word in ("audit", "deploy", "playground", "usage"):
+                    self.assertNotIn(f"take you to {word}", body["speech"].lower())
 
     def test_asking_to_leave_where_you_are_takes_you_out(self):
         """Somebody inside a product says "take me out of this" and means it literally."""

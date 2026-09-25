@@ -1,7 +1,7 @@
 # Pixel Design System (foundation)
 
 Source: `saas/console/app/globals.css` (tokens and component styles) and `saas/console/components`.
-Live gallery: `/preview` in the console prototype.
+The components live in `apps/console/components/ui.tsx` and `overlays.tsx`; every screen of the console uses them.
 
 ## Principles
 

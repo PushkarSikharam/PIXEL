@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AuthCard } from "@pixel-console/components/auth-card";
 import { Button, Field, Input } from "@pixel-console/components/ui";
-import { normalizeEmail, SIGN_IN_MESSAGES } from "@pixel-console/lib/mock-identity";
+import { INVALID_EMAIL, normalizeEmail } from "@pixel-console/lib/email";
 import { requestEmailCode } from "@pixel-console/lib/pixel-api";
 
 export default function SignIn() {
@@ -17,7 +17,7 @@ export default function SignIn() {
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     const address = normalizeEmail(email);
-    if (!address) { setError(SIGN_IN_MESSAGES.invalid_email); return; }
+    if (!address) { setError(INVALID_EMAIL); return; }
     setSending(true);
     try {
       const challenge = await requestEmailCode(address);

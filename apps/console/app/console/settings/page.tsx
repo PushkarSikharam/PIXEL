@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { useConsole } from "@pixel-console/components/console-context";
-import { SectionPlaceholder } from "@pixel-console/components/placeholder";
 import { useToast } from "@pixel-console/components/toast";
 import { Button, Field, Input, PageHead, Panel } from "@pixel-console/components/ui";
 import { endSession, renameOrganization, storedSession } from "@pixel-console/lib/pixel-api";
@@ -78,8 +77,5 @@ function LiveSettings() {
 }
 
 export default function Page() {
-  const c = useConsole();
-  if (c.live) return <LiveSettings />;
-  return <SectionPlaceholder title="Settings" permission="organization.manage"
-    description="Organization profile, login policy, credentials, billing and retention." />;
+  return <LiveSettings />;
 }

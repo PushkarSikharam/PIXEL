@@ -45,7 +45,7 @@ from app.engine.conversation import (
     detect,
     offerable,
 )
-from app.engine.knowledge import KnowledgeLookup, KnowledgePassage, answerable, ground
+from app.engine.knowledge import Grounding, KnowledgeLookup, KnowledgePassage, answerable, ground
 from app.engine.memory import ConversationMemory, PendingClarification
 from app.engine.normalizer import NormalizedMessage, contains_term
 from app.engine.router import IntentRouter, TurnContext, remember_accepted
@@ -237,7 +237,12 @@ class ConversationEngine:
             result, next_memory = routed.result, routed.memory
 
         conversation = None
-        if continued is None and fresh and result.kind == RouteKind.CLARIFY:
+        if continued is None and fresh and result.kind != RouteKind.REFUSE and self._asks_what_product_is(text):
+            # "What is <product>?" is a question about the product, whatever words in its name a
+            # view or an intent also uses; answering it is never a request.
+            next_memory = memory
+            conversation = self._product_about(composer, message)
+        if conversation is None and continued is None and fresh and result.kind == RouteKind.CLARIFY:
             # A question back writes nothing, so a message the platform can answer is answered.
             conversation = self._platform_conversation(text, context, memory)
             if conversation is None and _describes_visitor(message):
@@ -643,6 +648,50 @@ class ConversationEngine:
     def _view_label(self, view: str) -> str:
         spec = self._definition.views.get(view)
         return spec.label if spec is not None else view.replace("_", " ").capitalize()
+
+    def _asks_what_product_is(self, text: NormalizedMessage) -> bool:
+        """"What is <product>?", "what is <product> supposed to do?", "tell me about this app".
+
+        The product is named by its full name, by the first word of a longer name ("Northwind" for
+        "Northwind Ledger"), or as "this" - and only when it is the whole subject of the question,
+        so "what is this record about?" is still a question about a record.
+        """
+        name = self._definition.identity.product_name.lower()
+        names = {re.escape(name)}
+        first = name.split()[0]
+        if " " in name and len(first) >= 4:
+            names.add(re.escape(first))
+        subject = (rf"(?:the )?(?:{'|'.join(sorted(names))})"
+                   r"|this(?: (?:product|app|application|tool|platform|site|website|demo|thing))?")
+        asked = text.full.strip().rstrip("?.! ")
+        return re.fullmatch(
+            rf"(?:(?:what|who)(?: is|s|'s)? (?:{subject})"
+            r"(?: (?:supposed to do|meant to do|meant for|supposed to be|for|used for|about|all about|do))?"
+            rf"|what (?:does|can|will) (?:{subject}) do"
+            rf"|tell me (?:more )?about (?:{subject})"
+            rf"|explain (?:{subject}))",
+            asked,
+        ) is not None
+
+    def _product_about(self, composer: ResponseComposer, message: str):
+        """Approved text about the product if there is some; otherwise what it is and does here.
+
+        A passage answers only if it names the product. One that merely shares a word with its
+        name (a page about planning, for a product called "... Planning") is about something else.
+        """
+        if self._knowledge is not None:
+            name = self._definition.identity.product_name.lower()
+            called = {name, name.split()[0]}
+            grounding = answerable(ground(self._knowledge, message))
+            grounding = Grounding(tuple(
+                passage for passage in grounding.passages
+                if any(contains_term(f"{passage.title} {passage.snippet}".lower(), word) for word in called)
+            ))
+            reply = composer.knowledge_answer(grounding)
+            if grounding.is_grounded and reply.template_key != KNOWLEDGE_UNAVAILABLE_KEY:
+                return TurnStage.KNOWLEDGE, reply, grounding.passages, True
+        offers = offerable(self._definition, self._snapshot, self._policy)
+        return TurnStage.ANSWER, composer.product_about(offers), (), True
 
     def _asks_about(self, text: NormalizedMessage, name: str) -> bool:
         """"Who is <assistant>?", "what is <product>?", "what does <product> do?": by the name the

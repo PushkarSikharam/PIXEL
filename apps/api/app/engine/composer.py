@@ -86,7 +86,8 @@ STAGE_TEMPLATES: Mapping[Stage, frozenset[str]] = {
                              "guided_path", "next_step", "last_change", "nothing_changed",
                              "people_count", "people_count_here", "anchor_count",
                              "anchor_count_here", "anchor_count_none", "conversation_ended", "thanks",
-                             "voice_interruption", "next_step_here", "knowledge_unavailable"}),
+                             "voice_interruption", "next_step_here", "knowledge_unavailable",
+                             "product_about"}),
     Stage.UNGROUNDED: frozenset({"knowledge_unavailable"}),
 }
 
@@ -146,6 +147,13 @@ PLATFORM_CONVERSATION_TEMPLATES: Mapping[tuple[Stage, str], str] = {
     (Stage.CLARIFICATION, "clarify_all_items"): "Which records do you mean?",
     # Answers: what can be done, what exists, what happened, what is known.
     (Stage.ANSWER, "capabilities"): "Here's what I can do in {product}: {capabilities}.",
+    # "What is <product>?" with no approved text to answer from. Every clause is a fact the
+    # platform holds - the product's name, the assistant's, and what this caller can do in it -
+    # so it describes the product without claiming anything about it that nobody approved.
+    (Stage.ANSWER, "product_about"): (
+        "{product} is where you keep your {things}, and I'm {assistant}, your guide to it. "
+        "Here I can {capabilities}. What would you like to try first?"
+    ),
     # Owner decision: the guided path is a conversational route, drawn from the caller's offers.
     (Stage.ANSWER, "guided_path"): "Here's a good way to explore {product}: {capabilities}.",
     # A request nobody could place is the moment somebody most needs to know what is possible,
@@ -227,6 +235,14 @@ VARIED_TEMPLATES: Mapping[tuple[Stage, str], tuple[str, ...]] = {
     ),
     (Stage.ANSWER, "knowledge_unavailable"): KNOWLEDGE_UNAVAILABLE_WORDINGS,
     (Stage.UNGROUNDED, "knowledge_unavailable"): KNOWLEDGE_UNAVAILABLE_WORDINGS,
+    (Stage.ANSWER, "product_about"): (
+        "{product} is where you keep your {things}, and I'm {assistant}, your guide to it. "
+        "Here I can {capabilities}. What would you like to try first?",
+        "{product} keeps your {things} in one place. I'm {assistant}, and I can {capabilities}. "
+        "Where would you like to start?",
+        "You're in {product}, where your {things} live. I'm {assistant}, and here I can "
+        "{capabilities}. What should we look at first?",
+    ),
 }
 
 
@@ -347,6 +363,21 @@ class ResponseComposer:
     def capabilities(self, offers: OfferableActions) -> Reply:
         """What this caller can actually do, from the filtered offers; never a product's claim."""
         return self._offer_reply("capabilities", offers)
+
+    def product_about(self, offers: OfferableActions) -> Reply:
+        """What this product is: what it keeps, from its definition, and what this caller can do.
+
+        Its people are not what it is for, so they are named only when it keeps nothing else.
+        """
+        if offers.is_empty:
+            return self._offer_reply("product_about", offers)
+        people = self._definition.people.entity if self._definition.people else None
+        kept = [entity.plural.lower() for key, entity in self._definition.entities.items() if key != people]
+        kept = kept or [entity.plural.lower() for entity in self._definition.entities.values()]
+        things = kept[0] if len(kept) == 1 else f"{', '.join(kept[:-1])} and {kept[-1]}"
+        return self._render(Stage.ANSWER, "product_about", {
+            "capabilities": capability_sentence(offers, self._definition), "things": things,
+        })
 
     def unplaceable(self, offers: OfferableActions) -> Reply:
         """A request this product could not place, answered with what it can do instead.

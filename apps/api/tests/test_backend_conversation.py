@@ -361,13 +361,30 @@ class DefinitionAuthorityConversationTest(EngineCutoverFixture):
                              f"Thanks, that helps. What would you like to explore first in {PRODUCT_NAME}?",
                              message)
 
-    def test_a_question_about_pixel_without_approved_product_material_is_refused(self):
-        for index, message in enumerate(("what is pixel?", "what does Pixel do?")):
-            self.assertEqual(
-                self.say(message, session=f"product-{index}")["speech"],
-                f"Sorry, I can't answer that. I only know about {PRODUCT_NAME}, and I'd rather not guess.",
-                message,
-            )
+    def test_a_question_about_the_product_is_answered_from_what_it_really_does(self):
+        """Found live: "what is pixel" was refused, "what is pixel supposed to do?" was asked which
+        ticket, and "what is pixel planning" opened Cycles. Without approved text about the
+        product, the answer is built from facts the platform holds: its name, the assistant's,
+        and what this visitor can do in it. Nothing opens and nothing is claimed beyond that."""
+        questions = ("what is pixel?", "What is pixel", "what does Pixel do?",
+                     "What is pixel supposed to do?", "what is pixel planning", "tell me about this app")
+        for index, message in enumerate(questions):
+            with self.subTest(message=message):
+                answered = self.say(message, session=f"product-{index}")
+                self.assertIn(PRODUCT_NAME, answered["speech"])
+                self.assertIn("projects, cycles and tickets", answered["speech"])
+                self.assertIn("create a ticket", answered["speech"])
+                self.assertIsNone(answered["validated_action"])
+
+    def test_a_question_about_a_record_is_not_taken_for_a_question_about_the_product(self):
+        answered = self.say("what is this ticket about", session="record-question")
+        self.assertNotIn("projects, cycles and tickets", answered["speech"])
+
+    def test_asking_again_gets_different_words(self):
+        first = self.say("what is pixel", session="again")["speech"]
+        second = self.say("what is pixel supposed to do?", session="again", turn_id=2)["speech"]
+        self.assertNotEqual(first, second)
+        self.assertIn("projects, cycles and tickets", second)
 
     def test_a_request_that_needs_a_person_asks_instead_of_falling_back(self):
         """Found live: "assign it to priya" (an unrecognised name) answered "I'm not sure how to help"."""

@@ -121,7 +121,13 @@ async function snapshot(page: Page) {
 }
 
 async function openPage(page: Page, path: string) {
-  await page.goto(path, { waitUntil: "networkidle" });
+  try {
+    await page.goto(path, { waitUntil: "networkidle" });
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.includes("interrupted by another navigation")) throw error;
+    await page.waitForLoadState("domcontentloaded").catch(() => undefined);
+    await page.goto(path, { waitUntil: "networkidle" });
+  }
   await expect(page.locator("main")).toBeVisible();
 }
 
@@ -138,7 +144,11 @@ async function press(page: Page, path: string, seen: Seen, index: number) {
     await page.waitForTimeout(250);
     const end = await snapshot(page).catch(() => null);
     if (end === null) return true; // the page navigated away mid-read: that is an effect
-    if (end.url !== start.url || end.text !== start.text || end.dialogs !== start.dialogs
+    if (end.url !== start.url) {
+      await page.waitForLoadState("domcontentloaded").catch(() => undefined);
+      return true;
+    }
+    if (end.text !== start.text || end.dialogs !== start.dialogs
         || end.expanded !== start.expanded || seen.requests !== requests) return true;
   }
   return false;

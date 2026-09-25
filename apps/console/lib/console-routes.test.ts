@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { CONSOLE_ROUTES, unroutableViews } from "./console-routes";
+import { CONSOLE_ROUTES, consoleRecordRoute, unroutableViews } from "./console-routes";
 
 /**
  * Pixel's own definition names the places somebody can ask to be taken to. Every one of them
@@ -35,5 +35,11 @@ describe("everywhere Pixel can be asked to open", () => {
       expect(declaredViews()).not.toContain(unbuilt);
       expect(CONSOLE_ROUTES).not.toHaveProperty(unbuilt);
     }
+  });
+
+  it("opens a named product record and invents no routes for other record kinds", () => {
+    expect(consoleRecordRoute("product", "support desk")).toBe("/console/products/support%20desk");
+    expect(consoleRecordRoute("member", "owner@example.test")).toBeNull();
+    expect(consoleRecordRoute("product", "")).toBeNull();
   });
 });

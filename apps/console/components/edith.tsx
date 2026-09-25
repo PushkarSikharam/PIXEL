@@ -107,8 +107,6 @@ export function EdithPanel({
   const playing = useRef<HTMLAudioElement | null>(null);
   const audioUrl = useRef<string | null>(null);
   const log = useRef<HTMLDivElement | null>(null);
-  /** Whether this conversation has already been started over after a refusal. */
-  const retried = useRef(false);
   const turn = useRef(0);
   const sessionId = useRef("");
   function stopAudio() {
@@ -170,20 +168,6 @@ export function EdithPanel({
         throw new Error("The reply did not match this conversation. Please retry.");
       }
       if (response.status === "stale" || response.status === "cancelled") return;
-      if (response.status === "denied" && turn.current > 1 && !retried.current) {
-        // A refused turn did nothing, so nothing is repeated by asking again. What ends a
-        // conversation is nearly always the conversation itself, and that is no reason to leave
-        // somebody typing into a panel that will refuse everything from here on. Once only: a
-        // second refusal is about the request, and is shown.
-        retried.current = true;
-        sessionId.current = crypto.randomUUID();
-        turn.current = 0;
-        sending.current = false;
-        setBusy(false);
-        await send(message);
-        return;
-      }
-      retried.current = false;
       setMessages((all) => [...all, { role: "agent", text: response.speech }]);
       const action = response.status === "completed" && response.validated_action ? actions[response.validated_action.type] : null;
       if (response.validated_action && !response.execution) {

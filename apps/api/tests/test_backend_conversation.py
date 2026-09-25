@@ -288,6 +288,9 @@ class DefinitionAuthorityConversationTest(EngineCutoverFixture):
     def test_turn_context_selected_record_must_belong_to_this_product_and_scope(self):
         valid = self.say("what next", session="selected", page="issue_detail", selected="LIN-142")
         self.assertNotEqual(valid["status"], "denied")
+        stale = self.say("what next", session="stale-selected", page="projects", selected="LIN-142")
+        self.assertNotEqual(stale["status"], "denied",
+                            "a visible selection from the previous screen is ignored, not refused")
         forged = self.say("what next", session="forged", page="issue_detail", selected="CON-7")
         self.assertEqual(forged["status"], "denied")
         self.assertIn("invalid_selected_record", forged["intent_trace"]["reason"])

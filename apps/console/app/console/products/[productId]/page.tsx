@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Pencil, Plus, RotateCcw } from "lucide-react";
+import { RecordCards } from "@pixel-console/components/record-cards";
 import { useConsole } from "@pixel-console/components/console-context";
 import { ProductKnowledge } from "@pixel-console/components/product-knowledge";
 import { RecordFormDialog } from "@pixel-console/components/record-form";
@@ -162,7 +163,7 @@ function LiveProductWorkspace({ productId }: { productId: string }) {
               {recordFilter ? <Button size="sm" onClick={() => setRecordFilter(null)}>Clear filter</Button> : null}
               {selectedRecord ? <section aria-label="Selected record" className="px-stack">
                 <h2>{String(selectedRecord[currentEntity.title_field] ?? selectedRecord.id)}</h2>
-                <dl>{currentEntity.fields.filter((field) => field.display).map((field) => (
+                <dl className="px-record-fields">{currentEntity.fields.filter((field) => field.display).map((field) => (
                   <div key={field.name}><dt>{field.label}</dt>
                     <dd>{renderValue(named(shape, records, currentEntity.fields, field.name, selectedRecord[field.name]))}</dd>
                   </div>
@@ -175,9 +176,10 @@ function LiveProductWorkspace({ productId }: { productId: string }) {
                       <Pencil aria-hidden />Edit</Button>
                   ) : null}
                 </div>
-              </section> : <GenericRecordTable shape={shape} records={records} entity={currentEntity.name} rows={filteredRecords}
+              </section> : <RecordCards shape={shape} records={records} entity={currentEntity.name} rows={filteredRecords}
                 columns={currentView.columns.length ? currentView.columns : currentEntity.summary_fields}
                 onAdd={() => setWriting({ entity: currentEntity!.name, record: null })}
+                onOpen={(row) => setRecordSelection({ entity: currentEntity!.name, id: row.id })}
                 onEdit={(row) => setWriting({ entity: currentEntity!.name, record: row })} />
               }
             </Panel>
@@ -311,55 +313,6 @@ function ProductSummary({ shape, records, onOpen }: {
   );
 }
 
-function GenericRecordTable({ shape, records, entity, rows, columns, onAdd, onEdit }: {
-  shape: ApiProductShape;
-  records: ApiRecords;
-  entity: string;
-  rows: ApiRecord[];
-  columns: string[];
-  onAdd?: () => void;
-  onEdit?: (row: ApiRecord) => void;
-}) {
-  const entityShape = shape.entities.find((candidate) => candidate.name === entity);
-  const fields = entityShape?.fields ?? [];
-  const visibleColumns = ["id", ...(columns.length ? columns : fields.filter((field) => field.display).map((field) => field.name))];
-  if (rows.length === 0) {
-    // An empty screen that only says it is empty is a dead end. Both ways of filling it are
-    // offered, because somebody meeting this product for the first time may want either.
-    return (
-      <EmptyState title={`No ${entityShape?.plural.toLowerCase() ?? "records"} yet`}
-        action={onAdd ? <Button variant="primary" onClick={onAdd}>
-          <Plus aria-hidden />Add the first {entityShape?.label.toLowerCase() ?? "record"}</Button> : undefined}>
-        Add one here, or ask {shape.assistant_name} to create it for you.
-      </EmptyState>
-    );
-  }
-  return (
-    <div className="px-table-wrap">
-      <table className="px-table">
-        <thead><tr>{visibleColumns.map((column) => <th key={column} scope="col">{labelFor(fields, column)}</th>)}
-          {onEdit ? <th scope="col"><span className="px-sr-only">Actions</span></th> : null}</tr></thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.id}>
-              {visibleColumns.map((column) => (
-                <td key={column}>{renderValue(named(shape, records, fields, column, row[column]))}</td>
-              ))}
-              {onEdit ? <td style={{ textAlign: "right" }}>
-                {Number(row.revision ?? 0) >= 1 ? (
-                  <Button size="sm" aria-label={`Edit ${String(row.title || row.id)}`}
-                    onClick={() => onEdit(row)}><Pencil aria-hidden />Edit</Button>
-                ) : null}
-              </td> : null}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-
 function labelFor(fields: ApiProductShape["entities"][number]["fields"], column: string): string {
   if (column === "id") return "ID";
   const label = fields.find((field) => field.name === column)?.label || column.replace(/_/g, " ");
@@ -387,8 +340,11 @@ function named(shape: ApiProductShape, records: ApiRecords,
 }
 
 function renderValue(value: unknown) {
-  if (value === undefined || value === null || value === "") return <span className="px-muted">None</span>;
-  if (Array.isArray(value)) return value.length ? value.join(", ") : <span className="px-muted">None</span>;
+  // "None" read as a value somebody had typed. An empty field says it has not been filled in.
+  const empty = <span className="px-muted">Not set</span>;
+  if (value === undefined || value === null || value === "") return empty;
+  if (Array.isArray(value)) return value.length ? value.join(", ") : empty;
+  if (typeof value === "boolean") return value ? "Yes" : "No";
   return String(value);
 }
 

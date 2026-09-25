@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.account_api import router as account_router
+from app.organization_api import grant_product_to_everyone, router as organization_router
 from app.product_knowledge import router as knowledge_router
 from app.definitions.loader import parse_definition
 
@@ -308,6 +309,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.include_router(account_router)
+app.include_router(organization_router)
 app.include_router(knowledge_router)
 
 
@@ -655,6 +657,8 @@ def add_product(tenant_id: str, body: AddProductRequest, http: Request,
     # Whoever added the product can work in it straight away; a product nobody may open is not
     # one anybody added on purpose.
     grant_records(tenant_id, body.product_id, user.user_id, [], True)
+    # And so can everyone else already in the organization, each on their own terms.
+    grant_product_to_everyone(tenant_id, body.product_id, directory)
     definition = directory.definitions.load(body.definition_id, body.definition_version).definition
     return ProductSummary(
         team_id=binding.team_id,
@@ -743,6 +747,8 @@ class EntityShape(BaseModel):
     title_field: str
     summary_fields: list[str] = []
     fields: list[FieldShape] = []
+    # Whether these records are the product's people, so a screen can show them as people.
+    is_people: bool = False
 
 
 class ControlShape(BaseModel):
@@ -821,6 +827,7 @@ def product_shape(product_id: str, user: AuthUser = Depends(require_auth)) -> Pr
             EntityShape(
                 name=name, label=entity.label, plural=entity.plural,
                 title_field=entity.title_field, summary_fields=list(entity.summary_fields),
+                is_people=bool(definition.people and definition.people.entity == name),
                 fields=[
                     FieldShape(
                         name=field_name, label=spec.label or field_name.replace("_", " "),
@@ -1061,6 +1068,7 @@ def _keyed_record(execution_key: str, session_id: str, user: AuthUser, product_i
             record_id=result.record_id,
             changes=_committed_values(change_set.get("changes") or change_set.get("fields"),
                                       result.record),
+            title_field=definition.entities[entity].title_field if entity in definition.entities else "title",
         ),
         record=result.record,
     )
@@ -1609,6 +1617,9 @@ def _or_platform_navigation(request: TurnRequest, http: Request, background: Bac
         "session_id": f"{request.session_id}{PLATFORM_SESSION}",
         "workspace_scope_id": PRIMARY,
         "selected_issue_id": None,
+        # The screen open is one of the product's, which the application has never heard of; sent
+        # along, it made the application refuse and the product's "not sure" was all anyone heard.
+        "current_page": None,
     })
     try:
         elsewhere = _answer_turn(moved, http, background, user, engine)

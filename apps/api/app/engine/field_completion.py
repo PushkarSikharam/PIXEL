@@ -23,6 +23,12 @@ _DATE = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
 _YES = frozenset({"yes", "y", "yeah", "yep", "true"})
 _NO = frozenset({"no", "n", "nope", "false"})
 _FILLER = frozenset({"the", "a", "an", "it", "in", "to", "for", "please", "use", "make", "set"})
+# Replies to a question, not values. "What should the title be?" answered "yes" is somebody
+# agreeing to something, and a record called "yes" is never what they meant.
+_NOT_A_VALUE = frozenset({
+    "yes", "y", "yeah", "yep", "yup", "sure", "ok", "okay", "no", "n", "nope", "cancel", "stop",
+    "never mind", "nevermind", "confirm", "go ahead", "do it", "none", "nothing", "skip",
+})
 
 
 def first_missing(entity: EntitySpec, fields: dict[str, Any]) -> str | None:
@@ -86,7 +92,7 @@ def read_answer(spec: FieldSpec, message: str, snapshot: TurnSnapshot) -> Any | 
         match = _DATE.search(lowered)
         return match.group(1) if match else None
     if spec.type == "text":
-        return text
+        return None if lowered in _NOT_A_VALUE else text
     return None
 
 

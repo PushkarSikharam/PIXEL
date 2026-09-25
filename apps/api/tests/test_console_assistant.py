@@ -195,6 +195,31 @@ class AskingAboutPixelItselfTest(ConsoleAssistantFixture):
         self.assertNotIn("Here's what I can do", answer["speech"])
         self.assertIsNone(self.action(answer))
 
+    def test_what_is_pixel_is_answered_from_the_page_that_says_what_it_is(self):
+        """It used to quote "How Pixel works": checksums and pinned versions, to a newcomer."""
+        for question in ("What is Pixel?", "what does Pixel do"):
+            with self.subTest(question=question):
+                speech = self.ask(question)["speech"]
+                self.assertIn("Pixel is a platform for running products through conversation", speech)
+                self.assertNotIn("checksum", speech)
+                self.assertNotIn('"', speech)
+
+    def test_how_pixel_works_is_still_answered_from_how_it_works(self):
+        self.assertIn("Pixel works from definitions", self.ask("How does Pixel work?")["speech"])
+
+    def test_another_tool_is_declined_politely_not_answered_with_a_list(self):
+        for request in ("open salesforce", "check my gmail", "take me to hubspot"):
+            with self.subTest(request=request):
+                answer = self.ask(request, session=f"tool-{request}")
+                self.assertIsNone(self.action(answer))
+                self.assertIn("Pixel", answer["speech"])
+                self.assertNotIn("I can open", answer["speech"])
+
+    def test_the_people_screen_is_called_what_the_page_calls_it(self):
+        answer = self.ask("take me to people", session="people")
+        self.assertIn("People", answer["speech"])
+        self.assertNotIn("Members", answer["speech"])
+
     def test_it_explains_what_happens_before_a_record_changes(self):
         answer = self.ask("how does Pixel keep my records safe")
         self.assertIn("confirm", answer["speech"].lower())
@@ -341,7 +366,7 @@ class GoingBackTest(ConsoleAssistantFixture):
         self.ask("open products", session="twice")
         self.ask("open members", session="twice")
         self.assertIn("Products", self.ask("go back", session="twice")["speech"])
-        self.assertIn("Members", self.ask("go back", session="twice")["speech"])
+        self.assertIn("People", self.ask("go back", session="twice")["speech"])
 
     def test_a_named_destination_is_still_that_destination(self):
         self.ask("open members", session="named")

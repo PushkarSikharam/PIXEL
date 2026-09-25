@@ -147,6 +147,11 @@ def _prefix(name: str, taken: set[str]) -> str:
     return candidate
 
 
+def _a(noun: str) -> str:
+    """"an agent", "a deal": the article a person would write."""
+    return f"{'an' if noun[:1] in 'aeiou' else 'a'} {noun}"
+
+
 def _label(field: DraftField) -> str:
     return field.label or field.name.replace("_", " ")
 
@@ -253,7 +258,7 @@ def draft_definition(draft: ProductDraft, owner_organization: str | None = None)
             create = f"create_{thing.name}"
             actions[create] = {"capability": "CREATE_RECORD", "entity": thing.name,
                                "fields": settable,
-                               "description": f"Add a {thing.label.lower()}.",
+                               "description": f"Add {_a(thing.label.lower())}.",
                                "confirm": True}
             intents.append({"action": create, "response": "record_created",
                             "match": [["add", "create", "new", "raise", "log"], words]})
@@ -269,7 +274,7 @@ def draft_definition(draft: ProductDraft, owner_organization: str | None = None)
             change = f"change_{thing.name}"
             actions[change] = {"capability": "UPDATE_RECORD", "entity": thing.name,
                                "fields": changeable,
-                               "description": f"Change a {thing.label.lower()}.",
+                               "description": f"Change {_a(thing.label.lower())}.",
                                "confirm": True}
             change_words = ["change", "set", "update", "move"]
             if people and "owner" in changeable:

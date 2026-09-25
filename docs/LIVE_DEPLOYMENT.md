@@ -54,6 +54,21 @@ shared member records. The public web app no longer uses it, so production keeps
 on, anyone calling the API directly could still read and change the shared member records.
 `PIXEL_DEMO_LOGIN_USERS` and `PIXEL_DEMO_IDLE_RESET_MINUTES` only matter while it is on.
 
+### Signed-in console
+
+The console's sign-in and its assistant need two more settings on the API service:
+
+```text
+PIXEL_ENGINE_MODE=definition
+PIXEL_CONSOLE_DEFINITION=pixel_console
+```
+
+Customer sign-in refuses the legacy engine, so without `PIXEL_ENGINE_MODE=definition` nobody can
+sign in to the console. Without `PIXEL_CONSOLE_DEFINITION` sign-in works but the console has no
+assistant: its column says "The assistant is not set up for this deployment yet." After setting
+it, each organization gets the assistant the next time one of its people signs in with an email
+code.
+
 Provider credentials and budgets belong only to the API service. Copy the paid-provider settings
 from `.env.example`; never add them to Vercel or expose them as `NEXT_PUBLIC_*` variables.
 
@@ -215,6 +230,16 @@ Then check by hand:
    forwarding client addresses and every visitor shares one limit.
 7. Enable voice and speak one turn (paid: needs approval), or confirm the browser-voice fallback.
 8. Restart the API service and verify the saved data remains.
+
+## Recovery: the console says Pixel is not responding
+
+Start by reading the body of `https://<web-host>/api/agent/health`:
+
+- `{"status":"unhealthy", ...}` means the API is running but not ready. Follow the next section.
+- Anything else (an HTML page, a timeout, `502`/`504`) means the web app cannot reach the API at
+  all. Check the Railway service is running and not crash-looping (its restart policy gives up
+  after five failures), then check that Vercel's `PIXEL_AGENT_API_BASE_URL` still points at the
+  service's current public URL and ends in `/api`. Redeploy the web app after changing it.
 
 ## Recovery: conversations cannot start
 

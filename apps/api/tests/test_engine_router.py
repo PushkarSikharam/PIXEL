@@ -439,6 +439,24 @@ class PersonFollowUpTest(RouterFixture):
         self.assertEqual((result.kind, result.proposal.action_key, result.proposal.filter.value),
                          (RouteKind.PROPOSE, "contacts_by_owner", "ben-okafor"))
 
+    def test_a_message_that_merely_contains_a_name_is_not_a_follow_up(self):
+        """Right after a person request, "what's the weather in Paris?" was answered as if Paris
+        were someone to look up, and got "I can't find Paris"."""
+        for message in ("what's the weather in Paris?", "tell me about Rome", "Zed"):
+            with self.subTest(message=message):
+                chat = self.chat()
+                chat.say("show me the contacts")
+                self.assertNotEqual(chat.say(message).response_key, "unknown_person")
+
+    def test_follow_ups_can_be_phrased_several_ways(self):
+        for message in ("what about Ben", "how about Ben?", "and Ben", "same for Ben", "Ben too"):
+            with self.subTest(message=message):
+                chat = self.chat()
+                chat.say("show me the contacts")
+                result = chat.say(message)
+                self.assertEqual((result.kind, result.proposal.action_key),
+                                 (RouteKind.PROPOSE, "contacts_by_owner"))
+
     def test_a_person_based_request_is_reapplied_to_the_new_person(self):
         chat = self.chat()
         chat.say("contacts for Cara")
@@ -632,3 +650,56 @@ class ReproducedDefectTest(RouterFixture):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RecordNamedByTitleTest(RouterFixture):
+    """People name what they made by what they called it, not by the identifier Pixel gave it."""
+
+    def test_a_visible_record_opens_by_its_whole_title(self):
+        for message in ("open Eli Moss", "show me eli moss", "Eli Moss"):
+            with self.subTest(message=message):
+                result = self.chat().say(message)
+                self.assertEqual(result.kind, RouteKind.PROPOSE, result)
+                self.assertEqual(result.proposal.target, RecordRef("contact", "CON-2"))
+
+    def test_a_record_the_caller_cannot_see_is_never_opened(self):
+        result = self.chat().say("open Fay Chu")
+        self.assertTrue(result.proposal is None or result.proposal.target != RecordRef("contact", "CON-3"))
+
+    def test_part_of_a_title_names_nothing(self):
+        result = self.chat().say("open Moss")
+        self.assertTrue(result.proposal is None or result.proposal.target is None)
+
+
+class TitleDetailsTest(unittest.TestCase):
+    """Choices named after a new record's title set those fields instead of joining the title."""
+
+    def setUp(self):
+        from app.definitions.contract import EntitySpec
+        self.entity = EntitySpec.model_validate({
+            "label": "Case", "plural": "Cases", "id": {"strategy": "prefix", "prefix": "CASE"}, "title_field": "title",
+            "fields": {
+                "title": {"type": "text", "label": "Title"},
+                "priority": {"type": "enum", "label": "Priority", "values": ["Low", "High"]},
+                "status": {"type": "enum", "label": "Status", "values": ["New", "In progress", "Done"]},
+            },
+        })
+
+    def split(self, message: str):
+        from app.engine.mentions import title_and_details
+        return title_and_details(message, self.entity, ["title", "priority", "status"])
+
+    def test_a_trailing_choice_is_a_detail(self):
+        self.assertEqual(self.split("create a case called Checkout crash with high priority"),
+                         ("Checkout crash", {"priority": ["High"]}))
+        self.assertEqual(self.split("add a case called Printer jam, high priority and status in progress"),
+                         ("Printer jam", {"priority": ["High"], "status": ["In progress"]}))
+
+    def test_a_title_that_only_mentions_a_word_keeps_it(self):
+        self.assertEqual(self.split("create a case called Coffee with the new team"),
+                         ("Coffee with the new team", {}))
+        self.assertEqual(self.split("create a case about login errors"), ("Login errors", {}))
+
+    def test_a_choice_before_the_title_counts_too(self):
+        self.assertEqual(self.split("create a high priority case called Outage"),
+                         ("Outage", {"priority": ["High"]}))

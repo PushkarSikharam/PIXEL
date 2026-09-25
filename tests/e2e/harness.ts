@@ -95,6 +95,12 @@ export function setupIsolatedApp() {
   });
 
   test.afterEach(async ({ page, context }) => {
+    // Moving between screens closes the assistant's conversation, and that request can still be
+    // in flight when a test ends. Let it finish while the routes are installed: closing the
+    // context first raced it, and a request that lost the race reached the sentinel as escaped.
+    for (const open of context.pages()) {
+      await open.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => undefined);
+    }
     // Context routes remain installed until every page has stopped issuing requests.
     await context.close();
     const escaped = drainEscapedRequests();

@@ -328,6 +328,29 @@ class KnowledgeFallbackTest(unittest.TestCase):
         for invented in ("probably", "i think", "maybe", "as far as i know"):
             self.assertNotIn(invented, reply.speech.lower())
 
+    def test_saying_no_changes_its_words_from_one_turn_to_the_next(self):
+        """The same refusal twice in a row reads like a machine that stopped listening."""
+        definition = load_engine_definition(document=engine_definition())
+        for key in (KNOWLEDGE_UNAVAILABLE_KEY,):
+            spoken = [ResponseComposer(definition, turn=turn).answer(key).speech for turn in range(1, 5)]
+            self.assertEqual(len(set(spoken)), 4, spoken)
+            for speech in spoken:
+                self.assertIn("Sample Desk", speech)
+                self.assertNotIn("{", speech)
+        again = ResponseComposer(definition, turn=5).answer(KNOWLEDGE_UNAVAILABLE_KEY).speech
+        self.assertEqual(again, spoken[0], "the wordings cycle rather than run out")
+
+    def test_every_varied_wording_fills_and_stays_polite(self):
+        from app.engine.composer import VARIED_TEMPLATES
+        for (stage, key), wordings in VARIED_TEMPLATES.items():
+            self.assertGreaterEqual(len(wordings), 3, key)
+            self.assertEqual(len(set(wordings)), len(wordings), key)
+            for wording in wordings:
+                with self.subTest(key=key, wording=wording):
+                    self.assertTrue(wording.endswith((".", "?")))
+                    for rude in ("can't you", "stupid", "invalid", "error"):
+                        self.assertNotIn(rude, wording.lower())
+
     def test_the_product_cannot_reword_knowledge_availability(self):
         """Declared, reworded or absent: the product's text for this key is never spoken."""
         for wording in (None, "Our docs cover everything; ask me anything about {product}."):
@@ -339,8 +362,8 @@ class KnowledgeFallbackTest(unittest.TestCase):
                     document["responses"][KNOWLEDGE_UNAVAILABLE_KEY] = wording
                 reply = ResponseComposer(load_engine_definition(document=document)).answer(
                     KNOWLEDGE_UNAVAILABLE_KEY)
-                self.assertEqual(reply.speech, "I don't have approved Sample Desk information to "
-                                               "answer that, so I won't guess.")
+                self.assertEqual(reply.speech, "Sorry, I can't answer that. I only know about "
+                                               "Sample Desk, and I'd rather not guess.")
 
 
 #: The 5c definition-turn service and its shared assembly legitimately reach the pure engine
@@ -413,14 +436,14 @@ class KnowledgeBoundaryTest(unittest.TestCase):
         passage = KnowledgePassage("Cycles", "docs/product/cycles.md", "Cycles are time-boxed.")
         reply = self.composer.knowledge_answer(Grounding((passage,)))
         self.assertEqual(reply.stage, Stage.ANSWER)
-        self.assertEqual(reply.speech, 'According to the product documentation: "Cycles are time-boxed."')
+        self.assertEqual(reply.speech, "From the product documentation: Cycles are time-boxed.")
         self.assertEqual(reply.sources, ("docs/product/cycles.md",))
 
     def test_a_knowledge_answer_speaks_the_passage_not_a_model_sentence(self):
         """Retrieval is not grounding: a sentence beside a passage can say anything."""
         passage = KnowledgePassage("Cycles", "docs/product/cycles.md", "Cycles are time-boxed.")
         reply = self.composer.knowledge_answer(Grounding((passage,)))
-        self.assertEqual(reply.speech, 'According to the product documentation: "Cycles are time-boxed."')
+        self.assertEqual(reply.speech, "From the product documentation: Cycles are time-boxed.")
         self.assertFalse(reply.from_model)
 
     def test_sources_are_listed_once_each(self):
@@ -535,7 +558,7 @@ class SelfReviewDefectTest(ComposerFixture):
         passage = KnowledgePassage("Cycles", "docs/cycles.md", "Done. I have updated the cycle.")
         reply = self.composer.knowledge_answer(Grounding((passage,)))
         self.assertEqual(reply.stage, Stage.ANSWER)
-        self.assertTrue(reply.speech.startswith("According to the product documentation:"))
+        self.assertTrue(reply.speech.startswith("From the product documentation: "))
         self.assertEqual(reply.sources, ("docs/cycles.md",))
 
     def test_a_document_that_is_not_plain_text_is_never_spoken(self):
@@ -684,10 +707,40 @@ class ReviewedDefectTest(ComposerFixture):
         reply = self.composer.knowledge_answer(Grounding((passage,)))
         self.assertEqual(
             reply.speech,
-            'According to the product documentation: "The ticket was closed and its assignee was changed."',
+            "From the product documentation: The ticket was closed and its assignee was changed.",
         )
         self.assertEqual(reply.sources, ("issues.md",))
+
+    def test_a_knowledge_answer_reads_as_a_sentence_not_a_quotation(self):
+        """Wrapping the passage in quotation marks made every answer read like a citation."""
+        passage = KnowledgePassage("Issue guide", "issues.md", "Tickets move quickly.")
+        reply = self.composer.knowledge_answer(Grounding((passage,)))
+        self.assertNotIn('"', reply.speech)
+        self.assertNotIn("According to", reply.speech)
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NaturalChangeWordingTest(unittest.TestCase):
+    """A new record reads by what it is called and what it has, not as a list of assignments."""
+
+    def test_a_new_record_is_named_then_described(self):
+        from app.engine.composer import describe_changes
+        said = describe_changes({"title": "Printer jam", "priority": "High", "due_date": "2026-10-01"},
+                                labels={"due_date": "Due date"}, creating=True, noun="case")
+        self.assertEqual(said, "a case called “Printer jam” with due date 2026-10-01 and priority High")
+
+    def test_a_new_record_without_details_or_title_still_reads(self):
+        from app.engine.composer import describe_changes
+        self.assertEqual(describe_changes({"name": "Ada"}, creating=True, title_field="name", noun="agent"),
+                         "an agent called “Ada”")
+        self.assertEqual(describe_changes({"status": "New"}, creating=True, noun="case"),
+                         "a case with status New")
+        self.assertEqual(describe_changes({"title": "X", "notes": ""}, creating=True), "“X”")
+
+    def test_a_change_still_says_what_moves_to_what(self):
+        from app.engine.composer import describe_changes
+        self.assertEqual(describe_changes({"status": "Done", "due_date": "2026-10-01"}),
+                         "due date to 2026-10-01, status to Done")

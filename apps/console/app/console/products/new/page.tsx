@@ -11,10 +11,11 @@ import { TEAMS } from "@pixel-console/lib/mock-data";
 // Pixel's own guide, named here because the console may name her and core may not.
 const ASSISTANT_NAME = "Edith";
 import {
-  STEP_LABELS, STEPS, acceptUnderstanding, addField, addThing, addressFor, approveGeneratedUnderstanding,
+  PRODUCT_TEMPLATES, STEP_LABELS, STEPS, acceptUnderstanding, addField, addThing, addressFor, applyTemplate,
+  approveGeneratedUnderstanding,
   canEnter, completeAnalysis,
   definitionIdFor, goTo, initialOnboarding, keyForName, publish, removeField, removeThing, setConfirmation,
-  setDetails, starterDefinitionText, understood, updateField, updateThing,
+  setDetails, starterDefinitionText, summariseAbilities, understood, updateField, updateThing,
   toggleAction, validate, type OnboardingState, type Step,
 } from "@pixel-console/lib/onboarding";
 import { FieldError, addProduct, productDraft, storedSession } from "@pixel-console/lib/pixel-api";
@@ -40,6 +41,12 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
   const teams = TEAMS.filter((t) => t.organizationId === c.organizationId && !t.suspended
     && c.can("products.manage", { teamId: t.id, productId: null }));
   const liveTeamId = c.account?.team_id ?? c.account?.teams[0]?.team_id ?? null;
+  const liveTeams = c.account?.teams ?? [];
+  // An admin of an organization with several teams chooses which one runs the product.
+  const chooseLiveTeam = c.live && !c.account?.team_id && liveTeams.length > 1;
+  const [liveChosen, setLiveChosen] = useState<string | null>(null);
+  const liveTeam = chooseLiveTeam && liveTeams.some((team) => team.team_id === liveChosen) ? liveChosen : liveTeamId;
+  const liveTeamName = c.account?.teams.find((team) => team.team_id === liveTeam)?.name ?? "your team";
   const [state, setState] = useState<OnboardingState>(() => initialOnboarding(liveTeamId ?? teams[0]?.id ?? ""));
   const [sourceName, setSourceName] = useState("");
   const [sourceKind, setSourceKind] = useState<"document" | "openapi" | "url">("document");
@@ -49,6 +56,8 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
   // Which box a refusal was about, so it can be shown there instead of as a notice at the foot
   // of a step the person may not even be on any more.
   const [draftField, setDraftField] = useState<string | null>(null);
+  // The template the current description started from, if any, so its card shows as chosen.
+  const [templateId, setTemplateId] = useState<string | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const { setActiveWork } = c;
   const visibleSteps: Step[] = STEPS.filter((step) => step !== "published"
@@ -66,6 +75,7 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
     if (c.discardEpoch === epoch.current) return;
     epoch.current = c.discardEpoch;
     setState(initialOnboarding(teams[0]?.id ?? ""));
+    setTemplateId(null);
     setSourceName("");
     toast("warn", "The onboarding draft was discarded.");
   }, [c.discardEpoch, teams, toast]);
@@ -125,7 +135,7 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
 
   return (
     <>
-      <PageHead title="Add a product" description="Tell Pixel what your product keeps track of. It creates screens, records and an assistant you can review before launch."
+      <PageHead title="Add a product" description="Start from a template or describe what your product keeps. Pixel turns it into screens, records and an assistant you can review before launch."
         actions={onAdvanced ? <Button onClick={onAdvanced}>Advanced import</Button> : undefined} />
       <div className="px-onboarding">
         <nav aria-label="Onboarding steps">
@@ -148,7 +158,7 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
           {state.step === "details" && (
             <Panel>
               <form className="px-stack" onSubmit={(e) => { e.preventDefault(); setState((s) => goTo(s, "sources")); }}>
-                <Field label="Product name"
+                <Field label="What is your product called?" hint="For example: Acme Sales or Support Desk"
                   error={draftField === "product_name" ? draftError : null}>{(f) => (
                   <Input id={f.id} describedBy={f.describedBy} invalid={f.invalid} value={state.name}
                     maxLength={80} required
@@ -158,19 +168,35 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
                         s.slugChosen ? s.slug : addressFor(e.target.value), { derived: !s.slugChosen }));
                     }} />
                 )}</Field>
-                <Field label="Short link"
-                  hint="Pixel creates this from the name. Change it only if you want a different address inside Pixel."
-                  error={slugError}>{(f) => (
-                  <Input id={f.id} describedBy={f.describedBy} invalid={f.invalid} value={state.slug} required
-                    onChange={(e) => setState((s) => setDetails(s, s.name, e.target.value.toLowerCase()))} />
-                )}</Field>
-                <Field label="Owning team">{(f) => (
-                  <select id={f.id} className="px-select" value={liveTeamId ?? state.teamId} disabled={Boolean(liveTeamId)}
-                    onChange={(e) => setState((s) => ({ ...s, teamId: e.target.value }))}>
-                    {liveTeamId ? <option value={liveTeamId}>Planning team</option>
-                      : teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                  </select>
-                )}</Field>
+                {chooseLiveTeam ? (
+                  <Field label="Which team runs it" hint="People in that team can use it. Admins can use every product.">{(f) => (
+                    <select id={f.id} aria-describedby={f.describedBy} className="px-select" value={liveTeam ?? ""}
+                      onChange={(e) => setLiveChosen(e.target.value)}>
+                      {liveTeams.map((team) => <option key={team.team_id} value={team.team_id}>{team.name}</option>)}
+                    </select>
+                  )}</Field>
+                ) : liveTeamId ? (
+                  <p className="px-small px-muted" style={{ margin: 0 }}>
+                    It will belong to <strong>{liveTeamName}</strong>, so everyone there can use it.
+                  </p>
+                ) : (
+                  <Field label="Which team runs it">{(f) => (
+                    <select id={f.id} className="px-select" value={state.teamId}
+                      onChange={(e) => setState((s) => ({ ...s, teamId: e.target.value }))}>
+                      {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                  )}</Field>
+                )}
+                <details open={Boolean(slugError)}>
+                  <summary className="px-small">Advanced: change its web address</summary>
+                  <div style={{ marginTop: 8 }}>
+                    <Field label="Web address" hint={`Pixel makes this from the name: /console/products/${state.slug || "your-product"}`}
+                      error={slugError}>{(f) => (
+                      <Input id={f.id} describedBy={f.describedBy} invalid={f.invalid} value={state.slug} required
+                        onChange={(e) => setState((s) => setDetails(s, s.name, e.target.value.toLowerCase()))} />
+                    )}</Field>
+                  </div>
+                </details>
                 <div className="px-row"><Button type="submit" variant="primary" disabled={!canEnter(state, "sources")}>Continue</Button></div>
               </form>
             </Panel>
@@ -179,99 +205,95 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
           {state.step === "sources" && (
             <Panel>
               <div className="px-stack">
-                {state.things.length === 0 || (!state.things[0].label && !state.things[0].plural) ? (
-                  <div className="px-stack" style={{ gap: 12 }}>
-                    <p className="px-muted">Start from a template, or describe your own from scratch.</p>
-                    <div className="px-row" style={{ gap: 8, flexWrap: "wrap" }}>
-                      {[
-                        { label: "CRM", things: [{ singular: "Deal", plural: "Deals", people: false }, { singular: "Contact", plural: "Contacts", people: true }] },
-                        { label: "Project Tracker", things: [{ singular: "Task", plural: "Tasks", people: false }, { singular: "Member", plural: "Members", people: true }] },
-                        { label: "Support Desk", things: [{ singular: "Ticket", plural: "Tickets", people: false }, { singular: "Agent", plural: "Agents", people: true }] },
-                        { label: "Inventory", things: [{ singular: "Item", plural: "Items", people: false }, { singular: "Supplier", plural: "Suppliers", people: false }] },
-                      ].map((template) => (
-                        <Button key={template.label} size="sm" onClick={() => {
-                          setState((st) => {
-                            let s = st;
-                            // Clear default empty things
-                            while (s.things.length > 0) s = removeThing(s, 0);
-                            for (const t of template.things) {
-                              s = addThing(s);
-                              const idx = s.things.length - 1;
-                              s = updateThing(s, idx, { label: t.singular, plural: t.plural, people: t.people,
-                                id: t.singular.toLowerCase().replace(/[^a-z0-9]+/g, "_") });
-                            }
-                            return s;
-                          });
-                        }}>{template.label}</Button>
-                      ))}
-                    </div>
-                    <div style={{ borderTop: "1px solid var(--px-border)", paddingTop: 12 }}>
-                      <p className="px-muted px-small">Or start from scratch:</p>
-                    </div>
-                  </div>
-                ) : null}
-                <p className="px-muted">
-                  What does this product keep track of? Add each type of record below.
-                  Pixel creates a screen for each one, and Edith can navigate, count, and manage them.
+                <div className="px-stack" style={{ gap: 6 }}>
+                  <h3 style={{ margin: 0 }}>Start from a template</h3>
+                  <p className="px-muted" style={{ margin: 0 }}>
+                    Pick the closest match and Pixel fills in the rest. You can launch it as it is
+                    or change anything below first.
+                    {state.things.length && !templateId ? " Choosing one replaces what you have described." : null}
+                  </p>
+                </div>
+                <div className="px-template-grid" role="group" aria-label="Product templates">
+                  {PRODUCT_TEMPLATES.map((template) => (
+                    <button key={template.id} type="button" className="px-template-card"
+                      aria-pressed={templateId === template.id}
+                      onClick={() => {
+                        setDraftError(null); setDraftField(null);
+                        setTemplateId(template.id);
+                        setState((st) => applyTemplate(st, template.id));
+                      }}>
+                      <strong>{template.name}</strong>
+                      <span>{template.summary}</span>
+                      <span className="px-template-things">
+                        {template.things.map((described) => described.plural).join(" · ")}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <h3 style={{ margin: "8px 0 0" }}>{templateId ? "Adjust what it keeps" : "Or describe it yourself"}</h3>
+                <p className="px-muted" style={{ margin: 0 }}>
+                  Tell Pixel what your product keeps track of, like deals or tickets, and what you
+                  want to know about each one. Each becomes a screen, and {ASSISTANT_NAME} can open,
+                  count, add and change them for you.
                 </p>
                 {state.things.map((thing, index) => (
                   <fieldset key={index} className="px-stack"
                     style={{ border: "1px solid var(--px-border)", borderRadius: 8, padding: 12, gap: 10 }}>
-                    <legend className="px-label">{thing.label.trim() || `Record type ${index + 1}`}</legend>
+                    <legend className="px-label">{thing.plural.trim() || thing.label.trim() || `Thing ${index + 1}`}</legend>
                     <div className="px-row" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
-                      <Field label="Singular name" hint="e.g. Deal, Ticket, Contact">{(f) => (
+                      <Field label="What do you call one?" hint="For example: Deal">{(f) => (
                         <Input id={f.id} describedBy={f.describedBy} value={thing.label}
                           onChange={(e) => setState((st) => updateThing(st, index, {
                             label: e.target.value,
                             id: thing.id || e.target.value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, ""),
                           }))} />
                       )}</Field>
-                      <Field label="Plural name" hint="e.g. Deals, Tickets, Contacts">{(f) => (
+                      <Field label="And more than one?" hint="For example: Deals">{(f) => (
                         <Input id={f.id} describedBy={f.describedBy} value={thing.plural}
                           onChange={(e) => setState((st) => updateThing(st, index, { plural: e.target.value }))} />
                       )}</Field>
                       <label className="px-row px-small">
                         <input type="checkbox" checked={thing.people}
                           onChange={(e) => setState((st) => updateThing(st, index, { people: e.target.checked }))} />
-                        This represents people
+                        These are people (like agents or salespeople)
                       </label>
-                      <Button size="sm" variant="ghost" aria-label={`Remove ${thing.label || "record type"}`}
+                      <Button size="sm" variant="ghost" aria-label={`Remove ${thing.label || "record"}`}
                         onClick={() => setState((st) => removeThing(st, index))}><Trash2 aria-hidden /></Button>
                     </div>
                     {thing.fields.map((field, fieldIndex) => (
                       <div key={fieldIndex} className="px-row" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
-                        <Field label="Field name" hint="e.g. Status, Priority, Due date">{(f) => (
-                          <Input id={f.id} describedBy={f.describedBy} value={field.name} placeholder="e.g. Status"
+                        <Field label="Detail to keep" hint={fieldIndex === 0 ? "For example: Title, Status or Due date" : undefined}>{(f) => (
+                          <Input id={f.id} describedBy={f.describedBy} value={field.name} placeholder="Title"
                             onChange={(e) => setState((st) => updateField(st, index, fieldIndex, { name: e.target.value }))} />
                         )}</Field>
-                        <Field label="Field type">{(f) => (
+                        <Field label="What kind of answer?">{(f) => (
                           <select id={f.id} className="px-select" value={field.type}
                             onChange={(e) => setState((st) => updateField(st, index, fieldIndex, { type: e.target.value as typeof field.type }))}>
-                            <option value="text">Text</option><option value="enum">Multiple choice</option>
-                            <option value="integer">Number</option><option value="date">Date</option>
-                            <option value="boolean">Yes / No</option>
+                            <option value="text">Words</option><option value="enum">Pick from a list</option>
+                            <option value="integer">A number</option><option value="date">A date</option>
+                            <option value="boolean">Yes or no</option>
                           </select>
                         )}</Field>
                         {field.type === "enum" ? (
-                          <Field label="Options" hint="Comma-separated, e.g. New, Active, Closed">{(f) => (
-                            <Input id={f.id} describedBy={f.describedBy} value={field.values} placeholder="New, Active, Closed"
+                          <Field label="The choices" hint="Separate them with commas">{(f) => (
+                            <Input id={f.id} describedBy={f.describedBy} value={field.values} placeholder="New, Won, Lost"
                               onChange={(e) => setState((st) => updateField(st, index, fieldIndex, { values: e.target.value }))} />
                           )}</Field>
                         ) : null}
                         <label className="px-row px-small">
                           <input type="checkbox" checked={field.required}
                             onChange={(e) => setState((st) => updateField(st, index, fieldIndex, { required: e.target.checked }))} />
-                          Required
+                          Must be filled in
                         </label>
                         <Button size="sm" variant="ghost" aria-label={`Remove ${field.name || "field"}`}
                           disabled={thing.fields.length === 1}
                           onClick={() => setState((st) => removeField(st, index, fieldIndex))}><Trash2 aria-hidden /></Button>
                       </div>
                     ))}
-                    <div><Button size="sm" onClick={() => setState((st) => addField(st, index))}>Add a field</Button></div>
+                    <div><Button size="sm" onClick={() => setState((st) => addField(st, index))}><Plus aria-hidden />Add a detail</Button></div>
                   </fieldset>
                 ))}
-                <div><Button onClick={() => setState((st) => addThing(st))}><Plus aria-hidden />Add another record type</Button></div>
+                <div><Button onClick={() => setState((st) => addThing(st))}><Plus aria-hidden />{state.things.length ? "Add something else it keeps track of" : "Describe my own instead"}</Button></div>
                 {draftError && !draftField ? <Alert tone="danger">{draftError}</Alert> : null}
                 <div className="px-row">
                   <Button onClick={() => setState((s) => goTo(s, "details"))}>Back</Button>
@@ -303,7 +325,8 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
                   </dd></div>
                   <div><dt className="px-label">Edith will be able to</dt><dd style={{ margin: 0 }}>
                     <ul className="px-stack" style={{ margin: 0, paddingLeft: 18, gap: 4 }}>
-                      {(state.understanding?.canDo ?? []).map((can) => <li key={can} className="px-small">{can}</li>)}
+                      {summariseAbilities(state.understanding?.canDo ?? [], state.understanding?.things ?? [])
+                        .map((can) => <li key={can} className="px-small">{can}</li>)}
                     </ul>
                   </dd></div>
                 </dl>
@@ -384,7 +407,7 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
                         const definitionId = definitionIdFor(state);
                         const created = await addProduct(session, {
                           productId: state.slug,
-                          teamId: liveTeamId ?? state.teamId,
+                          teamId: liveTeam ?? state.teamId,
                           definitionId,
                           definition: state.understanding?.definition ?? starterDefinitionText(state),
                           version: 1,

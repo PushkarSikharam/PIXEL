@@ -86,14 +86,15 @@ STAGE_TEMPLATES: Mapping[Stage, frozenset[str]] = {
                              "guided_path", "next_step", "last_change", "nothing_changed",
                              "people_count", "people_count_here", "anchor_count",
                              "anchor_count_here", "anchor_count_none", "conversation_ended", "thanks",
-                             "voice_interruption", "next_step_here", "knowledge_unavailable"}),
+                             "voice_interruption", "next_step_here", "knowledge_unavailable",
+                             "product_about"}),
     Stage.UNGROUNDED: frozenset({"knowledge_unavailable"}),
 }
 
 # Lifecycle assertions are platform-owned. A product may rename itself and its records, but a
 # customer-authored response template cannot turn "proposed" or "failed" into "completed".
 PLATFORM_LIFECYCLE_TEMPLATES: Mapping[tuple[Stage, str], str] = {
-    (Stage.PROPOSED, "record_create_proposed"): "I'll create this record with {changes}.",
+    (Stage.PROPOSED, "record_create_proposed"): "I'll create {changes}.",
     (Stage.PROPOSED, "record_update_proposed"): "I'll update {record_id}: {changes}.",
     (Stage.PROPOSED, "view_opened"): "I'll open {view}.",
     # Owner decision: a correction is acknowledged before the navigation it asks for.
@@ -118,9 +119,15 @@ LIFECYCLE_STAGES = frozenset({
 PLATFORM_FAILURE = "I couldn't complete that request."
 # A control the definition does not name is described, never spoken as its identifier.
 UNNAMED_CONTROL = "the requested control"
-PLATFORM_KNOWLEDGE_UNAVAILABLE = (
-    "I don't have approved {product} information to answer that, so I won't guess."
+KNOWLEDGE_UNAVAILABLE_WORDINGS = (
+    "Sorry, I can't answer that. I only know about {product}, and I'd rather not guess.",
+    "That's not something I can tell you. I can only answer from approved {product} "
+    "information, and it doesn't cover that.",
+    "I'm not able to answer that one. Ask me anything about {product} and I'll do my best.",
+    "I don't have an answer for that, and I won't make one up. I can help with anything in "
+    "{product}.",
 )
+PLATFORM_KNOWLEDGE_UNAVAILABLE = KNOWLEDGE_UNAVAILABLE_WORDINGS[0]
 # Unknown and inaccessible people read identically, so a refusal never reveals that someone
 # exists outside the caller's scope.
 PLATFORM_PERSON_NOT_FOUND = "I can't find {person} in {scope}."
@@ -140,6 +147,13 @@ PLATFORM_CONVERSATION_TEMPLATES: Mapping[tuple[Stage, str], str] = {
     (Stage.CLARIFICATION, "clarify_all_items"): "Which records do you mean?",
     # Answers: what can be done, what exists, what happened, what is known.
     (Stage.ANSWER, "capabilities"): "Here's what I can do in {product}: {capabilities}.",
+    # "What is <product>?" with no approved text to answer from. Every clause is a fact the
+    # platform holds - the product's name, the assistant's, and what this caller can do in it -
+    # so it describes the product without claiming anything about it that nobody approved.
+    (Stage.ANSWER, "product_about"): (
+        "{product} is where you keep your {things}, and I'm {assistant}, your guide to it. "
+        "Here I can {capabilities}. What would you like to try first?"
+    ),
     # Owner decision: the guided path is a conversational route, drawn from the caller's offers.
     (Stage.ANSWER, "guided_path"): "Here's a good way to explore {product}: {capabilities}.",
     # A request nobody could place is the moment somebody most needs to know what is possible,
@@ -191,6 +205,47 @@ PLATFORM_CONVERSATION_TEMPLATES: Mapping[tuple[Stage, str], str] = {
 }
 
 
+# Replies that say "not here" come in several wordings, and a conversation moves through them
+# turn by turn. The same refusal twice in a row reads like a machine that has stopped listening;
+# every wording still says plainly what the assistant cannot do and what it can.
+VARIED_TEMPLATES: Mapping[tuple[Stage, str], tuple[str, ...]] = {
+    (Stage.ANSWER, "fallback"): (
+        "Sorry, I can't help with that in {product}. I can {capabilities}. What would you like to do?",
+        "That's outside what I can do here, I'm afraid. In {product} I can {capabilities}. "
+        "What would you like to try?",
+        "I didn't quite follow that one. I can {capabilities}. Where would you like to start?",
+        "I'm not able to help with that in {product}, but I can {capabilities}. "
+        "What should we do next?",
+    ),
+    (Stage.REFUSED, "out_of_scope"): (
+        "Sorry, I can't do that. I can only help with {product} here.",
+        "That's outside {product}, so it isn't something I can do for you.",
+        "I'm afraid I can't help with that. My work is limited to {product}.",
+        "I can't do that from here. I only have access to {product}.",
+    ),
+    (Stage.REFUSED, "fallback"): (
+        "Sorry, I can't help with that here.",
+        "That isn't something I can do here.",
+        "I'm afraid I can't help with that one.",
+    ),
+    (Stage.REFUSED, "destructive_refused"): (
+        "Sorry, I can't delete or erase anything here.",
+        "Deleting isn't something I'm able to do, so nothing has been removed.",
+        "I can't delete or erase anything, so everything stays as it is.",
+    ),
+    (Stage.ANSWER, "knowledge_unavailable"): KNOWLEDGE_UNAVAILABLE_WORDINGS,
+    (Stage.UNGROUNDED, "knowledge_unavailable"): KNOWLEDGE_UNAVAILABLE_WORDINGS,
+    (Stage.ANSWER, "product_about"): (
+        "{product} is where you keep your {things}, and I'm {assistant}, your guide to it. "
+        "Here I can {capabilities}. What would you like to try first?",
+        "{product} keeps your {things} in one place. I'm {assistant}, and I can {capabilities}. "
+        "Where would you like to start?",
+        "You're in {product}, where your {things} live. I'm {assistant}, and here I can "
+        "{capabilities}. What should we look at first?",
+    ),
+}
+
+
 class TemplateNotAllowed(ValueError):
     """A stage was asked to speak with wording that does not belong to it."""
 
@@ -239,12 +294,16 @@ class Reply:
 class ResponseComposer:
     """Turns verified state into platform wording; products contribute names only."""
 
-    def __init__(self, definition: ProductDefinition, *, visitor_name: str | None = None) -> None:
+    def __init__(self, definition: ProductDefinition, *, visitor_name: str | None = None,
+                 turn: int = 1) -> None:
         for name in (definition.identity.product_name, definition.identity.assistant_name):
             if name_problems(name):
                 raise UnsafeProductCopy("identity must contain plain names")
         self._definition = definition
         self._visitor = visitor_name
+        # Which wording a varied reply uses: the first on a conversation's first turn, the next
+        # on the next, so two refusals in a row never read the same.
+        self._turn = max(turn, 1)
 
     # --- the lifecycle ---
 
@@ -264,7 +323,7 @@ class ResponseComposer:
         template = (
             "Should I update {record_id}: {changes}?"
             if action.target is not None
-            else "Should I create this record with {changes}?"
+            else "Should I create {changes}?"
         )
         return self._render_platform(Stage.AWAITING_CONFIRMATION, "confirm_action", template,
                                      described)
@@ -304,6 +363,21 @@ class ResponseComposer:
     def capabilities(self, offers: OfferableActions) -> Reply:
         """What this caller can actually do, from the filtered offers; never a product's claim."""
         return self._offer_reply("capabilities", offers)
+
+    def product_about(self, offers: OfferableActions) -> Reply:
+        """What this product is: what it keeps, from its definition, and what this caller can do.
+
+        Its people are not what it is for, so they are named only when it keeps nothing else.
+        """
+        if offers.is_empty:
+            return self._offer_reply("product_about", offers)
+        people = self._definition.people.entity if self._definition.people else None
+        kept = [entity.plural.lower() for key, entity in self._definition.entities.items() if key != people]
+        kept = kept or [entity.plural.lower() for entity in self._definition.entities.values()]
+        things = kept[0] if len(kept) == 1 else f"{', '.join(kept[:-1])} and {kept[-1]}"
+        return self._render(Stage.ANSWER, "product_about", {
+            "capabilities": capability_sentence(offers, self._definition), "things": things,
+        })
 
     def unplaceable(self, offers: OfferableActions) -> Reply:
         """A request this product could not place, answered with what it can do instead.
@@ -356,7 +430,10 @@ class ResponseComposer:
             return self._render_platform(
                 Stage.UNGROUNDED, "knowledge_unavailable", PLATFORM_KNOWLEDGE_UNAVAILABLE, {}
             )
-        speech = f'According to the product documentation: "{snippet}"'
+        # Always attributed, so a document saying "Done, I have updated it" is never heard as the
+        # assistant claiming something it did. The attribution is fixed wording: a title is written
+        # by whoever approved the document and is never spoken.
+        speech = f"From the product documentation: {snippet}"
         return Reply(speech, Stage.ANSWER, None, sources=(passage.source,), source_titles=(title,))
 
     # --- model-written speech ---
@@ -407,6 +484,9 @@ class ResponseComposer:
     def _render_platform(
         self, stage: Stage, key: str, template: str, values: Mapping[str, str],
     ) -> Reply:
+        wordings = VARIED_TEMPLATES.get((stage, key))
+        if wordings:
+            template = wordings[(self._turn - 1) % len(wordings)]
         return Reply(self._fill(template, values), stage, key)
 
     def _fill(self, template: str, values: Mapping[str, str]) -> str:
@@ -431,13 +511,43 @@ class ResponseComposer:
             control = view.controls.get(action.control) if view is not None else None
             described.setdefault("control", control.label if control is not None else UNNAMED_CONTROL)
         if action.fields:
-            described.setdefault("changes", describe_changes(action.fields))
+            described.setdefault("changes", describe_changes(action.fields, creating=action.target is None))
         return {name: value for name, value in described.items() if value != "" or name in values}
 
 
-def describe_changes(fields: Mapping[str, object]) -> str:
-    """"status to Closed, owner to Ana Lopez" — the exact change, in the visitor's terms."""
-    return ", ".join(f"{name} to {value}" for name, value in sorted(fields.items()))
+def describe_changes(fields: Mapping[str, object], *, labels: Mapping[str, str] | None = None,
+                     creating: bool = False, title_field: str = "title", noun: str | None = None) -> str:
+    """The exact change, in the words a person would use.
+
+    A change reads "status to Closed, owner to Ana Lopez". A new record reads by what it is called
+    and what it has: "a case called “Printer jam” with priority High and status New".
+    """
+    labels = labels or {}
+
+    def said(name: str) -> str:
+        return str(labels.get(name) or name.replace("_", " ")).lower()
+
+    if not creating:
+        return ", ".join(f"{said(name)} to {value}" for name, value in sorted(fields.items()))
+    title = fields.get(title_field)
+    title = str(title).strip() if title not in (None, "") else ""
+    details = [f"{said(name)} {value}" for name, value in sorted(fields.items())
+               if name != title_field and value not in (None, "", [], ())]
+    if noun:
+        head = f"{_article(noun)} {noun}" + (f" called “{title}”" if title else "")
+    else:
+        head = f"“{title}”" if title else ""
+    if not details:
+        return head or "a new record"
+    return f"{head} with {_listed(details)}" if head else _listed(details)
+
+
+def _article(noun: str) -> str:
+    return "an" if noun[:1].lower() in "aeiou" else "a"
+
+
+def _listed(parts: list[str]) -> str:
+    return parts[0] if len(parts) == 1 else f"{', '.join(parts[:-1])} and {parts[-1]}"
 
 
 def _claims_completion(speech: str) -> bool:
@@ -479,7 +589,7 @@ RECEIPT_REJECTED = RECEIPT_FAILURES["invalid_change"]
 
 def receipt_speech(
     code: str, *, executed: bool, replay: bool, created: bool = False, record_id: str | None = None,
-    changes: Mapping[str, object] | None = None,
+    changes: Mapping[str, object] | None = None, title_field: str = "title",
 ) -> str:
     """The platform sentence for one keyed-write outcome."""
     if executed:
@@ -490,5 +600,6 @@ def receipt_speech(
         template = PLATFORM_LIFECYCLE_TEMPLATES[
             (Stage.EXECUTED, "record_created" if created else "record_updated")
         ]
-        return template.format(record_id=record_id or "the record", changes=describe_changes(changes or {}))
+        return template.format(record_id=record_id or "the record",
+                               changes=describe_changes(changes or {}, creating=created, title_field=title_field))
     return RECEIPT_FAILURES.get(code, RECEIPT_REJECTED)

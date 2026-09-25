@@ -12,39 +12,13 @@
  * pending question or execution key from the product just left can reach the new one.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { useConsole } from "./console-context";
 import { EdithPanel } from "./edith";
-import { productShape, storedSession, type ApiProductShape, type ApiSession } from "@pixel-console/lib/pixel-api";
+import { productShape, serverUnavailable, storedSession, SERVER_UNAVAILABLE, type ApiProductShape,
+  type ApiSession } from "@pixel-console/lib/pixel-api";
 import { viewForRoute } from "@pixel-console/lib/console-routes";
-
-/** Visible placeholder when the assistant cannot reach the backend. */
-function EdithUnavailable({ onRetry, loading }: { onRetry: () => void; loading: boolean }) {
-  return (
-    <div className="px-edith px-edith-unavailable" role="status">
-      <div className="px-edith-topbar">
-        <span className="px-edith-brand">
-          <span className="px-edith-mark" aria-hidden>P</span>
-          Pixel
-        </span>
-      </div>
-      <div className="px-edith-unavailable-body">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <circle cx="12" cy="12" r="10" />
-          <path d="M12 8v4M12 16h.01" />
-        </svg>
-        <p className="px-edith-unavailable-title">Edith is unavailable</p>
-        <p className="px-edith-unavailable-detail">
-          The assistant could not connect to the Pixel service. Chat, voice, and actions are temporarily disabled.
-        </p>
-        <button type="button" className="px-edith-chip" onClick={onRetry} disabled={loading}>
-          {loading ? "Connecting\u2026" : "Retry"}
-        </button>
-      </div>
-    </div>
-  );
-}
 
 export function Edith() {
   const c = useConsole();
@@ -53,31 +27,25 @@ export function Edith() {
   const consoleProductId = c.account?.console_product_id ?? null;
   const [session, setSession] = useState<ApiSession | null>(null);
   const [consoleShape, setConsoleShape] = useState<ApiProductShape | null>(null);
-  const [shapeFailed, setShapeFailed] = useState(false);
-  const [retrying, setRetrying] = useState(false);
+  // Why Pixel's own assistant could not be loaded, so the column can say so instead of vanishing.
+  const [shapeProblem, setShapeProblem] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => { setSession(storedSession()); }, [c.account]);
 
-  const loadConsoleShape = useCallback(() => {
-    if (!consoleProductId || !session) return;
-    setShapeFailed(false);
-    setRetrying(true);
-    productShape(session, consoleProductId)
-      .then((shape) => { setConsoleShape(shape); setShapeFailed(false); })
-      .catch(() => { setConsoleShape(null); setShapeFailed(true); })
-      .finally(() => setRetrying(false));
-  }, [consoleProductId, session]);
-
   useEffect(() => {
     setConsoleShape(null);
-    setShapeFailed(false);
+    setShapeProblem(null);
     if (!consoleProductId || !session) return;
     let cancelled = false;
     productShape(session, consoleProductId)
-      .then((shape) => { if (!cancelled) { setConsoleShape(shape); setShapeFailed(false); } })
-      .catch(() => { if (!cancelled) { setConsoleShape(null); setShapeFailed(true); } });
+      .then((shape) => { if (!cancelled) setConsoleShape(shape); })
+      // A panel that answers nothing is worse than none, but so is a gap nobody can explain.
+      .catch((caught) => {
+        if (!cancelled) setShapeProblem(serverUnavailable(caught) ? SERVER_UNAVAILABLE : "The assistant could not be loaded.");
+      });
     return () => { cancelled = true; };
-  }, [consoleProductId, session]);
+  }, [consoleProductId, session, attempt]);
 
   if (!c.live || !session || !c.account) return null;
   if (surface) {
@@ -88,13 +56,33 @@ export function Edith() {
         onUiAction={surface.showAction} />
     );
   }
-
-  // Show a visible placeholder when the assistant can't load, instead of blank space.
-  if (!consoleProductId || shapeFailed) {
-    return <EdithUnavailable onRetry={loadConsoleShape} loading={retrying} />;
+  if (!consoleProductId) {
+    return <EdithUnavailable>
+      The assistant is not set up for this deployment yet. Everything else in the console still works.
+    </EdithUnavailable>;
   }
-
+  if (shapeProblem) {
+    return <EdithUnavailable onRetry={() => setAttempt((count) => count + 1)}>{shapeProblem}</EdithUnavailable>;
+  }
   if (!consoleShape) return null;
   return <EdithPanel key="pixel" session={session} shape={consoleShape}
     productId={consoleProductId} currentPage={viewForRoute(pathname)} scope="platform" />;
+}
+
+/** Where the assistant would be, saying why it is not, in the same place and the same frame. */
+function EdithUnavailable({ children, onRetry }: { children: ReactNode; onRetry?: () => void }) {
+  return (
+    <aside className="px-product-assistant px-edith px-edith-unavailable" aria-label="Assistant unavailable">
+      <div className="px-edith-topbar">
+        <span className="px-edith-brand"><span className="px-edith-mark" aria-hidden>P</span>Pixel</span>
+        <span className="px-edith-state" role="status">Unavailable</span>
+      </div>
+      <div className="px-edith-intro">
+        <p className="px-edith-kicker">Your guide to Pixel</p>
+        <p className="px-edith-note">{children}</p>
+        {onRetry ? <button type="button" className="px-edith-chip" style={{ marginTop: 10 }} onClick={onRetry}>
+          Try again</button> : null}
+      </div>
+    </aside>
+  );
 }

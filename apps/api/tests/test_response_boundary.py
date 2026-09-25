@@ -57,7 +57,7 @@ VALUES = {
     "person": "Ana Lopez", "count": "2", "records": "CON-1 and CON-2", "record_id": "CON-1",
     "record_title": "Dana Reyes", "field": "owner", "value": "Ana Lopez", "scope": "ACC-1",
     "view": "Contacts", "changes": "status to Closed", "label": "contacts", "visitor": "Priya",
-    "capabilities": "Open the contact list",
+    "capabilities": "Open the contact list", "things": "contacts and accounts",
 }
 
 # One adversarial sentence per assertion the platform owns, marked so a leak is unmistakable.
@@ -150,6 +150,7 @@ def every_reply(composer: ResponseComposer, definition: ProductDefinition) -> di
                        CapabilityPolicy(translatable=lambda key: True, permitted=lambda key: True))
     replies[("capabilities",)] = composer.capabilities(offers)
     replies[("guided_path",)] = composer.guided_path(offers)
+    replies[("product_about",)] = composer.product_about(offers)
     replies[("capabilities", "none")] = composer.capabilities(OfferableActions((), ()))
     for stage in Stage:
         for key in sorted(STAGE_TEMPLATES[stage]):

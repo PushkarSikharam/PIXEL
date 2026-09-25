@@ -357,3 +357,114 @@ function invalidateAnalysis(state: OnboardingState): OnboardingState {
 export function understood(state: OnboardingState, understanding: Understanding): OnboardingState {
   return { ...state, understanding, analysisRevision: state.sourceRevision, step: "review" };
 }
+
+/**
+ * Ready-made descriptions of common products.
+ *
+ * Describing a product from nothing asks somebody to think in records and fields before they have
+ * seen what Pixel does with them. A template is a filled-in description they can launch as it is
+ * or change first; it goes through exactly the same drafting and review as one typed by hand.
+ */
+export interface ProductTemplate {
+  id: string;
+  name: string;
+  summary: string;
+  things: DescribedThing[];
+}
+
+type FieldSpec = [name: string, type: DescribedField["type"], required?: boolean, values?: string];
+
+function thing(label: string, plural: string, fields: FieldSpec[], people = false): DescribedThing {
+  return {
+    id: keyForName(label), label, plural, people,
+    fields: fields.map(([name, type, required = false, values = ""]) => ({ name, type, required, values })),
+  };
+}
+
+export const PRODUCT_TEMPLATES: ProductTemplate[] = [
+  {
+    id: "team-planning", name: "Team planning", summary: "Tickets, projects and cycles for a team, like the guided demo.",
+    things: [
+      thing("Ticket", "Tickets", [["Title", "text", true], ["Priority", "enum", true, "Low, Medium, High, Urgent"],
+        ["Status", "enum", true, "Backlog, Todo, In progress, Done"], ["Due date", "date"]]),
+      thing("Project", "Projects", [["Name", "text", true], ["Status", "enum", true, "Planned, Active, Complete"],
+        ["Target date", "date"]]),
+      thing("Cycle", "Cycles", [["Name", "text", true], ["Starts on", "date"], ["Ends on", "date"]]),
+      thing("Team member", "Team members", [["Name", "text", true], ["Role", "text"]], true),
+    ],
+  },
+  {
+    id: "sales-crm", name: "Sales CRM", summary: "Deals, the companies behind them and who owns each one.",
+    things: [
+      thing("Deal", "Deals", [["Title", "text", true], ["Stage", "enum", true, "New, Qualified, Proposal, Won, Lost"],
+        ["Value", "integer"], ["Close date", "date"]]),
+      thing("Company", "Companies", [["Name", "text", true], ["Industry", "text"], ["Website", "text"]]),
+      thing("Salesperson", "Salespeople", [["Name", "text", true], ["Email", "text"]], true),
+    ],
+  },
+  {
+    id: "support-desk", name: "Support desk", summary: "Customer tickets, their priority and who is handling them.",
+    things: [
+      thing("Ticket", "Tickets", [["Subject", "text", true], ["Priority", "enum", true, "Low, Normal, High, Urgent"],
+        ["Status", "enum", true, "Open, Waiting, Solved"], ["Opened on", "date"]]),
+      thing("Customer", "Customers", [["Name", "text", true], ["Email", "text"], ["Plan", "enum", false, "Free, Pro, Enterprise"]]),
+      thing("Agent", "Agents", [["Name", "text", true], ["Email", "text"]], true),
+    ],
+  },
+  {
+    id: "project-tracker", name: "Project tracker", summary: "Projects, the tasks inside them and who is doing what.",
+    things: [
+      thing("Task", "Tasks", [["Title", "text", true], ["Status", "enum", true, "To do, In progress, Done"],
+        ["Due date", "date"], ["Estimate", "integer"]]),
+      thing("Project", "Projects", [["Name", "text", true], ["Status", "enum", true, "Planned, Active, Complete"],
+        ["Target date", "date"]]),
+      thing("Teammate", "Teammates", [["Name", "text", true], ["Role", "text"]], true),
+    ],
+  },
+  {
+    id: "recruiting", name: "Recruiting", summary: "Open roles, candidates and where each one is in hiring.",
+    things: [
+      thing("Candidate", "Candidates", [["Name", "text", true],
+        ["Stage", "enum", true, "Applied, Screening, Interview, Offer, Hired, Rejected"], ["Email", "text"], ["Applied on", "date"]]),
+      thing("Opening", "Openings", [["Title", "text", true], ["Department", "text"], ["Remote", "boolean"]]),
+      thing("Recruiter", "Recruiters", [["Name", "text", true], ["Email", "text"]], true),
+    ],
+  },
+  {
+    id: "inventory", name: "Inventory", summary: "Stock items, quantities on hand and who supplies them.",
+    things: [
+      thing("Item", "Items", [["Name", "text", true], ["SKU", "text"], ["Quantity", "integer", true],
+        ["Category", "enum", false, "Raw material, Part, Finished good"]]),
+      thing("Supplier", "Suppliers", [["Name", "text", true], ["Contact email", "text"]]),
+    ],
+  },
+];
+
+/**
+ * Start from a template: its records replace whatever was described. Everything downstream is
+ * invalidated, as for any other change to the description.
+ */
+export function applyTemplate(state: OnboardingState, templateId: string): OnboardingState {
+  const template = PRODUCT_TEMPLATES.find((candidate) => candidate.id === templateId);
+  if (!template) return state;
+  const things = template.things.map((described) => ({
+    ...described, fields: described.fields.map((field) => ({ ...field })),
+  }));
+  return invalidateAnalysis({ ...state, things });
+}
+
+/**
+ * What the assistant will be able to do, as a person would say it.
+ *
+ * Every kind of record gets the same four abilities, and listing all four for each one read like
+ * a machine talking ("Add a agent. Change a agent. Open one agent..."). Those are said once, for
+ * every kind together; anything particular to this product is kept as its own line.
+ */
+export function summariseAbilities(canDo: string[], things: string[]): string[] {
+  const standard = /^(Add an? |Change an? |Open one |Open the list of )/;
+  const special = canDo.filter((line) => !standard.test(line));
+  if (!things.length || special.length === canDo.length) return canDo;
+  const names = things.map((thing) => thing.toLowerCase());
+  const listed = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return [`Add, change and open ${listed}, and show the list of each.`, ...special];
+}

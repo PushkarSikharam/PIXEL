@@ -30,7 +30,7 @@ _TOKEN = re.compile(r"[A-Za-z][A-Za-z'’-]*")
 _POSSESSIVE = re.compile(r"['’]s?$")
 _APOSTROPHE = re.compile(r"['’]")
 _RECORD_ID = re.compile(r"^[a-z]+-\d+$")
-_TITLE_CUE = re.compile(r"\babout\s+(.+)$", re.IGNORECASE)
+_TITLE_CUE = re.compile(r"\b(?:about|called|named|titled)\s+(.+)$", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -114,9 +114,52 @@ def enum_values(entity: EntitySpec, field_names: list[str], text: str) -> dict[s
 
 
 def title_text(original: str) -> str | None:
-    """The subject of a new record, taken from "... about <subject>"."""
+    """The subject of a new record, taken from "... about <subject>" or "... called <name>"."""
     match = _TITLE_CUE.search(original)
     if not match:
         return None
-    subject = re.sub(r"[^\w\s'-]", "", match.group(1)).strip()
+    subject = re.sub(r"[^\w\s'-]", "", match.group(1)).strip().strip("'").strip()
     return subject[:1].upper() + subject[1:] if subject else None
+
+
+_DETAIL_SPLIT = re.compile(r"\s*(?:,|\bwith\b)\s+", re.IGNORECASE)
+_DETAIL_FILLER = frozenset({"and", "a", "an", "the", "to", "as", "set", "its", "it", "of", "is", "at", "in"})
+
+
+def title_and_details(original: str, entity: EntitySpec,
+                      field_names: list[str]) -> tuple[str | None, dict[str, list[str]]]:
+    """The subject of a new record and the choices named for it.
+
+    "a case called Printer jam with high priority" is called "Printer jam" and has priority
+    High: a trailing clause is a detail only when every word of it is a declared value, a field's
+    name or a joining word. Anything else stays in the title, so "called Coffee with friends" keeps
+    its whole name.
+    """
+    match = _TITLE_CUE.search(original)
+    if not match:
+        return None, {}
+    before, subject = original[:match.start()], match.group(1)
+    details = ""
+    for split in _DETAIL_SPLIT.finditer(subject):
+        clause = subject[split.end():]
+        named = enum_values(entity, field_names, clause.lower())
+        if named and _only_details(clause, entity, field_names, named):
+            subject, details = subject[:split.start()], clause
+            break
+    return title_text(f"called {subject}"), enum_values(entity, field_names, f"{before} {details}".lower())
+
+
+def _only_details(clause: str, entity: EntitySpec, field_names: list[str],
+                  named: dict[str, list[str]]) -> bool:
+    allowed = set(_DETAIL_FILLER)
+    for name in field_names:
+        spec = entity.fields.get(name)
+        allowed.update(name.lower().replace("_", " ").split())
+        if spec is not None and spec.label:
+            allowed.update(spec.label.lower().split())
+    for values in named.values():
+        for value in values:
+            allowed.update(value.lower().split())
+    words = re.findall(r"[\w'-]+", clause.lower())
+    return bool(words) and all(word in allowed for word in words)
+

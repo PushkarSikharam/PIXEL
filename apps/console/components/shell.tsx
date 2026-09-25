@@ -31,7 +31,7 @@ const NAV = [
     { href: "/console/products/new", label: "Add a product", icon: Hammer },
   ] },
   { section: "Your organization", items: [
-    { href: "/console/organization", label: "People", icon: Users },
+    { href: "/console/organization", label: "People and teams", icon: Users },
     { href: "/console/settings", label: "Settings", icon: Building2 },
   ] },
   { section: "Pixel", items: [
@@ -60,8 +60,15 @@ export function Shell({ children }: { children: ReactNode }) {
   const [pendingHref, setPendingHref] = useState<string | null>(null);
   const organization = c.live ? { name: c.account?.organization_name ?? "Your organization" } : ORGANIZATIONS.find((o) => o.id === c.organizationId);
   const product = c.visibleProducts.find((p) => p.id === c.productId);
+  // The column is always there once somebody is signed in: either the assistant, or a note saying
+  // why she is not, so a missing assistant is never just a gap on the page.
   const hasAssistant = Boolean(c.live && c.account);
   const [logoutError, setLogoutError] = useState<string | null>(null);
+  // Only the most specific item is current: "Add a product" lives under "Products", and marking
+  // both reads as two places at once.
+  const currentHref = NAV.flatMap((group) => group.items).map((item) => item.href)
+    .filter((href) => pathname === href || (href !== "/console" && pathname.startsWith(`${href}/`)))
+    .sort((a, b) => b.length - a.length)[0] ?? null;
 
   function requestProduct(id: string | null) {
     if (id === c.productId) return;
@@ -78,7 +85,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <aside className="px-sidebar" aria-label="Console">
         <div className="px-brand">
           <span className="px-brand-mark" aria-hidden><span /><span /><span /><span /></span>
-          Pixel
+          <span className="px-brand-text">Pixel<small>{c.live ? c.account?.organization_name ?? "Console" : "Console"}</small></span>
         </div>
         <nav aria-label="Primary">
           <div className="px-nav">
@@ -88,7 +95,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <div key={group.section} className="px-nav">
               <div className="px-nav-section">{group.section}</div>
               {group.items.map((item) => {
-                const current = item.href === "/console" ? pathname === "/console" : pathname.startsWith(item.href);
+                const current = item.href === currentHref;
                 return (
                   <Link key={item.href} href={item.href} aria-current={current ? "page" : undefined}
                     onClick={(event) => {
@@ -168,9 +175,22 @@ export function Shell({ children }: { children: ReactNode }) {
               page is a row of the same grid as the assistant, so the first row is as tall as the
               assistant and everything after the heading starts below the fold. */}
           <div className="px-main-column">
-            {c.live && c.loading ? <LoadingRows rows={4} /> : c.live && !c.account ? <div className="px-stack">
-              <h1>Your Pixel workspace</h1><Alert>{c.liveError ?? "Sign in to continue."}</Alert>
-              <Link className="px-button" data-variant="primary" href="/sign-in">Sign in</Link>
+            {c.live && c.loading ? <LoadingRows rows={4} /> : c.live && !c.account && c.liveUnavailable ? <div className="px-stack">
+              <h1>Your Pixel workspace</h1>
+              <Alert tone="warn" title="Pixel is temporarily unavailable">
+                Pixel&apos;s server is not responding, so your workspace and assistant cannot load
+                right now. You are not signed out, and nothing has been lost.
+              </Alert>
+              <div className="px-row"><Button variant="primary" onClick={c.reloadProducts}>Try again</Button></div>
+            </div> : c.live && !c.account ? <div className="px-stack">
+              <h1>Your Pixel workspace</h1>
+              {c.liveError
+                ? <Alert tone="warn">{c.liveError}</Alert>
+                : <p className="px-muted" style={{ margin: 0 }}>Sign in to see your products and ask Edith about them, or explore the demo first.</p>}
+              <div className="px-row">
+                <Link className="px-button" data-variant="primary" href="/sign-in">Sign in</Link>
+                <a className="px-button" href="/demo">Explore the demo</a>
+              </div>
             </div> : c.live && !CONNECTED_AREAS.some((area) =>
               area === pathname || (area !== "/console" && pathname.startsWith(area + "/"))) ?
               <Alert title="Not connected yet">

@@ -15,7 +15,7 @@ import {
   approveGeneratedUnderstanding,
   canEnter, completeAnalysis,
   definitionIdFor, goTo, initialOnboarding, keyForName, publish, removeField, removeThing, setConfirmation,
-  setDetails, starterDefinitionText, understood, updateField, updateThing,
+  setDetails, starterDefinitionText, summariseAbilities, understood, updateField, updateThing,
   toggleAction, validate, type OnboardingState, type Step,
 } from "@pixel-console/lib/onboarding";
 import { FieldError, addProduct, productDraft, storedSession } from "@pixel-console/lib/pixel-api";
@@ -41,6 +41,7 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
   const teams = TEAMS.filter((t) => t.organizationId === c.organizationId && !t.suspended
     && c.can("products.manage", { teamId: t.id, productId: null }));
   const liveTeamId = c.account?.team_id ?? c.account?.teams[0]?.team_id ?? null;
+  const liveTeamName = c.account?.teams.find((team) => team.team_id === liveTeamId)?.name ?? "your team";
   const [state, setState] = useState<OnboardingState>(() => initialOnboarding(liveTeamId ?? teams[0]?.id ?? ""));
   const [sourceName, setSourceName] = useState("");
   const [sourceKind, setSourceKind] = useState<"document" | "openapi" | "url">("document");
@@ -152,7 +153,7 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
           {state.step === "details" && (
             <Panel>
               <form className="px-stack" onSubmit={(e) => { e.preventDefault(); setState((s) => goTo(s, "sources")); }}>
-                <Field label="Product name"
+                <Field label="What is your product called?" hint="For example: Acme Sales or Support Desk"
                   error={draftField === "product_name" ? draftError : null}>{(f) => (
                   <Input id={f.id} describedBy={f.describedBy} invalid={f.invalid} value={state.name}
                     maxLength={80} required
@@ -162,19 +163,28 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
                         s.slugChosen ? s.slug : addressFor(e.target.value), { derived: !s.slugChosen }));
                     }} />
                 )}</Field>
-                <Field label="Short link"
-                  hint="Pixel creates this from the name. Change it only if you want a different address inside Pixel."
-                  error={slugError}>{(f) => (
-                  <Input id={f.id} describedBy={f.describedBy} invalid={f.invalid} value={state.slug} required
-                    onChange={(e) => setState((s) => setDetails(s, s.name, e.target.value.toLowerCase()))} />
-                )}</Field>
-                <Field label="Owning team">{(f) => (
-                  <select id={f.id} className="px-select" value={liveTeamId ?? state.teamId} disabled={Boolean(liveTeamId)}
-                    onChange={(e) => setState((s) => ({ ...s, teamId: e.target.value }))}>
-                    {liveTeamId ? <option value={liveTeamId}>Planning team</option>
-                      : teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                  </select>
-                )}</Field>
+                {liveTeamId ? (
+                  <p className="px-small px-muted" style={{ margin: 0 }}>
+                    It will belong to <strong>{liveTeamName}</strong>, so everyone there can use it.
+                  </p>
+                ) : (
+                  <Field label="Which team runs it">{(f) => (
+                    <select id={f.id} className="px-select" value={state.teamId}
+                      onChange={(e) => setState((s) => ({ ...s, teamId: e.target.value }))}>
+                      {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                  )}</Field>
+                )}
+                <details open={Boolean(slugError)}>
+                  <summary className="px-small">Advanced: change its web address</summary>
+                  <div style={{ marginTop: 8 }}>
+                    <Field label="Web address" hint={`Pixel makes this from the name: /console/products/${state.slug || "your-product"}`}
+                      error={slugError}>{(f) => (
+                      <Input id={f.id} describedBy={f.describedBy} invalid={f.invalid} value={state.slug} required
+                        onChange={(e) => setState((s) => setDetails(s, s.name, e.target.value.toLowerCase()))} />
+                    )}</Field>
+                  </div>
+                </details>
                 <div className="px-row"><Button type="submit" variant="primary" disabled={!canEnter(state, "sources")}>Continue</Button></div>
               </form>
             </Panel>
@@ -210,50 +220,50 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
                 </div>
                 <h3 style={{ margin: "8px 0 0" }}>{templateId ? "Adjust what it keeps" : "Or describe it yourself"}</h3>
                 <p className="px-muted" style={{ margin: 0 }}>
-                  List the kinds of record people work with, like deals or tickets, and the details
-                  each one has. Pixel turns each into a screen, and {ASSISTANT_NAME} can open, count
-                  and change them when the product allows it.
+                  Tell Pixel what your product keeps track of, like deals or tickets, and what you
+                  want to know about each one. Each becomes a screen, and {ASSISTANT_NAME} can open,
+                  count, add and change them for you.
                 </p>
                 {state.things.map((thing, index) => (
                   <fieldset key={index} className="px-stack"
                     style={{ border: "1px solid var(--px-border)", borderRadius: 8, padding: 12, gap: 10 }}>
-                    <legend className="px-label">{thing.label.trim() || `Record ${index + 1}`}</legend>
+                    <legend className="px-label">{thing.plural.trim() || thing.label.trim() || `Thing ${index + 1}`}</legend>
                     <div className="px-row" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
-                      <Field label="One item is called" hint="For example: Deal">{(f) => (
+                      <Field label="What do you call one?" hint="For example: Deal">{(f) => (
                         <Input id={f.id} describedBy={f.describedBy} value={thing.label}
                           onChange={(e) => setState((st) => updateThing(st, index, {
                             label: e.target.value,
                             id: thing.id || e.target.value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, ""),
                           }))} />
                       )}</Field>
-                      <Field label="Many are called" hint="For example: Deals">{(f) => (
+                      <Field label="And more than one?" hint="For example: Deals">{(f) => (
                         <Input id={f.id} describedBy={f.describedBy} value={thing.plural}
                           onChange={(e) => setState((st) => updateThing(st, index, { plural: e.target.value }))} />
                       )}</Field>
                       <label className="px-row px-small">
                         <input type="checkbox" checked={thing.people}
                           onChange={(e) => setState((st) => updateThing(st, index, { people: e.target.checked }))} />
-                        People who do the work
+                        These are people (like agents or salespeople)
                       </label>
                       <Button size="sm" variant="ghost" aria-label={`Remove ${thing.label || "record"}`}
                         onClick={() => setState((st) => removeThing(st, index))}><Trash2 aria-hidden /></Button>
                     </div>
                     {thing.fields.map((field, fieldIndex) => (
                       <div key={fieldIndex} className="px-row" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
-                        <Field label="Detail to store">{(f) => (
-                          <Input id={f.id} describedBy={f.describedBy} value={field.name} placeholder="title"
+                        <Field label="Detail to keep" hint={fieldIndex === 0 ? "For example: Title, Status or Due date" : undefined}>{(f) => (
+                          <Input id={f.id} describedBy={f.describedBy} value={field.name} placeholder="Title"
                             onChange={(e) => setState((st) => updateField(st, index, fieldIndex, { name: e.target.value }))} />
                         )}</Field>
-                        <Field label="Answer type">{(f) => (
+                        <Field label="What kind of answer?">{(f) => (
                           <select id={f.id} className="px-select" value={field.type}
                             onChange={(e) => setState((st) => updateField(st, index, fieldIndex, { type: e.target.value as typeof field.type }))}>
-                            <option value="text">Text</option><option value="enum">One of a few choices</option>
-                            <option value="integer">A whole number</option><option value="date">A date</option>
+                            <option value="text">Words</option><option value="enum">Pick from a list</option>
+                            <option value="integer">A number</option><option value="date">A date</option>
                             <option value="boolean">Yes or no</option>
                           </select>
                         )}</Field>
                         {field.type === "enum" ? (
-                          <Field label="Choices" hint="Separated by commas">{(f) => (
+                          <Field label="The choices" hint="Separate them with commas">{(f) => (
                             <Input id={f.id} describedBy={f.describedBy} value={field.values} placeholder="New, Won, Lost"
                               onChange={(e) => setState((st) => updateField(st, index, fieldIndex, { values: e.target.value }))} />
                           )}</Field>
@@ -261,17 +271,17 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
                         <label className="px-row px-small">
                           <input type="checkbox" checked={field.required}
                             onChange={(e) => setState((st) => updateField(st, index, fieldIndex, { required: e.target.checked }))} />
-                          Required
+                          Must be filled in
                         </label>
                         <Button size="sm" variant="ghost" aria-label={`Remove ${field.name || "field"}`}
                           disabled={thing.fields.length === 1}
                           onClick={() => setState((st) => removeField(st, index, fieldIndex))}><Trash2 aria-hidden /></Button>
                       </div>
                     ))}
-                    <div><Button size="sm" onClick={() => setState((st) => addField(st, index))}>Add another detail</Button></div>
+                    <div><Button size="sm" onClick={() => setState((st) => addField(st, index))}><Plus aria-hidden />Add a detail</Button></div>
                   </fieldset>
                 ))}
-                <div><Button onClick={() => setState((st) => addThing(st))}><Plus aria-hidden />Add another thing this product tracks</Button></div>
+                <div><Button onClick={() => setState((st) => addThing(st))}><Plus aria-hidden />{state.things.length ? "Add something else it keeps track of" : "Describe my own instead"}</Button></div>
                 {draftError && !draftField ? <Alert tone="danger">{draftError}</Alert> : null}
                 <div className="px-row">
                   <Button onClick={() => setState((s) => goTo(s, "details"))}>Back</Button>
@@ -303,7 +313,8 @@ function PrototypeNewProduct({ onAdvanced }: { onAdvanced?: () => void }) {
                   </dd></div>
                   <div><dt className="px-label">Edith will be able to</dt><dd style={{ margin: 0 }}>
                     <ul className="px-stack" style={{ margin: 0, paddingLeft: 18, gap: 4 }}>
-                      {(state.understanding?.canDo ?? []).map((can) => <li key={can} className="px-small">{can}</li>)}
+                      {summariseAbilities(state.understanding?.canDo ?? [], state.understanding?.things ?? [])
+                        .map((can) => <li key={can} className="px-small">{can}</li>)}
                     </ul>
                   </dd></div>
                 </dl>

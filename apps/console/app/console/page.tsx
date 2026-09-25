@@ -39,6 +39,13 @@ function LiveOverview() {
       actions={<Link className="px-button" data-variant="primary" href="/console/products/new">
         <Plus aria-hidden />Add a product</Link>} />
 
+    {c.account?.role === "org_admin" && c.account.organization_name === "My organization" ? (
+      <Alert title="Give your organization a name">
+        It is called &quot;My organization&quot; for now. <Link href="/console/settings">Name it in Settings</Link>,
+        and everyone you add will see it at the top of every page.
+      </Alert>
+    ) : null}
+
     {first ? (
       <Panel title="Start here">
         <ol className="px-stack" style={{ margin: 0, paddingLeft: 20, gap: 10 }}>

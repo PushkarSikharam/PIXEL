@@ -164,8 +164,8 @@ function FieldControl({ field, records, value, onChange }: {
     const chosen = many ? (Array.isArray(value) ? value : []) : [String(value ?? "")].filter(Boolean);
     if (options.length === 0) {
       return (
-        <Field label={label} hint={`There are no ${field.target ?? "records"} to choose from yet.`}>
-          {({ id }) => <Input id={id} value="" disabled placeholder="Nothing to choose yet" />}
+        <Field label={label} hint={`Nothing to pick yet. Add ${/^[aeiou]/i.test(label) ? "an" : "a"} ${label.toLowerCase()} first, then come back to choose one.`}>
+          {({ id }) => <Input id={id} value="" disabled placeholder="Nothing to pick yet" />}
         </Field>
       );
     }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.account_api import router as account_router
+from app.organization_api import grant_product_to_everyone, router as organization_router
 from app.product_knowledge import router as knowledge_router
 from app.definitions.loader import parse_definition
 
@@ -308,6 +309,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.include_router(account_router)
+app.include_router(organization_router)
 app.include_router(knowledge_router)
 
 
@@ -655,6 +657,8 @@ def add_product(tenant_id: str, body: AddProductRequest, http: Request,
     # Whoever added the product can work in it straight away; a product nobody may open is not
     # one anybody added on purpose.
     grant_records(tenant_id, body.product_id, user.user_id, [], True)
+    # And so can everyone else already in the organization, each on their own terms.
+    grant_product_to_everyone(tenant_id, body.product_id, directory)
     definition = directory.definitions.load(body.definition_id, body.definition_version).definition
     return ProductSummary(
         team_id=binding.team_id,

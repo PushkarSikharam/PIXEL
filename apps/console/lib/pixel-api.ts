@@ -357,6 +357,26 @@ export async function listMembers(session: ApiSession): Promise<ApiMember[]> {
   return answer.members;
 }
 
+export type PersonRole = "team_member" | "team_admin" | "org_admin";
+
+/** Give an email address a place in this organization. They sign in with it to arrive here. */
+export async function addPerson(session: ApiSession, email: string, role: PersonRole): Promise<ApiMember> {
+  return call<ApiMember>(`/organizations/${encodeURIComponent(session.tenantId)}/people`, {
+    method: "POST", body: JSON.stringify({ email, role }),
+  }, session);
+}
+
+export async function removePerson(session: ApiSession, userId: string): Promise<void> {
+  await call(`/organizations/${encodeURIComponent(session.tenantId)}/people/${encodeURIComponent(userId)}`,
+    { method: "DELETE" }, session);
+}
+
+export async function renameOrganization(session: ApiSession, name: string): Promise<{ name: string }> {
+  return call(`/organizations/${encodeURIComponent(session.tenantId)}`, {
+    method: "PATCH", body: JSON.stringify({ name }),
+  }, session);
+}
+
 export async function listProducts(session: ApiSession): Promise<ApiProduct[]> {
   const answer = await call<{ products: ApiProduct[] }>(
     `/organizations/${encodeURIComponent(session.tenantId)}/products`, {}, session,

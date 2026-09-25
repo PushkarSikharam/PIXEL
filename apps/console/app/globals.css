@@ -1042,3 +1042,7 @@ code, .px-mono { font-family: var(--px-mono); font-size: var(--px-text-sm); }
   .px-record-fields { grid-template-columns: 1fr; gap: 2px; }
   .px-record-fields dd { margin-bottom: var(--px-space-2); }
 }
+
+/* A heading focused by the page, so a screen reader announces the new step, is not something a
+   person can type into; outlined, it looked like a text box. Keyboard focus rings are unchanged. */
+h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus { outline: none; }

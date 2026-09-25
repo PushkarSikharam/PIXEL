@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  PRODUCT_TEMPLATES, acceptUnderstanding, addSource, addThing, applyTemplate, approveGeneratedUnderstanding, canEnter,
+  PRODUCT_TEMPLATES, summariseAbilities, acceptUnderstanding, addSource, addThing, applyTemplate, approveGeneratedUnderstanding, canEnter,
   completeAnalysis, goTo, initialOnboarding,
   keyForName, publish, removeSource, setConfirmation, setDetails, toggleAction, updateField, updateThing,
   understood, validate,
@@ -145,5 +145,20 @@ describe("product templates", () => {
   it("an unknown template changes nothing", () => {
     const state = described();
     expect(applyTemplate(state, "missing")).toBe(state);
+  });
+});
+
+describe("what the assistant will be able to do", () => {
+  it("says the everyday abilities once and keeps what is particular", () => {
+    const canDo = ["Add a ticket.", "Add an agent.", "Change a ticket.", "Open one ticket.", "Open one agent.",
+      "Open the list of tickets.", "Open the list of agents.", "Show every ticket one agent owns."];
+    expect(summariseAbilities(canDo, ["Tickets", "Agents"])).toEqual([
+      "Add, change and open tickets and agents, and show the list of each.",
+      "Show every ticket one agent owns.",
+    ]);
+  });
+
+  it("leaves a list it does not recognise as it is", () => {
+    expect(summariseAbilities(["Refund an order."], ["Orders"])).toEqual(["Refund an order."]);
   });
 });

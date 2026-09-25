@@ -57,6 +57,15 @@ class DraftingTest(unittest.TestCase):
         self.assertEqual(parsed.identity.product_name, "Acme CRM")
         self.assertEqual(sorted(parsed.entities), ["contact", "deal", "rep"])
 
+    def test_what_the_assistant_can_do_reads_as_english(self):
+        """The review listed "Add a agent" and "Change a agent" to whoever was adding a product."""
+        things = [dict(CRM["things"][0]), {"name": "agent", "label": "Agent", "plural": "Agents",
+                                           "people": True, "fields": [{"name": "name", "type": "text"}, {"name": "email", "type": "text"}]}]
+        described = {action["description"] for action in self.draft(things=things)["actions"].values()}
+        self.assertIn("Add an agent.", described)
+        self.assertIn("Change an agent.", described)
+        self.assertIn("Add a deal.", described)
+
     def test_the_product_is_about_what_was_described(self):
         text = draft_text(ProductDraft.model_validate(CRM)).lower()
         for theirs in ("deal", "contact", "sales rep", "stage", "qualified"):

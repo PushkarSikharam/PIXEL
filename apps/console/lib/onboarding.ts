@@ -441,3 +441,19 @@ export function applyTemplate(state: OnboardingState, templateId: string): Onboa
   }));
   return invalidateAnalysis({ ...state, things });
 }
+
+/**
+ * What the assistant will be able to do, as a person would say it.
+ *
+ * Every kind of record gets the same four abilities, and listing all four for each one read like
+ * a machine talking ("Add a agent. Change a agent. Open one agent..."). Those are said once, for
+ * every kind together; anything particular to this product is kept as its own line.
+ */
+export function summariseAbilities(canDo: string[], things: string[]): string[] {
+  const standard = /^(Add an? |Change an? |Open one |Open the list of )/;
+  const special = canDo.filter((line) => !standard.test(line));
+  if (!things.length || special.length === canDo.length) return canDo;
+  const names = things.map((thing) => thing.toLowerCase());
+  const listed = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return [`Add, change and open ${listed}, and show the list of each.`, ...special];
+}

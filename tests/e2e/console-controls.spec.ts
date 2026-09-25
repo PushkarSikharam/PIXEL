@@ -121,14 +121,17 @@ async function snapshot(page: Page) {
 }
 
 async function openPage(page: Page, path: string) {
-  try {
-    await page.goto(path, { waitUntil: "networkidle" });
-  } catch (error) {
-    if (!(error instanceof Error) || !error.message.includes("interrupted by another navigation")) throw error;
-    await page.waitForLoadState("domcontentloaded").catch(() => undefined);
-    await page.goto(path, { waitUntil: "networkidle" });
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await page.goto(path, { waitUntil: "networkidle" });
+      await expect(page.locator("main")).toBeVisible();
+      return;
+    } catch (error) {
+      const interrupted = error instanceof Error && error.message.includes("interrupted by another navigation");
+      if (!interrupted || attempt === 2) throw error;
+      await page.waitForTimeout(100);
+    }
   }
-  await expect(page.locator("main")).toBeVisible();
 }
 
 /** Press one control on a fresh page and say whether anything happened. */

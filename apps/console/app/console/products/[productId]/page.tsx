@@ -11,28 +11,16 @@ import { RecordFormDialog } from "@pixel-console/components/record-form";
 import { Dialog } from "@pixel-console/components/overlays";
 import { useToast } from "@pixel-console/components/toast";
 import { Alert, Badge, Button, EmptyState, ErrorState, LoadingRows, PageHead, Panel, PermissionDenied, StatusBadge } from "@pixel-console/components/ui";
-import { DEPLOYMENTS, RELEASES, productById, teamName } from "@pixel-console/lib/mock-data";
 import { productRecords, productShape, storedSession,
   type ApiActionShape, type ApiProductShape, type ApiRecord, type ApiRecords, type ApiSession,
 } from "@pixel-console/lib/pixel-api";
-import type { Environment, Release } from "@pixel-console/lib/contracts";
-
-const ENVS: Environment[] = ["development", "staging", "production"];
 
 export default function ProductDetail() {
   const { productId } = useParams<{ productId: string }>();
   const c = useConsole();
   useEffect(() => { c.selectProduct(productId); }, [productId, c.selectProduct]);
-  const liveProduct = c.live ? c.visibleProducts.find((p) => p.id === productId) : null;
-
-  if (c.live) {
-    if (!liveProduct) return <PermissionDenied what="this product" />;
-    return <LiveProductWorkspace key={`${c.organizationId}:${productId}`} productId={productId} />;
-  }
-
-  const product = productById(productId);
-  if (!product || !c.can("products.read", { productId })) return <PermissionDenied what="this product" />;
-  return <MockProductDetail productId={productId} />;
+  if (!c.visibleProducts.some((p) => p.id === productId)) return <PermissionDenied what="this product" />;
+  return <LiveProductWorkspace key={`${c.organizationId}:${productId}`} productId={productId} />;
 }
 
 function LiveProductWorkspace({ productId }: { productId: string }) {
@@ -142,13 +130,14 @@ function LiveProductWorkspace({ productId }: { productId: string }) {
         actions={<StatusBadge status="active" />} />
       <div className="px-product-workspace">
         <div className="px-stack">
-          <ProductCommandCenter shape={shape} records={records}
+          <ProductCommandCenter shape={shape} records={records} current={recordSelection ? null : activeView}
             onOpen={(view) => { setActiveView(view); setRecordSelection(null); setRecordFilter(null); }}
             onAdd={(entity) => setWriting({ entity, record: null })} />
           <Panel title="Screens" actions={<Badge>{records.scope}</Badge>}>
             <div className="px-row" role="tablist" aria-label="Product screens">
               {shape.views.filter((view) => view.navigable).map((view) => (
                 <Button key={view.name} size="sm" variant={view.name === activeView ? "primary" : "default"}
+                  aria-pressed={view.name === activeView}
                   onClick={() => { setActiveView(view.name); setRecordSelection(null); setRecordFilter(null); }}>{view.label}</Button>
               ))}
             </div>
@@ -226,9 +215,11 @@ function firstWorthOpening(shape: ApiProductShape, records: ApiRecords): string 
   return (withRecords ?? navigable[0] ?? shape.views[0])?.name ?? null;
 }
 
-function ProductCommandCenter({ shape, records, onOpen, onAdd }: {
+function ProductCommandCenter({ shape, records, current, onOpen, onAdd }: {
   shape: ApiProductShape;
   records: ApiRecords;
+  /** The screen showing now, whose shortcuts are marked current rather than offered again. */
+  current: string | null;
   onOpen: (view: string) => void;
   onAdd: (entity: string) => void;
 }) {
@@ -244,6 +235,7 @@ function ProductCommandCenter({ shape, records, onOpen, onAdd }: {
         <div className="px-stats" aria-label="Product record counts">
           {metrics.length ? metrics.map(({ entity, count, view }) => (
             <button key={entity.name} type="button" className="px-stat px-stat-button"
+              aria-current={view !== null && view === current ? "true" : undefined}
               disabled={!view} onClick={() => view ? onOpen(view) : undefined}>
               <span className="px-stat-label">{entity.plural}</span>
               <strong className="px-stat-value">{count}</strong>
@@ -252,7 +244,8 @@ function ProductCommandCenter({ shape, records, onOpen, onAdd }: {
         </div>
         <div className="px-row">
           {shape.views.filter((view) => view.navigable).slice(0, 3).map((view) => (
-            <Button key={view.name} size="sm" onClick={() => onOpen(view.name)}>Open {view.label}</Button>
+            <Button key={view.name} size="sm" onClick={() => onOpen(view.name)}
+              aria-current={view.name === current ? "true" : undefined}>Open {view.label}</Button>
           ))}
           {firstRecordEntity ? (
             <Button size="sm" variant="primary" onClick={() => onAdd(firstRecordEntity.name)}>
@@ -346,72 +339,4 @@ function renderValue(value: unknown) {
   if (Array.isArray(value)) return value.length ? value.join(", ") : empty;
   if (typeof value === "boolean") return value ? "Yes" : "No";
   return String(value);
-}
-
-function MockProductDetail({ productId }: { productId: string }) {
-  const toast = useToast();
-  const [rollback, setRollback] = useState<{ env: Environment; release: Release } | null>(null);
-  const product = productById(productId)!;
-  const releases = RELEASES.filter((r) => r.productId === product.id).sort((a, b) => b.version - a.version);
-  const canDeploy = true;
-
-  return (
-    <>
-      <PageHead title={product.name} description={`${product.description} Owned by ${teamName(product.teamId)}.`}
-        actions={<StatusBadge status={product.state} />} />
-      {product.state === "archived" ? <Alert tone="warn" title="Archived.">History stays readable; nothing can be deployed or changed until it is restored.</Alert> : null}
-      <Panel title="Environments">
-        <div className="px-table-wrap">
-          <table className="px-table">
-            <caption className="px-sr-only">Deployment per environment</caption>
-            <thead><tr><th scope="col">Environment</th><th scope="col">Release</th><th scope="col">Deployment</th><th scope="col"><span className="px-sr-only">Actions</span></th></tr></thead>
-            <tbody>
-              {ENVS.map((env) => {
-                const d = DEPLOYMENTS.find((x) => x.productId === product.id && x.environment === env);
-                const release = d ? RELEASES.find((r) => r.id === d.releaseId) : undefined;
-                const previous = releases.find((r) => r.state === "published" && r.id !== release?.id);
-                return (
-                  <tr key={env}>
-                    <td style={{ textTransform: "capitalize" }}>{env}</td>
-                    <td>{release ? <span className="px-mono">v{release.version} / {release.checksum.slice(0, 8)}</span> : <span className="px-muted">Nothing deployed</span>}</td>
-                    <td>{d ? <StatusBadge status={d.state} /> : "-"}</td>
-                    <td style={{ textAlign: "right" }}>
-                      {d && previous && canDeploy && product.state === "active" ? (
-                        <Button size="sm" onClick={() => setRollback({ env, release: previous })}><RotateCcw aria-hidden />Roll back to v{previous.version}</Button>
-                      ) : null}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </Panel>
-      <Panel title="Releases" actions={<Link href="/console/build">Open in Build</Link>}>
-        <div className="px-table-wrap">
-          <table className="px-table">
-            <caption className="px-sr-only">Releases, newest first</caption>
-            <thead><tr><th scope="col">Version</th><th scope="col">Checksum</th><th scope="col">State</th><th scope="col">Created</th></tr></thead>
-            <tbody>
-              {releases.map((r) => (
-                <tr key={r.id}>
-                  <td className="px-mono">v{r.version}</td>
-                  <td className="px-mono">{r.checksum}</td>
-                  <td><StatusBadge status={r.state} /></td>
-                  <td>{r.createdAt}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Panel>
-      <Dialog open={rollback !== null} onOpenChange={(open) => { if (!open) setRollback(null); }}
-        title={`Roll back ${rollback?.env ?? ""}?`}
-        description={rollback ? `This starts a new deployment of v${rollback.release.version} (${rollback.release.checksum.slice(0, 8)}) to ${rollback.env}. No release is edited, and open sessions finish on the release they started with.` : undefined}
-        actions={<>
-          <Button onClick={() => setRollback(null)}>Cancel</Button>
-          <Button variant="primary" onClick={() => { toast("ok", `Rollback to v${rollback?.release.version} started (prototype: nothing was deployed).`); setRollback(null); }}>Start rollback</Button>
-        </>} />
-    </>
-  );
 }

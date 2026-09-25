@@ -14,10 +14,6 @@ export const CONSOLE_ROUTES: Record<string, string> = {
   overview: "/console",
   members: "/console/organization",
   settings: "/console/settings",
-  test: "/console/test",
-  deploy: "/console/deploy",
-  operate: "/console/operate",
-  audit: "/console/audit",
 };
 
 export function viewForRoute(pathname: string | null | undefined): string | null {

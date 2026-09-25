@@ -40,7 +40,7 @@ test("email sign-in never uses a shared demo identity", async ({ page }) => {
   await page.getByLabel("One-time code").fill("12345678");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Welcome to Pixel", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Organization: Private workspace/ })).toBeVisible();
+  await expect(page.locator(".px-topbar")).toContainText("Private workspace");
   expect(requests.some((path) => path.includes("demo-login"))).toBe(false);
   await expect(page.getByRole("heading", { name: "No products yet", exact: true })).toBeVisible();
 });

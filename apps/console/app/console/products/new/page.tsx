@@ -5,18 +5,15 @@ import { useRouter } from "next/navigation";
 import { Check, Loader2, Plus, Trash2 } from "lucide-react";
 import { useConsole } from "@pixel-console/components/console-context";
 import { useToast } from "@pixel-console/components/toast";
-import { Alert, Badge, Button, Field, Input, PageHead, Panel, PermissionDenied } from "@pixel-console/components/ui";
-import { TEAMS } from "@pixel-console/lib/mock-data";
+import { Alert, Badge, Button, Field, Input, PageHead, Panel } from "@pixel-console/components/ui";
 
 // Pixel's own guide, named here because the console may name her and core may not.
 const ASSISTANT_NAME = "Edith";
 import {
-  PRODUCT_TEMPLATES, STEP_LABELS, STEPS, acceptUnderstanding, addField, addThing, addressFor, applyTemplate,
-  approveGeneratedUnderstanding,
-  canEnter, completeAnalysis,
-  definitionIdFor, goTo, initialOnboarding, keyForName, publish, removeField, removeThing, setConfirmation,
-  setDetails, starterDefinitionText, summariseAbilities, understood, updateField, updateThing,
-  toggleAction, validate, type OnboardingState, type Step,
+  PRODUCT_TEMPLATES, STEP_LABELS, STEPS, addField, addThing, addressFor, applyTemplate,
+  approveGeneratedUnderstanding, canEnter, definitionIdFor, goTo, initialOnboarding, keyForName, publish,
+  removeField, removeThing, setDetails, starterDefinitionText, summariseAbilities, understood, updateField,
+  updateThing, type OnboardingState, type Step,
 } from "@pixel-console/lib/onboarding";
 import { FieldError, addProduct, productDraft, storedSession } from "@pixel-console/lib/pixel-api";
 import { ProductImport } from "@pixel-console/components/product-import";
@@ -24,7 +21,6 @@ import { ProductImport } from "@pixel-console/components/product-import";
 export default function NewProduct() {
   const c = useConsole();
   const [advanced, setAdvanced] = useState(false);
-  if (!c.live) return <GuidedProductOnboarding />;
   if (advanced) return <>
     <div className="px-row" style={{ justifyContent: "flex-end" }}>
       <Button onClick={() => setAdvanced(false)}>Describe a product instead</Button>
@@ -38,16 +34,14 @@ function GuidedProductOnboarding({ onAdvanced }: { onAdvanced?: () => void }) {
   const c = useConsole();
   const toast = useToast();
   const router = useRouter();
-  const teams = TEAMS.filter((t) => t.organizationId === c.organizationId && !t.suspended
-    && c.can("products.manage", { teamId: t.id, productId: null }));
   const liveTeamId = c.account?.team_id ?? c.account?.teams[0]?.team_id ?? null;
   const liveTeams = c.account?.teams ?? [];
   // An admin of an organization with several teams chooses which one runs the product.
-  const chooseLiveTeam = c.live && !c.account?.team_id && liveTeams.length > 1;
+  const chooseLiveTeam = !c.account?.team_id && liveTeams.length > 1;
   const [liveChosen, setLiveChosen] = useState<string | null>(null);
   const liveTeam = chooseLiveTeam && liveTeams.some((team) => team.team_id === liveChosen) ? liveChosen : liveTeamId;
   const liveTeamName = c.account?.teams.find((team) => team.team_id === liveTeam)?.name ?? "your team";
-  const [state, setState] = useState<OnboardingState>(() => initialOnboarding(liveTeamId ?? teams[0]?.id ?? ""));
+  const [state, setState] = useState<OnboardingState>(() => initialOnboarding(liveTeamId ?? ""));
   const [sourceName, setSourceName] = useState("");
   const [sourceKind, setSourceKind] = useState<"document" | "openapi" | "url">("document");
   const [publishing, setPublishing] = useState(false);
@@ -61,7 +55,7 @@ function GuidedProductOnboarding({ onAdvanced }: { onAdvanced?: () => void }) {
   const heading = useRef<HTMLHeadingElement>(null);
   const { setActiveWork } = c;
   const visibleSteps: Step[] = STEPS.filter((step) => step !== "published"
-    && (!c.live || (step !== "actions" && step !== "validation")));
+    && step !== "actions" && step !== "validation");
 
   // A started draft is unsaved work: switching product would discard it.
   useEffect(() => {
@@ -74,13 +68,11 @@ function GuidedProductOnboarding({ onAdvanced }: { onAdvanced?: () => void }) {
   useEffect(() => {
     if (c.discardEpoch === epoch.current) return;
     epoch.current = c.discardEpoch;
-    setState(initialOnboarding(teams[0]?.id ?? ""));
+    setState(initialOnboarding(liveTeamId ?? ""));
     setTemplateId(null);
     setSourceName("");
     toast("warn", "The onboarding draft was discarded.");
-  }, [c.discardEpoch, teams, toast]);
-
-  if (teams.length === 0 && !c.live) return <PermissionDenied what="product creation in any team" />;
+  }, [c.discardEpoch, liveTeamId, toast]);
 
   const slugError = state.slug && !/^[a-z0-9][a-z0-9-]{1,62}$/.test(state.slug)
     ? "Use 2 to 63 lowercase letters, digits or hyphens, starting with a letter or digit." : null;
@@ -88,11 +80,6 @@ function GuidedProductOnboarding({ onAdvanced }: { onAdvanced?: () => void }) {
   async function runAnalysis() {
     setDraftError(null);
     setDraftField(null);
-    if (!c.live) {
-      setState((s) => goTo(s, "analyzing"));
-      window.setTimeout(() => setState((s) => completeAnalysis(s)), 1200);
-      return;
-    }
     const session = storedSession();
     if (!session) { setDraftError("Sign in to add a product."); return; }
     setDrafting(true);
@@ -179,14 +166,7 @@ function GuidedProductOnboarding({ onAdvanced }: { onAdvanced?: () => void }) {
                   <p className="px-small px-muted" style={{ margin: 0 }}>
                     It will belong to <strong>{liveTeamName}</strong>, so everyone there can use it.
                   </p>
-                ) : (
-                  <Field label="Which team runs it">{(f) => (
-                    <select id={f.id} className="px-select" value={state.teamId}
-                      onChange={(e) => setState((s) => ({ ...s, teamId: e.target.value }))}>
-                      {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                    </select>
-                  )}</Field>
-                )}
+                ) : null}
                 <details open={Boolean(slugError)}>
                   <summary className="px-small">Advanced: change its web address</summary>
                   <div style={{ marginTop: 8 }}>
@@ -338,55 +318,9 @@ function GuidedProductOnboarding({ onAdvanced }: { onAdvanced?: () => void }) {
                 </details>
                 <div className="px-row">
                   <Button onClick={() => setState((s) => goTo(s, "sources"))}>Change what you described</Button>
-                  <Button variant="primary" onClick={() => setState((s) => c.live
-                    ? approveGeneratedUnderstanding(s) : acceptUnderstanding(s))}>
-                    {c.live ? "Accept and continue" : "Accept and configure actions"}
+                  <Button variant="primary" onClick={() => setState((s) => approveGeneratedUnderstanding(s))}>
+                    Accept and continue
                   </Button>
-                </div>
-              </div>
-            </Panel>
-          )}
-
-          {state.step === "actions" && (
-            <Panel>
-              <div className="px-stack">
-                <div className="px-table-wrap">
-                  <table className="px-table">
-                    <caption className="px-sr-only">Actions Edith may offer</caption>
-                    <thead><tr><th scope="col">Action</th><th scope="col">Kind</th><th scope="col">Enabled</th><th scope="col">Ask before running</th></tr></thead>
-                    <tbody>
-                      {state.actions.map((a) => (
-                        <tr key={a.key}>
-                          <td>{a.description}<div className="px-small px-mono px-muted">{a.key}</div></td>
-                          <td>{a.mutating ? <Badge tone="warn">Changes data</Badge> : <Badge>Read only</Badge>}</td>
-                          <td><input type="checkbox" aria-label={`Enable ${a.description}`} checked={a.enabled} onChange={(e) => setState((s) => toggleAction(s, a.key, e.target.checked))} /></td>
-                          <td>
-                            <input type="checkbox" aria-label={`Ask before ${a.description}`} checked={a.requiresConfirmation} disabled={a.mutating}
-                              onChange={(e) => setState((s) => setConfirmation(s, a.key, e.target.checked))} />
-                            {a.mutating ? <span className="px-small px-muted"> Always</span> : null}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="px-row">
-                  <Button onClick={() => setState((s) => goTo(s, "review"))}>Back</Button>
-                  <Button variant="primary" onClick={() => setState((s) => validate(s))}>Run validation</Button>
-                </div>
-              </div>
-            </Panel>
-          )}
-
-          {state.step === "validation" && (
-            <Panel>
-              <div className="px-stack">
-                {state.findings.length === 0 ? <Alert tone="ok" title="All checks passed.">This configuration is ready to publish.</Alert> : state.findings.map((f) => (
-                  <Alert key={f.id} tone={f.severity === "error" ? "danger" : "warn"} title={f.severity === "error" ? "Blocks publishing." : "Warning."}>{f.message}</Alert>
-                ))}
-                <div className="px-row">
-                  <Button onClick={() => setState((s) => goTo(s, "actions"))}>Change actions</Button>
-                  <Button variant="primary" disabled={!canEnter(state, "ready")} onClick={() => setState((s) => goTo(s, "ready"))}>Continue</Button>
                 </div>
               </div>
             </Panel>
@@ -397,32 +331,25 @@ function GuidedProductOnboarding({ onAdvanced }: { onAdvanced?: () => void }) {
               <div className="px-stack">
                 <p>Launching creates version 1 of <strong>{state.name}</strong> for your organization. You can open it right away and keep improving it later.</p>
                 <div className="px-row">
-                  <Button onClick={() => setState((s) => goTo(s, "actions"))}>Back</Button>
+                  <Button onClick={() => setState((s) => goTo(s, "review"))}>Back</Button>
                   <Button variant="primary" loading={publishing} onClick={async () => {
                     setPublishing(true);
                     try {
-                      if (c.live) {
-                        const session = storedSession();
-                        if (!session) throw new Error("Sign in to add a product.");
-                        const definitionId = definitionIdFor(state);
-                        const created = await addProduct(session, {
-                          productId: state.slug,
-                          teamId: liveTeam ?? state.teamId,
-                          definitionId,
-                          definition: state.understanding?.definition ?? starterDefinitionText(state),
-                          version: 1,
-                        });
-                        c.reloadProducts();
-                        setState((s) => publish(s));
-                        setActiveWork(null);
-                        toast("ok", `${created.name} v1 published.`);
-                        router.push(`/console/products/${created.product_id}`);
-                        return;
-                      }
+                      const session = storedSession();
+                      if (!session) throw new Error("Sign in to add a product.");
+                      const definitionId = definitionIdFor(state);
+                      const created = await addProduct(session, {
+                        productId: state.slug,
+                        teamId: liveTeam ?? state.teamId,
+                        definitionId,
+                        definition: state.understanding?.definition ?? starterDefinitionText(state),
+                        version: 1,
+                      });
+                      c.reloadProducts();
                       setState((s) => publish(s));
                       setActiveWork(null);
-                      toast("ok", `${state.name} v1 published (prototype: nothing was stored).`);
-                      router.push("/console/products");
+                      toast("ok", `${created.name} is ready.`);
+                      router.push(`/console/products/${created.product_id}`);
                     } catch (error) {
                       toast("danger", error instanceof Error ? error.message : "Product could not be published.");
                     } finally {

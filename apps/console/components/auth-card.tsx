@@ -17,7 +17,3 @@ export function AuthCard({ title, description, children, footer }: { title: stri
     </main>
   );
 }
-
-export function PrototypeNote({ children }: { children: ReactNode }) {
-  return <p className="px-small px-muted" style={{ borderTop: "1px solid var(--px-border)", paddingTop: 12 }}>Prototype: {children}</p>;
-}

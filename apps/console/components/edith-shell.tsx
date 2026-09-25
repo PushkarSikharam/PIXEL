@@ -47,7 +47,7 @@ export function Edith() {
     return () => { cancelled = true; };
   }, [consoleProductId, session, attempt]);
 
-  if (!c.live || !session || !c.account) return null;
+  if (!session || !c.account) return null;
   if (surface) {
     return (
       <EdithPanel key={`product:${surface.productId}`} session={session} shape={surface.shape}

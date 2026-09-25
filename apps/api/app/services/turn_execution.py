@@ -152,7 +152,7 @@ class NewEngineTurns:
             request.message, memory, history,
             TurnContext(
                 turn=request.turn_id,
-                selected=selected_record(prepared.records, request.selected_issue_id),
+                selected=_selected_on(request, definition, prepared),
                 last_change=self._ledger.last_executed(owner, request.session_id, scope_id),
                 view=getattr(request, "current_page", None),
             ),
@@ -338,22 +338,40 @@ def _stale(request: TurnRequest) -> TurnResponse:
 
 
 def _invalid_context(request: TurnRequest, definition: Any, prepared) -> str | None:
-    view = None
-    if request.current_page:
-        view = definition.views.get(request.current_page)
-        if view is None:
-            return "invalid_turn_page"
+    """Whether what this turn claims about the screen is something we must refuse to answer.
+
+    Only two things are refused, and both mean the request is describing a place or a record that
+    is not this caller's to describe: a screen this product does not have, and a record none of
+    the records they can see has the identifier of.
+
+    A record they *can* see, which simply is not what the screen they are on lists, is neither.
+    It is a selection the browser kept after somebody moved: open one record, walk to a screen
+    that lists a different kind, and the first is still selected. Refusing that ended the
+    conversation - and because the page went on sending the same selection with every later
+    message, it ended it permanently, with a sentence that explained nothing. It is dropped in
+    `_selected_on` instead, and the turn is answered without it.
+    """
+    if request.current_page and definition.views.get(request.current_page) is None:
+        return "invalid_turn_page"
     if not request.selected_issue_id:
         return None
     wanted = request.selected_issue_id.lower()
-    matches = [
-        RecordRef(entity, record.id)
-        for entity, records in prepared.records.items()
-        for record in records
-        if record.id.lower() == wanted
-    ]
-    if view is not None and view.entity is not None:
-        matches = [match for match in matches if match.entity == view.entity]
-    if len(matches) != 1:
-        return "invalid_selected_record"
-    return None
+    visible = [record.id for records in prepared.records.values() for record in records
+               if record.id.lower() == wanted]
+    return "invalid_selected_record" if not visible else None
+
+
+def _selected_on(request: TurnRequest, definition: Any, prepared) -> RecordRef | None:
+    """The record this turn is about: the selected one, when the screen showing it lists that kind.
+
+    A screen that lists nothing in particular carries whatever is selected. A screen that lists
+    one kind of record carries a selection only of that kind, so a request to change "it" cannot
+    quietly mean something of another kind that was opened several screens ago.
+    """
+    selected = selected_record(prepared.records, request.selected_issue_id)
+    if selected is None:
+        return None
+    view = definition.views.get(request.current_page) if request.current_page else None
+    if view is not None and view.entity is not None and selected.entity != view.entity:
+        return None
+    return selected

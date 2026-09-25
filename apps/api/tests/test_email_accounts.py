@@ -59,6 +59,30 @@ class EmailDeliveryTransportTest(unittest.TestCase):
         smtp.login.assert_called_once_with("user", "password")
         smtp.send_message.assert_called_once()
 
+    def test_the_mail_server_is_reached_the_way_the_library_expects(self):
+        """A mock accepts any arguments, so what they mean is checked against the real signature.
+
+        The second positional argument of `SMTP_SSL` is the port, not the timeout. Passing the
+        timeout there connects to the wrong port - or fails outright when the port is also given
+        by name - and no test that replaces `SMTP_SSL` with a mock can tell, because a mock is
+        happy to be called any way at all.
+        """
+        import inspect
+        import smtplib
+
+        smtp = Mock()
+        smtp.__enter__ = Mock(return_value=smtp)
+        smtp.__exit__ = Mock(return_value=None)
+        with patch.object(account_api.smtplib, "SMTP_SSL", return_value=smtp) as smtp_ssl:
+            account_api.send_code("owner@example.test", "12345678", (
+                "secret", "smtp.example.test", "user", "password", "noreply@example.test",
+            ))
+        bound = inspect.signature(smtplib.SMTP_SSL.__init__).bind(
+            None, *smtp_ssl.call_args.args, **smtp_ssl.call_args.kwargs).arguments
+        self.assertEqual(bound["host"], "smtp.example.test")
+        self.assertEqual(bound["port"], 465)
+        self.assertEqual(bound["timeout"], account_api.SMTP_TIMEOUT_SECONDS)
+
 
 class EmailAccountsTest(EngineCutoverFixture):
     def setUp(self):

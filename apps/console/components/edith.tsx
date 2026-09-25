@@ -20,7 +20,7 @@ import {
   type ApiActionShape, type ApiProductShape, type ApiSession, type ApiTurnResponse,
 } from "@pixel-console/lib/pixel-api";
 import { speechInputConstructor, type SpeechInput } from "@pixel-console/lib/speech-input";
-import { CONSOLE_ROUTES } from "@pixel-console/lib/console-routes";
+import { CONSOLE_ROUTES, consoleRecordRoute } from "@pixel-console/lib/console-routes";
 
 /**
  * A short route through whichever product is answering, drawn from what that product declares.
@@ -96,6 +96,9 @@ export function EdithPanel({
   const [voiceStatus, setVoiceStatus] = useState("Voice off");
   const [listening, setListening] = useState(false);
   const [micAvailable, setMicAvailable] = useState(false);
+  // Why voice input did not start, shown whether or not spoken replies are on: a press that
+  // silently does nothing reads as a broken button.
+  const [micProblem, setMicProblem] = useState<string | null>(null);
   const recognition = useRef<SpeechInput | null>(null);
   const alive = useRef(true);
   const sending = useRef(false);
@@ -104,6 +107,8 @@ export function EdithPanel({
   const playing = useRef<HTMLAudioElement | null>(null);
   const audioUrl = useRef<string | null>(null);
   const log = useRef<HTMLDivElement | null>(null);
+  /** Whether this conversation has already been started over after a refusal. */
+  const retried = useRef(false);
   const turn = useRef(0);
   const sessionId = useRef("");
   function stopAudio() {
@@ -165,16 +170,37 @@ export function EdithPanel({
         throw new Error("The reply did not match this conversation. Please retry.");
       }
       if (response.status === "stale" || response.status === "cancelled") return;
+      if (response.status === "denied" && turn.current > 1 && !retried.current) {
+        // A refused turn did nothing, so nothing is repeated by asking again. What ends a
+        // conversation is nearly always the conversation itself, and that is no reason to leave
+        // somebody typing into a panel that will refuse everything from here on. Once only: a
+        // second refusal is about the request, and is shown.
+        retried.current = true;
+        sessionId.current = crypto.randomUUID();
+        turn.current = 0;
+        sending.current = false;
+        setBusy(false);
+        await send(message);
+        return;
+      }
+      retried.current = false;
       setMessages((all) => [...all, { role: "agent", text: response.speech }]);
       const action = response.status === "completed" && response.validated_action ? actions[response.validated_action.type] : null;
       if (response.validated_action && !response.execution) {
         // A place in the application is somewhere to go; anything else is for the screen showing
         // this product. An action this product does not declare came from Pixel itself, which
         // happens when somebody asks to leave the product they are in.
-        const payload = response.validated_action.payload as { view?: string };
+        const payload = response.validated_action.payload as { view?: string; record_id?: string };
         const view = action?.capability === "NAVIGATE_VIEW" ? action.view : payload.view;
         const route = typeof view === "string" ? CONSOLE_ROUTES[view] : undefined;
-        if (route && (!action || action.capability === "NAVIGATE_VIEW")) router.push(route);
+        // One of Pixel's own records is a place too: asked for a product by name, Pixel opens
+        // that product rather than the list it appears in. Inside a product the same reply is
+        // about that product's own records, which belong to the screen showing them.
+        const record = scope === "platform" && action?.capability === "OPEN_RECORD" && action.entity
+          ? consoleRecordRoute(action.entity, String(payload.record_id ?? ""))
+          : null;
+        if (record) router.push(record);
+        else if (route && (!action || action.capability === "NAVIGATE_VIEW")) router.push(route);
         else if (action) onUiAction?.(action, response.validated_action.payload);
       }
       const receipt = await maybeExecute(session, productId, response, actions);
@@ -218,6 +244,7 @@ export function EdithPanel({
     if (listening) { recognition.current?.abort(); setListening(false); return; }
     const Constructor = speechInputConstructor();
     if (!Constructor || busy) return;
+    setMicProblem(null);
     stopAudio();
     const capture = new Constructor();
     recognition.current = capture;
@@ -227,10 +254,18 @@ export function EdithPanel({
       const transcript = event.results[0]?.[0]?.transcript?.trim();
       if (transcript) { voiceEnabled.current = true; setVoice(true); void send(transcript); }
     };
-    capture.onerror = (event) => { if (alive.current) setVoiceStatus(event.error === "not-allowed" ? "Microphone permission denied" : "Speech input unavailable. Please type your message."); };
+    capture.onerror = (event) => {
+      if (!alive.current) return;
+      const problem = event.error === "not-allowed" ? "Microphone permission denied" : "Speech input unavailable. Please type your message.";
+      setVoiceStatus(problem);
+      setMicProblem(problem);
+    };
     capture.onend = () => { if (alive.current) setListening(false); };
     try { capture.start(); setListening(true); }
-    catch { setVoiceStatus("Microphone unavailable. Please type your message."); }
+    catch {
+      setVoiceStatus("Microphone unavailable. Please type your message.");
+      setMicProblem("Microphone unavailable. Please type your message.");
+    }
   }
 
   const steps = useMemo(() => starterSteps(shape), [shape]);
@@ -264,8 +299,9 @@ export function EdithPanel({
             aria-label={collapsed ? `Show ${shape.assistant_name}` : `Hide ${shape.assistant_name}`}>
             {collapsed ? "Show" : "Hide"}</button>
           {collapsed ? null : <>
-            <button type="button" className="px-edith-chip" disabled={busy} onClick={restart}
-              aria-label="Restart this conversation">Restart</button>
+            <button type="button" className="px-edith-chip" disabled={busy || messages.length <= 1} onClick={restart}
+              aria-label="Restart this conversation"
+              title={messages.length <= 1 ? "Nothing to restart yet" : undefined}>Restart</button>
             <span className="px-edith-state" role="status">{state}</span>
           </>}
         </span>
@@ -343,7 +379,7 @@ export function EdithPanel({
             </button>
           </div>
           <div className="px-edith-voice-status">
-            <span>Voice: <strong>{voice || listening ? voiceStatus : "Off"}</strong></span>
+            <span>Voice: <strong>{micProblem && !listening ? micProblem : voice || listening ? voiceStatus : "Off"}</strong></span>
             <span className="px-edith-spectrum" data-animating={listening || busy}
               aria-hidden><i /><i /><i /><i /><i /></span>
           </div>

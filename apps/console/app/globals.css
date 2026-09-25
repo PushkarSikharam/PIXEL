@@ -276,6 +276,7 @@ code, .px-mono { font-family: var(--px-mono); font-size: var(--px-text-sm); }
 .px-brand-mark span:nth-child(4) { background: #34d399; }
 .px-brand-text { display: grid; line-height: 1.2; }
 .px-brand-text small { font-size: var(--px-text-xs); font-weight: 500; color: var(--px-text-2); }
+.px-mobile-nav-toggle { display: none; }
 .px-nav { display: grid; gap: 2px; }
 .px-nav a { display: flex; align-items: center; gap: var(--px-space-3); min-height: 38px; padding: 8px 10px; border: 1px solid transparent; border-radius: 7px; color: var(--px-text-2); font-weight: 500; }
 .px-nav a:hover { background: var(--px-surface-2); color: var(--px-text); text-decoration: none; }
@@ -324,12 +325,22 @@ code, .px-mono { font-family: var(--px-mono); font-size: var(--px-text-sm); }
 
 @media (max-width: 900px) {
   .px-shell { grid-template-columns: minmax(0, 1fr); }
-  .px-sidebar { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; }
-  .px-nav { grid-auto-flow: column; overflow-x: auto; }
-  .px-nav-section { display: none; }
+  .px-sidebar { position: static; height: auto; padding: var(--px-space-3) var(--px-space-4); gap: var(--px-space-2); overflow: visible; }
+  .px-sidebar .px-brand { width: 100%; padding: 0; }
+  .px-mobile-nav-toggle {
+    display: inline-grid; place-items: center; width: 40px; height: 40px; margin-left: auto;
+    border: 1px solid var(--px-border); border-radius: var(--px-radius); background: var(--px-bg);
+    color: var(--px-text); cursor: pointer;
+  }
+  .px-mobile-nav-toggle:hover { background: var(--px-surface-2); }
+  .px-mobile-nav-toggle:focus-visible { outline: 2px solid var(--px-focus); outline-offset: 2px; }
+  .px-mobile-nav-toggle svg { width: 18px; height: 18px; }
+  .px-sidebar nav { display: none; width: 100%; padding-top: var(--px-space-2); border-top: 1px solid var(--px-border); }
+  .px-sidebar[data-mobile-open="true"] nav { display: grid; gap: var(--px-space-2); }
+  .px-nav { grid-auto-flow: row; overflow: visible; }
+  .px-nav-section { display: block; }
   .px-topbar { padding: var(--px-space-2) var(--px-space-4); height: auto; min-height: 52px; flex-wrap: wrap; }
   .px-crumbs { flex-wrap: wrap; }
-  .px-sidebar nav { width: 100%; }
   .px-main { padding: var(--px-space-4); }
   .px-grid-2, .px-grid-two, .px-onboarding { grid-template-columns: 1fr; }
 }

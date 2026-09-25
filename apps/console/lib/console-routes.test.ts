@@ -8,7 +8,7 @@ import { unroutableViews } from "./console-routes";
  * must have a route, or the assistant promises a move it cannot make.
  */
 const definition = readFileSync(
-  fileURLToPath(new URL("../../../products/pixel_console/definition/v5.yaml", import.meta.url)),
+  fileURLToPath(new URL("../../../products/pixel_console/definition/v6.yaml", import.meta.url)),
   "utf8",
 );
 

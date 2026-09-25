@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import {
   Activity, Boxes, Building2, ChevronsUpDown, ClipboardList, FlaskConical, Gauge, Hammer, LogOut,
-  Monitor, Moon, Network, PlayCircle, Rocket, Sun, UserCog, Users,
+  Monitor, Moon, Network, PanelLeftClose, PanelLeftOpen, PlayCircle, Rocket, Sun, UserCog, Users,
 } from "lucide-react";
 import { useConsole } from "./console-context";
 import { Edith } from "./edith-shell";
@@ -58,6 +58,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const c = useConsole();
   const [pending, setPending] = useState<string | null | undefined>(undefined);
   const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const organization = c.live ? { name: c.account?.organization_name ?? "Your organization" } : ORGANIZATIONS.find((o) => o.id === c.organizationId);
   const product = c.visibleProducts.find((p) => p.id === c.productId);
   // The column is always there once somebody is signed in: either the assistant, or a note saying
@@ -82,12 +83,18 @@ export function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="px-shell">
       <a className="px-skip" href="#main">Skip to content</a>
-      <aside className="px-sidebar" aria-label="Console">
+      <aside className="px-sidebar" aria-label="Console" data-mobile-open={mobileNavOpen}>
         <div className="px-brand">
           <span className="px-brand-mark" aria-hidden><span /><span /><span /><span /></span>
           <span className="px-brand-text">Pixel<small>{c.live ? c.account?.organization_name ?? "Console" : "Console"}</small></span>
+          <button type="button" className="px-mobile-nav-toggle"
+            aria-expanded={mobileNavOpen} aria-controls="pixel-primary-navigation"
+            aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
+            onClick={() => setMobileNavOpen((open) => !open)}>
+            {mobileNavOpen ? <PanelLeftClose aria-hidden /> : <PanelLeftOpen aria-hidden />}
+          </button>
         </div>
-        <nav aria-label="Primary">
+        <nav id="pixel-primary-navigation" aria-label="Primary">
           <div className="px-nav">
             <a href="/demo"><Monitor aria-hidden />Visit demo</a>
           </div>
@@ -101,6 +108,7 @@ export function Shell({ children }: { children: ReactNode }) {
                     onClick={(event) => {
                       // Leaving a page with unsaved work asks first, exactly like switching product.
                       if (c.activeWork && !current) { event.preventDefault(); setPendingHref(item.href); }
+                      else setMobileNavOpen(false);
                     }}>
                     <item.icon aria-hidden />{item.label}
                   </Link>
